@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Thin, safe wrapper around the installed `codebase-index` CLI.
+# - Resolves the binary (prefers one on PATH; falls back to `python -m codebase_index`).
+# - Whitelists subcommands so the skill can never invoke destructive ones (clean/init/watch).
+set -euo pipefail
+
+ALLOWED="search explain symbol refs impact stats update index"
+
+sub="${1:-}"
+case " $ALLOWED " in
+  *" ${sub} "*) : ;;
+  *)
+    echo "cbx: refusing subcommand '${sub}'. Allowed: ${ALLOWED}" >&2
+    exit 2
+    ;;
+esac
+
+if command -v codebase-index >/dev/null 2>&1; then
+  exec codebase-index "$@"
+else
+  exec python -m codebase_index "$@"
+fi

@@ -1,0 +1,23 @@
+{
+  "root": ".",
+  "languages": "auto",
+  "max_file_bytes": 1048576,
+  "ignore_files": [".gitignore", ".cursorignore", ".claudeignore", ".codeindexignore"],
+  "extra_ignore": ["**/snapshots/**", "**/__generated__/**"],
+  "chunk": { "window_lines": 80, "overlap_lines": 10 },
+  "retrieval": {
+    "default_mode": "hybrid",
+    "rrf_k": 60,
+    "token_budget": 1500,
+    "limit": 10
+  },
+  "embeddings": {
+    "backend": "noop",
+    "enabled": false,
+    "model": "all-MiniLM-L6-v2",
+    "allow_external": false,
+    "endpoint": null
+  },
+  "graph": { "max_depth": 2, "node_cap": 40 },
+  "redaction": { "enabled": true }
+}

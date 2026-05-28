@@ -1,0 +1,22 @@
+# --- codebase-index generated cache (NEVER commit) ---
+.claude/cache/codebase-index/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# The skill itself (.claude/skills/codebase-index/) MAY be committed so the team shares it.
+# The cache above must not be.
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
