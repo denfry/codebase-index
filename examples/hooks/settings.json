@@ -1,0 +1,18 @@
+{
+  "_comment": "OPTIONAL. Copy into .claude/settings.json (merge with existing hooks) to keep the index fresh after Claude edits files. Off by default. Review before enabling — hooks run shell commands on every matching tool use. See docs/SECURITY.md and docs/INSTALLATION.md.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "codebase-index update --quiet >/dev/null 2>&1 &",
+            "timeout": 5,
+            "_note_windows": "On Windows use: start /b codebase-index update --quiet"
+          }
+        ]
+      }
+    ]
+  }
+}
