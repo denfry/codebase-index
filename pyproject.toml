@@ -84,3 +84,12 @@ exclude_lines = [
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
 ]
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["watchdog.*", "sqlite_vec.*", "sentence_transformers.*"]
+ignore_missing_imports = true

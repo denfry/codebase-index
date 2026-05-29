@@ -151,7 +151,7 @@ def fts_search(conn: sqlite3.Connection, query: str, *, limit: int) -> list[Cand
             content=r["content"],
             token_est=r["token_est"],
             bm25=r["bm25"],
-            kind=r.get("kind", "window"),
+            kind=r.get("kind", "window"),  # type: ignore[attr-defined]
         )
         for r in rows
     ]

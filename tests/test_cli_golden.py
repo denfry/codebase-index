@@ -1,7 +1,16 @@
-# tests/test_cli_golden.py  (initial version — normalizer unit test only)
+# tests/test_cli_golden.py
 from __future__ import annotations
 
-from tests.golden_utils import normalize
+import json as _json
+import subprocess
+
+import pytest
+from typer.testing import CliRunner
+
+from codebase_index.cli import app
+from tests.golden_utils import assert_matches_golden, normalize
+
+runner = CliRunner()
 
 
 def test_normalize_scrubs_volatile_fields():
@@ -21,21 +30,8 @@ def test_normalize_scrubs_volatile_fields():
     out = normalize(raw, root="/abs/root")
     assert out["index"]["built_at"] == "<TS>"
     assert out["index"]["head_commit"] == "<SHA>"
-    # absolute root prefix stripped to a repo-relative path
     assert out["results"][0]["path"] == "src/auth/token.py"
-    # floats rounded so trivial ranking jitter doesn't churn goldens
     assert out["results"][0]["score"] == 0.8734
-
-
-import json as _json
-
-import pytest
-from typer.testing import CliRunner
-
-from codebase_index.cli import app
-from tests.golden_utils import assert_matches_golden
-
-runner = CliRunner()
 
 
 @pytest.fixture(scope="module")
@@ -47,7 +43,6 @@ def indexed_repo(tmp_path_factory):
 
     dest = tmp_path_factory.mktemp("indexed") / "repo"
     shutil.copytree(FIXTURE_ROOT, dest)
-    import subprocess
 
     subprocess.run(["git", "init"], cwd=dest, capture_output=True)
     subprocess.run(["git", "add", "."], cwd=dest, capture_output=True)
