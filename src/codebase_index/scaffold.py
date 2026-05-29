@@ -6,6 +6,7 @@ the wheel via importlib.resources, so it works in editable and zip installs alik
 
 from __future__ import annotations
 
+import json
 import stat
 from importlib import resources
 from importlib.resources.abc import Traversable
@@ -84,3 +85,54 @@ def write_hooks_example(root: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(src.read_bytes())
     return path
+
+
+SETTINGS_REL = Path(".claude") / "settings.json"
+_HOOK_MARKER = "codebase-index update"
+
+
+def _template_hook_entries() -> "list[dict]":
+    src = _template_root() / "examples" / "hooks" / "settings.json"
+    data = json.loads(src.read_text(encoding="utf-8"))
+    return data["hooks"]["PostToolUse"]
+
+
+def _has_our_hook(settings: dict) -> bool:
+    for entry in settings.get("hooks", {}).get("PostToolUse", []):
+        for hk in entry.get("hooks", []):
+            if _HOOK_MARKER in hk.get("command", ""):
+                return True
+    return False
+
+
+def merge_hook_settings(root: Path) -> bool:
+    path = root / SETTINGS_REL
+    settings: dict = {}
+    if path.exists():
+        settings = json.loads(path.read_text(encoding="utf-8"))
+    if _has_our_hook(settings):
+        return False
+
+    hooks = settings.setdefault("hooks", {})
+    post = hooks.setdefault("PostToolUse", [])
+    post.extend(_template_hook_entries())
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    return True
+
+
+def enabled_hooks(root: Path) -> list[str]:
+    path = root / SETTINGS_REL
+    if not path.exists():
+        return []
+    try:
+        settings = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return [
+        hk.get("command", "")
+        for entry in settings.get("hooks", {}).get("PostToolUse", [])
+        for hk in entry.get("hooks", [])
+        if _HOOK_MARKER in hk.get("command", "")
+    ]
