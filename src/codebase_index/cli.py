@@ -76,11 +76,46 @@ def main(
 # --- lifecycle ----------------------------------------------------------------------------------
 @app.command()
 def init(
+    ctx: typer.Context,
     force: bool = typer.Option(False, "--force", help="Overwrite an existing skill install."),
-    with_hooks: bool = typer.Option(False, "--with-hooks", help="Also offer to install the update hook."),
+    with_hooks: bool = typer.Option(False, "--with-hooks", help="Also write a hooks example to review."),
 ) -> None:
     """Scaffold the skill, config.json, and .gitignore rules into the current project."""
-    _todo("init")
+    from . import scaffold
+    from .config import find_root
+
+    root_opt = ctx.obj.get("root") if ctx.obj else None
+    root = Path(root_opt).resolve() if root_opt else find_root()
+
+    try:
+        scaffold.materialize_skill(root, force=force)
+    except FileExistsError:
+        typer.echo(
+            "[codebase-index] skill already installed at "
+            f"{root / scaffold.SKILL_REL}. Re-run with --force to overwrite."
+        )
+        raise typer.Exit(code=1)
+
+    cfg_path = scaffold.write_config(root, force=force)
+    gitignore_changed = scaffold.merge_gitignore(root)
+
+    lines = [
+        f"Installed skill   -> {root / scaffold.SKILL_REL}",
+        f"Wrote config      -> {cfg_path}",
+        f".gitignore        -> {'updated' if gitignore_changed else 'already covered'}",
+    ]
+    if with_hooks:
+        hook_path = scaffold.write_hooks_example(root)
+        lines.append(f"Hooks example     -> {hook_path} (review, then merge into .claude/settings.json)")
+
+    lines += [
+        "",
+        "Next steps:",
+        "  1. codebase-index index      # build the index",
+        "  2. codebase-index stats       # verify coverage",
+        "  3. Ask a codebase question in Claude Code — the skill auto-invokes.",
+    ]
+    typer.echo("\n".join(lines))
 
 
 @app.command()
