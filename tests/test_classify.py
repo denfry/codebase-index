@@ -1,0 +1,42 @@
+from __future__ import annotations
+
+from codebase_index.discovery.classify import (
+    detect_language,
+    is_generated,
+    is_secret_filename,
+    looks_binary,
+    parser_for,
+)
+
+
+def test_detect_language_from_extension():
+    assert detect_language("src/app.py") == "python"
+    assert detect_language("web/app.ts") == "typescript"
+    assert detect_language("web/app.tsx") == "typescript"
+    assert detect_language("web/app.js") == "javascript"
+    assert detect_language("README.md") == "markdown"
+    assert detect_language("unknown.xyz") is None
+
+
+def test_parser_for_tree_sitter_languages():
+    assert parser_for("python") == "treesitter"
+    assert parser_for("typescript") == "treesitter"
+    assert parser_for("markdown") == "line"
+    assert parser_for(None) == "line"
+
+
+def test_secret_filename_detection():
+    for path in [".env", ".env.local", "secrets.pem", "id_rsa", "config/credentials.json"]:
+        assert is_secret_filename(path)
+    assert not is_secret_filename("src/token.py")
+
+
+def test_binary_detection():
+    assert looks_binary(b"abc\x00def")
+    assert not looks_binary(b"plain text\nwith lines")
+
+
+def test_generated_detection():
+    assert is_generated("src/schema.generated.ts")
+    assert is_generated("web/app.min.js")
+    assert not is_generated("web/app.ts")

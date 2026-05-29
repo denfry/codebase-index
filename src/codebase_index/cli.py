@@ -52,9 +52,38 @@ def init(
 
 
 @app.command()
-def index(rebuild: bool = typer.Option(False, "--rebuild", help="Discard and rebuild from scratch.")) -> None:
+def index(
+    ctx: typer.Context,
+    rebuild: bool = typer.Option(False, "--rebuild", help="Discard and rebuild from scratch."),
+) -> None:
     """Full index build into .claude/cache/codebase-index/index.sqlite."""
-    _todo("index")
+    import json as _json
+
+    from .config import load
+    from .indexer.pipeline import build_index
+    from .storage.db import Database
+
+    root_opt = ctx.obj.get("root") if ctx.obj else None
+    cfg = load(root_opt)
+    db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+    if rebuild and db_path.exists():
+        db_path.unlink()
+
+    with Database(db_path) as db:
+        stats = build_index(cfg, db, root=Path(cfg.root))
+
+    if ctx.obj and ctx.obj.get("json"):
+        typer.echo(
+            _json.dumps(
+                {
+                    "indexed": stats.indexed,
+                    "deleted": stats.deleted,
+                    "total_bytes": stats.total_bytes,
+                }
+            )
+        )
+    elif not (ctx.obj and ctx.obj.get("quiet")):
+        typer.echo(f"Indexed {stats.indexed} files ({stats.deleted} pruned).")
 
 
 @app.command()
@@ -74,6 +103,7 @@ def search(
     token_budget: int = typer.Option(1500, "--token-budget"),
     mode: str = typer.Option("hybrid", "--mode", help="hybrid|fts|symbol|vector"),
     no_fallback: bool = typer.Option(False, "--no-fallback"),
+    json_out: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Hybrid ranked search; returns compact results + recommended_reads."""
     _todo("search")
@@ -119,9 +149,43 @@ def explain(
 
 # --- diagnostics / maintenance ------------------------------------------------------------------
 @app.command()
-def stats() -> None:
+def stats(ctx: typer.Context) -> None:
     """Index size, coverage %, and freshness."""
-    _todo("stats")
+    import json as _json
+
+    from .config import load
+    from .storage import repo
+    from .storage.db import Database
+
+    root_opt = ctx.obj.get("root") if ctx.obj else None
+    cfg = load(root_opt)
+    db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+
+    if not db_path.exists():
+        if ctx.obj and ctx.obj.get("json"):
+            typer.echo(_json.dumps({"files": 0, "built_at": None, "exists": False}))
+        else:
+            typer.echo("No index found. Run `codebase-index index`.")
+        raise typer.Exit(code=0)
+
+    with Database(db_path) as db:
+        files = repo.count_files(db.conn)
+        built_at = repo.get_meta(db.conn, "built_at")
+        head = repo.get_meta(db.conn, "head_commit")
+
+    if ctx.obj and ctx.obj.get("json"):
+        typer.echo(
+            _json.dumps(
+                {
+                    "files": files,
+                    "built_at": built_at,
+                    "head_commit": head,
+                    "exists": True,
+                }
+            )
+        )
+    else:
+        typer.echo(f"files={files}  built_at={built_at}  head={head}")
 
 
 @app.command()

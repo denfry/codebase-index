@@ -1,6 +1,6 @@
 # Test fixtures
 
-`sample_repo/` (to be added in M1, see docs/ROADMAP.md task 5) is a tiny multi-language repo used
+`sample_repo/` (added in M1) is a tiny multi-language repo used
 across discovery/parsing/retrieval/graph tests. It deliberately includes things that MUST be
 excluded so we can assert the security gates:
 
