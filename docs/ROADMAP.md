@@ -49,6 +49,15 @@ Milestones are vertical-ish slices: each ends with something runnable and testab
 ## M7 — Claude Code Skill packaging ✅
 - Shipped: `init` materializes the wheel-bundled skill template (SKILL.md + cbx/cbx.ps1) to `.claude/skills/codebase-index/`, writes resolved `config.json`, and idempotently gitignores the cache (`--force` to overwrite). The freshness contract is honored end-to-end — `search` returns real `stale`/`files_changed_since_build` (git clean-tree fast-path + mtime diff), so the skill triggers `update`/`index` per SKILL.md. `--with-hooks` writes a reviewable hooks example; auto-merging hooks + `watch` are M8.
 
+## M7.5 — One-command plugin install
+- Repo doubles as a Claude Code plugin (`.claude-plugin/plugin.json` + `marketplace.json`).
+- `SessionStart` hook (`scripts/bootstrap.sh`/`.ps1`) provisions a venv in `${CLAUDE_PLUGIN_DATA}`
+  with the pinned CLI (uv-preferred, pip fallback), reinstalling only when `requirements.lock` changes.
+- `bin/cbx` + `bin/codebase-index` wrappers resolve the venv via a `.venv-path` pointer and keep the
+  subcommand whitelist.
+- **Exit:** `/plugin install codebase-index@<marketplace>` → ask a codebase question → compact reads,
+  no manual `pip`/`init`/`index`. Depends on the M9 PyPI release for the non-`CBX_INSTALL_SPEC` path.
+
 ## M8 — Hooks + watch mode
 - `examples/hooks/settings.json`; `--with-hooks`; `watch/watcher.py` (debounced, async).
 - `doctor` reports enabled hooks.

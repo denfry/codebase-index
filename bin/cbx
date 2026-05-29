@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Plugin wrapper: whitelist-guards subcommands, then execs the codebase-index CLI
+# from the venv provisioned by scripts/bootstrap.sh (located via the .venv-path pointer).
+set -euo pipefail
+
+ALLOWED="search explain symbol refs impact stats update index"
+sub="${1:-}"
+case " $ALLOWED " in
+  *" ${sub} "*) : ;;
+  *)
+    echo "cbx: refusing subcommand '${sub}'. Allowed: ${ALLOWED}" >&2
+    exit 2
+    ;;
+esac
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+venv=""
+if [ -f "$here/../.venv-path" ]; then
+  venv="$(cat "$here/../.venv-path")"
+fi
+
+if [ -n "$venv" ] && [ -x "$venv/bin/codebase-index" ]; then
+  exec "$venv/bin/codebase-index" "$@"
+elif [ -n "$venv" ] && [ -x "$venv/Scripts/codebase-index.exe" ]; then
+  exec "$venv/Scripts/codebase-index.exe" "$@"
+elif command -v codebase-index >/dev/null 2>&1; then
+  exec codebase-index "$@"
+else
+  exec python -m codebase_index "$@"
+fi

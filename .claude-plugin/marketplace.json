@@ -1,0 +1,11 @@
+{
+  "name": "codebase-index",
+  "owner": { "name": "codebase-index contributors" },
+  "plugins": [
+    {
+      "name": "codebase-index",
+      "source": "./",
+      "description": "Local-first hybrid codebase index skill with auto-provisioned CLI."
+    }
+  ]
+}
