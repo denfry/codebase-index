@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from .types import Candidate
 
-_SOURCE_RICHNESS = {"symbol": 3, "fts": 2, "path": 1}
+_SOURCE_RICHNESS = {"symbol": 3, "fts": 2, "vector": 2, "path": 1}
 
 
 def _richer(a: Candidate, b: Candidate) -> Candidate:
