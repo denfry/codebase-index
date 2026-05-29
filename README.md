@@ -1,16 +1,30 @@
-# codebase-index: Claude Code Skill for Local Code Search
+# codebase-index: Local Codebase Indexing for AI Coding Agents
 
-> `codebase-index` is a local-first Claude Code skill for codebase indexing, symbol lookup, and hybrid code search, so you can find where code lives without scanning the whole repository.
+`codebase-index` is a local-first codebase indexing tool that helps Claude Code,
+Codex CLI, OpenCode, and other AI coding agents find relevant files, symbols, and
+references without scanning an entire repository.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
-[![CI](https://github.com/<OWNER>/claude-code-codebase-index-skill/actions/workflows/ci.yml/badge.svg)](https://github.com/<OWNER>/claude-code-codebase-index-skill/actions)
+[![CI](https://github.com/denfry/codebase-index/actions/workflows/ci.yml/badge.svg)](https://github.com/denfry/codebase-index/actions)
 [![Claude Code Skill](https://img.shields.io/badge/Claude%20Code%20Skill-yes-green.svg)](skill/SKILL.md)
+[![Codex CLI](https://img.shields.io/badge/Codex%20CLI-supported-green.svg)](#which-ai-clis-does-codebase-index-support)
+[![OpenCode](https://img.shields.io/badge/OpenCode-supported-green.svg)](#which-ai-clis-does-codebase-index-support)
 [![Local First](https://img.shields.io/badge/local--first-yes-green.svg)](#safety-and-privacy)
 [![No Telemetry](https://img.shields.io/badge/no%20telemetry-yes-green.svg)](#safety-and-privacy)
 [![No Network By Default](https://img.shields.io/badge/no%20network%20by%20default-yes-green.svg)](#safety-and-privacy)
 [![SQLite](https://img.shields.io/badge/database-SQLite-blue.svg)](docs/DATABASE_SCHEMA.md)
 [![Tree-sitter](https://img.shields.io/badge/parsing-Tree--sitter-orange.svg)](docs/ARCHITECTURE.md)
+
+## What Is codebase-index?
+
+**codebase-index is a private, offline retrieval layer for AI code search.** It
+builds a SQLite index of your repository, extracts symbols with Tree-sitter,
+ranks matches with hybrid retrieval, and returns compact file:line ranges that
+an AI coding agent can read instead of opening broad file sets.
+
+Use it when you want Cursor-like codebase awareness in terminal-based AI tools
+while keeping source code, snippets, and search metadata on your machine.
 
 ## Start Here (First Time on GitHub)
 
@@ -26,34 +40,58 @@ If you only need the shortest path, run:
 ```bash
 pip install codebase-index
 cd your-project
-codebase-index init
+codebase-index init            # prompts for Claude Code / Codex CLI / OpenCode
 codebase-index index
 codebase-index search "where is authentication implemented?"
 ```
 
-## Status
+## Project Status
 
-✅ **`1.0.1` released.** All milestones M0–M9 are implemented: discovery + storage, FTS5 lexical
-search, tree-sitter symbols/refs, hybrid ranking, graph impact, optional local embeddings, the
-packaged skill + freshness contract, hooks/watch, and a tested, `pipx`-installable release. The
-1.0.1 patch pins tree-sitter grammars so CI and local goldens use the same parser versions. See
-[CHANGELOG.md](CHANGELOG.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
+**`1.0.2` is released.** The current release includes repository discovery,
+SQLite FTS5 storage, Tree-sitter symbols and references, hybrid ranking, graph
+impact analysis, token-budgeted retrieval packets, optional local embeddings,
+hooks/watch support, multi-CLI installation, and a tested `pipx` install path.
+
+The `1.0.2` patch adds multi-CLI `init` targeting and refreshes the README for
+AI coding agent search intent. See [CHANGELOG.md](CHANGELOG.md) and
+[docs/ROADMAP.md](docs/ROADMAP.md).
 
 ```
-You:    "Where is user authentication implemented?"
-Claude: → searches local index (symbols + FTS5 + graph)
-        → reads only 3 ranked files (≈400 lines) instead of scanning 60
-        → answers with citations: src/auth/AuthService.ts:12-148
+You:   "Where is user authentication implemented?"
+Agent: searches local index (symbols + FTS5 + graph)
+       reads only 3 ranked files instead of scanning 60
+       answers with citations: src/auth/AuthService.ts:12-148
 ```
 
 ---
 
-## Install as a Claude Code plugin
+## How Do I Install codebase-index?
+
+For most users, install the Python package and run `init` inside the repository
+you want to index:
+
+```bash
+pip install codebase-index
+cd your-project
+codebase-index init            # choose Claude Code, Codex CLI, OpenCode, or all
+codebase-index index
+```
+
+In a non-interactive script, pass a target explicitly:
+
+```bash
+codebase-index init --target auto      # install into detected AI CLIs
+codebase-index init --target codex     # write AGENTS.md + Codex resources
+codebase-index init --target claude    # write .claude/skills/codebase-index
+codebase-index init --target opencode  # write OpenCode command + agent files
+```
+
+### Install as a Claude Code plugin
 
 One command in Claude Code:
 
 ```
-/plugin marketplace add your-org/codebase-index
+/plugin marketplace add denfry/codebase-index
 /plugin install codebase-index@codebase-index
 ```
 
@@ -67,28 +105,28 @@ otherwise `python -m venv` + `pip`. It reinstalls only when the lock file change
 Nothing is installed globally; uninstalling the plugin removes the data directory.
 
 **Prerequisite:** Python 3.10+ on your PATH. The first install needs network access to
-fetch the package; later sessions are offline. The skill builds its index on your first
-codebase question — no manual `index` step.
+fetch the package; later sessions are offline. The skill builds its index on
+your first codebase question, so there is no manual `index` step.
 
-## What This Skill Does
+## What Problem Does codebase-index Solve?
 
-`codebase-index` is a **Claude Code Skill** that gives Claude Cursor-like codebase awareness. When you ask a question about your project, Claude searches a local hybrid index instead of scanning the entire repository. The skill returns compact, ranked retrieval packets with files, symbols, line ranges, snippets, and "next files to read" — helping Claude answer codebase questions with far fewer tokens.
-
-## The Problem
-
-Claude Code faces real challenges when working with large codebases:
+AI coding agents struggle with large repositories when they rely on broad file
+reads, grep output, or user-provided context. `codebase-index` gives those agents
+a ranked local retrieval packet before they read source files.
 
 - **Token waste** — Scanning entire files or running broad grep/glob queries burns through the context window on irrelevant content.
 - **No symbol awareness** — Standard search can't distinguish a function definition from a call, or a class from a variable.
-- **No ranking** — Grep returns all matches with no relevance ordering. Claude must read everything.
+- **No ranking** — Grep returns all matches with no relevance ordering. The agent must read everything.
 - **No context** — Grep doesn't know which files are related or what to read next.
 - **Cloud dependency** — External code indexing services send your proprietary code to remote servers.
 
-Developers want Cursor-like codebase awareness inside Claude Code — without leaving their workflow or sending code to a server.
+Developers get Cursor-like codebase awareness in Claude Code, Codex CLI, and
+OpenCode without leaving the terminal or sending code to a remote indexing
+service.
 
-## The Solution
+## How Does codebase-index Work?
 
-`codebase-index` builds a **local hybrid index** that combines:
+`codebase-index` builds a local hybrid index that combines:
 
 - **Symbol search** — Tree-sitter AST parsing extracts classes, functions, methods, and variables.
 - **Full-text search** — SQLite FTS5 for fast lexical search across code chunks.
@@ -97,7 +135,8 @@ Developers want Cursor-like codebase awareness inside Claude Code — without le
 - **Dependency graph** — Import, call, and reference edges for impact analysis and graph expansion.
 - **Token-budgeted output** — Ranked retrieval packets with specific line ranges, not whole files.
 
-Claude reads only the recommended files, not the entire repository.
+The AI agent reads only the recommended files and line ranges, not the entire
+repository.
 
 ## Quick Demo
 
@@ -126,7 +165,7 @@ Recommended reads:
      reason: auth middleware validates sessions
 ```
 
-## Installation
+## Installation Options
 
 If you are new to this repo, start with [docs/QUICKSTART.md](docs/QUICKSTART.md).  
 If you want all install options and troubleshooting, use [docs/INSTALLATION.md](docs/INSTALLATION.md).
@@ -143,35 +182,36 @@ curl -fsSL https://raw.githubusercontent.com/denfry/codebase-index/main/install.
 irm https://raw.githubusercontent.com/denfry/codebase-index/main/install.ps1 | iex
 ```
 
-### Option 1: Clone as a Claude Code Skill
+### Option 1: Install from PyPI
 
 ```bash
 cd your-project
-git clone https://github.com/<OWNER>/claude-code-codebase-index-skill.git .claude/skills/codebase-index
-cd .claude/skills/codebase-index
-pip install -e .
-python -m codebase_index doctor
+pip install codebase-index
+codebase-index init
+codebase-index index
 ```
 
-### Option 2: Install as a Python Package
+### Option 2: Install with pipx
 
 ```bash
-# Using pip
-pip install codebase-index
-
-# Using pipx (isolated)
 pipx install codebase-index
+cd your-project
+codebase-index init --target auto
+codebase-index index
+```
 
-# From source
-git clone https://github.com/<OWNER>/claude-code-codebase-index-skill.git
-cd claude-code-codebase-index-skill
+### Option 3: Install from source
+
+```bash
+git clone https://github.com/denfry/codebase-index.git
+cd codebase-index
 pip install -e ".[dev]"
 ```
 
-### Option 3: Run Doctor
+### Verify the install
 
 ```bash
-python -m codebase_index doctor
+codebase-index doctor
 ```
 
 See [docs/INSTALLATION.md](docs/INSTALLATION.md) for the full guide, including optional extras (embeddings, watch mode) and troubleshooting.
@@ -206,12 +246,12 @@ codebase-index doctor
 
 Add `--json` to any command for machine-readable output.
 
-## How Codebase Index Works
+## How Does Retrieval Flow Through codebase-index?
 
 ```
 User question
     ↓
-Claude Code Skill (SKILL.md)
+CLI instructions or skill
     ↓
 Hybrid retrieval
     ├─ Path search
@@ -222,7 +262,7 @@ Hybrid retrieval
     ↓
 Ranked retrieval packet
     ↓
-Claude reads only the recommended line ranges
+Agent reads only the recommended line ranges
     ↓
 Answer with precise file:line citations
 ```
@@ -241,6 +281,7 @@ Answer with precise file:line citations
 - [x] **Secret redaction** — Masks keys, tokens, and credentials in snippets
 - [x] **Optional embeddings** — Local or remote vector search (opt-in)
 - [x] **Optional hooks/watch** — Auto-update index after file edits
+- [x] **Multi-CLI setup** — Claude Code, Codex CLI, and OpenCode instructions
 - [ ] **Optional MCP wrapper** — Model Context Protocol bridge (planned)
 
 ## Safety and Privacy
@@ -257,25 +298,27 @@ Answer with precise file:line citations
 
 See [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) for the full security model and threat analysis.
 
-## Comparison
+## How Does codebase-index Compare?
 
-| Feature | Manual Grep/Read | Cursor Indexing | Aider repo-map | codebase-index |
+| Feature | Manual grep/read | Cursor indexing | Aider repo-map | codebase-index |
 |---|---|---|---|---|
 | Symbol awareness | No | Yes | No | Yes |
 | Result ranking | No | Yes | No | Yes |
 | Token-efficient | No | Yes | Partial | Yes |
 | Local-first | Yes | Yes | Yes | Yes |
 | No network | Yes | Yes | Yes | Yes |
-| Works with Claude Code | Manual | No | No | Native (Skill) |
+| Works with Claude Code | Manual | No | No | Native skill |
+| Works with Codex CLI | Manual | No | No | AGENTS.md package |
+| Works with OpenCode | Manual | No | No | Command + agent files |
 | Open source | N/A | No | Yes | Yes (MIT) |
-| Dependency graph | No | Partial | No | Planned |
+| Dependency graph | No | Partial | No | Yes |
 | Secret redaction | No | No | No | Yes |
 
 **Honest positioning:**
 
 - This is **not** a full IDE or a replacement for Cursor.
 - This is **not** a cloud service — it's local-first.
-- This **is** a local retrieval layer that makes Claude Code smarter about finding the right files.
+- This **is** a local retrieval layer that makes AI coding agents better at finding the right files.
 
 See [docs/COMPARISON.md](docs/COMPARISON.md) for a detailed comparison.
 
@@ -297,8 +340,8 @@ Measured on `sample_repo` (Python + TypeScript + Markdown fixture, 5 simple quer
 ## Repository Layout
 
 ```
-├── skill/              # Claude Code Skill (SKILL.md, scripts, examples)
-├── skills/             # Plugin skill (byte-identical copy of skill/)
+├── skill/              # Source instruction package (SKILL.md, scripts, examples)
+├── skills/             # Plugin skill copy
 ├── src/codebase_index/ # Python package (CLI, indexer, retrieval, storage)
 ├── docs/               # Documentation (architecture, schema, security, FAQ)
 ├── examples/           # Sample queries, retrieval output, demo project
@@ -350,11 +393,25 @@ Create `.codeindex.json` in your project root:
 └── config.json    # Resolved configuration
 ```
 
-## Claude Code Integration
+## Which AI CLIs Does codebase-index Support?
 
-The skill is defined in [`skill/SKILL.md`](skill/SKILL.md) with YAML frontmatter for automatic selection.
+`codebase-index init` can install instructions for three AI coding CLIs:
 
-### Example `.claude/CLAUDE.md`
+| CLI | Files written by `init` | Best command |
+|---|---|---|
+| Claude Code | `.claude/skills/codebase-index/` | `codebase-index init --target claude` |
+| Codex CLI | `AGENTS.md` + `.codex/skills/codebase-index/` | `codebase-index init --target codex` |
+| OpenCode | `.opencode/commands/` + `.opencode/agents/` + resources | `codebase-index init --target opencode` |
+
+Use `codebase-index init --target auto` to install into detected CLIs, or
+`codebase-index init --target all` to write every supported integration.
+
+### Claude Code Integration
+
+The Claude Code skill is defined in [`skill/SKILL.md`](skill/SKILL.md) with
+YAML frontmatter for automatic selection.
+
+Example `.claude/CLAUDE.md`:
 
 ```markdown
 ## Codebase Questions
@@ -383,15 +440,13 @@ Configure automatic index updates in `.codeindex.json`:
 
 See [skill/examples/](skill/examples/) for full examples.
 
-## Keywords
-
-`codebase-index` is a local-first Claude Code Skill for codebase indexing, semantic code search, token-efficient context retrieval, AST-based symbol search, and Cursor-like project awareness inside Claude Code. It provides hybrid code search combining SQLite FTS5 lexical search, Tree-sitter symbol extraction, and optional vector embeddings — all running locally with no network by default.
-
 ## FAQ
 
 ### Is this a Cursor replacement?
 
-No. `codebase-index` is not a replacement for Cursor or any IDE. It is a **local retrieval layer** for Claude Code that provides Cursor-like codebase awareness. You still use Claude Code as your primary interface; this skill makes it smarter about finding the right files.
+No. `codebase-index` is not a replacement for Cursor or any IDE. It is a
+local retrieval layer for terminal AI coding agents. You still use Claude Code,
+Codex CLI, OpenCode, or another agent as your primary interface.
 
 ### Does it send my code anywhere?
 
@@ -411,11 +466,14 @@ Grep returns all matches with no ranking, no symbol awareness, and no context ab
 
 ### Why not MCP?
 
-MCP is a great standard and a bridge is planned (M8 on the roadmap). However, the Claude Code Skill interface is simpler and more direct for this use case. The MCP bridge will be an **optional** addition.
+MCP is a useful standard and an optional bridge is planned. The current package
+focuses on a simple CLI plus native instruction packages because they work in
+existing terminal agent workflows without running a separate server.
 
 ### Can I use it with other agents?
 
-Yes. While optimized for Claude Code, the CLI is agent-agnostic. Any agent that can run shell commands can use `codebase-index`. JSON output (`--json`) is parseable by any tool.
+Yes. The CLI is agent-agnostic. Any agent that can run shell commands can use
+`codebase-index`, and JSON output (`--json`) is parseable by other tools.
 
 ### How do I reset the index?
 
@@ -432,8 +490,8 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full gu
 Quick start:
 
 ```bash
-git clone https://github.com/<OWNER>/claude-code-codebase-index-skill.git
-cd claude-code-codebase-index-skill
+git clone https://github.com/denfry/codebase-index.git
+cd codebase-index
 pip install -e ".[dev]"
 pytest
 ruff check src/ tests/
@@ -448,13 +506,13 @@ See [ROADMAP.md](ROADMAP.md) for the full milestone plan.
 | M0 | ✅ Done | Repository packaging |
 | M1 | ✅ Done | SQLite + FTS5 index |
 | M2 | ✅ Done | Tree-sitter symbol extraction |
-| M3 | Planned | Hybrid retrieval |
-| M4 | Planned | Graph expansion |
+| M3 | ✅ Done | Hybrid retrieval |
+| M4 | ✅ Done | Graph expansion |
 | M5 | ✅ Done | Token-budgeted retrieval packets |
 | M6 | ✅ Done | Optional local embeddings |
 | M7 | ✅ Done | Claude Code Skill packaging |
 | M7.5 | ✅ Done | One-command plugin install |
-| M8 | Planned | Hooks + watch mode |
+| M8 | ✅ Done | Hooks + watch mode |
 | M9 | ✅ Done | Public release |
 
 ## License

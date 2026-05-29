@@ -1,4 +1,4 @@
-"""Materialize the bundled skill template into a project's `.claude/` tree.
+"""Materialize the bundled skill template into project CLI trees.
 
 Pure filesystem helpers used by the `init` CLI command. The template is read from
 the wheel via importlib.resources, so it works in editable and zip installs alike.
@@ -7,6 +7,7 @@ the wheel via importlib.resources, so it works in editable and zip installs alik
 from __future__ import annotations
 
 import json
+import shutil
 import stat
 from importlib import resources
 from importlib.resources.abc import Traversable
@@ -14,13 +15,23 @@ from pathlib import Path
 
 from .config import Config
 
-SKILL_REL = Path(".claude") / "skills" / "codebase-index"
+CLI_TARGETS = ("claude", "codex", "opencode")
+
+CLAUDE_SKILL_REL = Path(".claude") / "skills" / "codebase-index"
+CODEX_SKILL_REL = Path(".codex") / "skills" / "codebase-index"
+OPENCODE_SKILL_REL = Path(".opencode") / "skills" / "codebase-index"
+OPENCODE_COMMAND_REL = Path(".opencode") / "commands" / "codebase-index.md"
+OPENCODE_AGENT_REL = Path(".opencode") / "agents" / "codebase-index.md"
+
+SKILL_REL = CLAUDE_SKILL_REL
 CACHE_REL = Path(".claude") / "cache" / "codebase-index"
 _CACHE_IGNORE_LINE = ".claude/cache/codebase-index/"
 _GITIGNORE_BLOCK = (
     "\n# codebase-index cache (machine-local; do not commit)\n"
     f"{_CACHE_IGNORE_LINE}\n"
 )
+_MANAGED_START = "<!-- >>> codebase-index managed >>> -->"
+_MANAGED_END = "<!-- <<< codebase-index managed <<< -->"
 
 
 def _template_root() -> Traversable:
@@ -39,9 +50,34 @@ def _iter_template(node: Traversable, prefix: str = "") -> "list[tuple[str, Trav
     return out
 
 
-def materialize_skill(root: Path, *, force: bool) -> list[Path]:
-    """Copy the whole skill template to `<root>/.claude/skills/codebase-index/`."""
-    dest = root / SKILL_REL
+def skill_rel_for_target(target: str) -> Path:
+    if target == "claude":
+        return CLAUDE_SKILL_REL
+    if target == "codex":
+        return CODEX_SKILL_REL
+    if target == "opencode":
+        return OPENCODE_SKILL_REL
+    raise ValueError(f"unknown CLI target: {target}")
+
+
+def detect_cli_targets(root: Path) -> list[str]:
+    """Detect usable local CLI targets for a project install."""
+    home = Path.home()
+    checks = (
+        ("claude", "claude", root / ".claude", home / ".claude"),
+        ("codex", "codex", root / ".codex", home / ".codex"),
+        ("opencode", "opencode", root / ".opencode", home / ".config" / "opencode"),
+    )
+    return [
+        target
+        for target, command, project_marker, home_marker in checks
+        if project_marker.exists() or shutil.which(command) or home_marker.exists()
+    ]
+
+
+def materialize_skill(root: Path, *, force: bool, target: str = "claude") -> list[Path]:
+    """Copy the whole skill template to the target's project resource directory."""
+    dest = root / skill_rel_for_target(target)
     if dest.exists() and not force:
         raise FileExistsError(dest)
 
@@ -53,6 +89,74 @@ def materialize_skill(root: Path, *, force: bool) -> list[Path]:
         if rel == "scripts/cbx":
             target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         written.append(target)
+    return written
+
+
+def _managed_block(content: str) -> str:
+    return f"{_MANAGED_START}\n{content.rstrip()}\n{_MANAGED_END}\n"
+
+
+def _upsert_managed_block(path: Path, content: str) -> Path:
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    block = _managed_block(content)
+    if _MANAGED_START in existing and _MANAGED_END in existing:
+        before, rest = existing.split(_MANAGED_START, 1)
+        _, after = rest.split(_MANAGED_END, 1)
+        new_text = before.rstrip() + "\n\n" + block + after.lstrip()
+    else:
+        sep = "" if existing in ("", "\n") else "\n\n"
+        new_text = existing.rstrip() + sep + block
+    path.write_text(new_text, encoding="utf-8")
+    return path
+
+
+def write_codex_agents(root: Path) -> Path:
+    rel = CODEX_SKILL_REL / "SKILL.md"
+    content = f"""# codebase-index
+
+Use the local codebase index before scanning repository files.
+
+Skill resources: `{rel.as_posix()}`
+
+Run `codebase-index search "<query>" --json` for general questions, or use
+`symbol`, `refs`, and `impact` for symbol lookup, references, and change impact.
+If the index is missing, run `codebase-index index` first.
+"""
+    return _upsert_managed_block(root / "AGENTS.md", content)
+
+
+def write_opencode_files(root: Path) -> list[Path]:
+    command = root / OPENCODE_COMMAND_REL
+    agent = root / OPENCODE_AGENT_REL
+    command.parent.mkdir(parents=True, exist_ok=True)
+    agent.parent.mkdir(parents=True, exist_ok=True)
+    command.write_text(
+        """---
+description: Search this repository with codebase-index before reading files.
+---
+
+Run:
+
+```bash
+codebase-index search "$ARGUMENTS" --json
+```
+
+Use `symbol <name>`, `refs <name>`, or `impact <file|symbol>` when those match
+the request. If the index is missing, run `codebase-index index` first.
+""",
+        encoding="utf-8",
+    )
+    src = _template_root() / "SKILL.md"
+    agent.write_bytes(src.read_bytes())
+    return [command, agent]
+
+
+def install_target(root: Path, target: str, *, force: bool) -> list[Path]:
+    written = materialize_skill(root, force=force, target=target)
+    if target == "codex":
+        written.append(write_codex_agents(root))
+    elif target == "opencode":
+        written.extend(write_opencode_files(root))
     return written
 
 

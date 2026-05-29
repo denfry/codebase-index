@@ -24,7 +24,7 @@ def _bash_works() -> bool:
 BASH_OK = _bash_works()
 
 LOCK_TEXT = (
-    "codebase-index==1.0.1\n"
+    "codebase-index==1.0.2\n"
     "tree-sitter==0.25.2\n"
     "tree-sitter-language-pack==1.8.1\n"
 )

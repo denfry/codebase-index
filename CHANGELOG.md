@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-05-29
+
+### Added
+- Added `codebase-index init --target claude|codex|opencode|auto|all`, with an
+  interactive Rich target picker for terminal use.
+- Added project scaffolding for Codex CLI (`AGENTS.md` + resources) and OpenCode
+  (command, agent, and resources), while preserving the Claude Code skill path.
+
+### Changed
+- Refreshed README positioning and SEO structure around local codebase indexing for
+  AI coding agents, including Claude Code, Codex CLI, and OpenCode.
+- Updated quickstart and installation docs for multi-CLI initialization.
+
 ## [1.0.1] - 2026-05-29
 
 ### Fixed
@@ -49,7 +62,8 @@ All notable changes to this project are documented here. The format is based on
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/1.0.1...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/1.0.2...HEAD
+[1.0.2]: https://github.com/denfry/codebase-index/compare/1.0.1...1.0.2
 [1.0.1]: https://github.com/denfry/codebase-index/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/denfry/codebase-index/compare/v0.1.0...1.0.0
 [0.1.0]: https://github.com/denfry/codebase-index/releases/tag/v0.1.0

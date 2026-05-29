@@ -1,6 +1,6 @@
-# Installation Guide: codebase-index for Claude Code
+# Installation Guide: codebase-index for AI CLIs
 
-This page explains how to install `codebase-index` and make the skill available in Claude Code.
+This page explains how to install `codebase-index` and make it available in Claude Code, Codex CLI, or OpenCode.
 
 ## Choose Your Path
 
@@ -29,7 +29,14 @@ codebase-index init
 codebase-index index
 ```
 
-This writes `.claude/skills/codebase-index/` (SKILL.md + `scripts/cbx`/`cbx.ps1`), a resolved `config.json`, and adds the cache directory to `.gitignore`. Use `--force` to overwrite an existing install, or `--with-hooks` to auto-merge the PostToolUse update hook into `.claude/settings.json` (a reviewable example is also written as a reference copy).
+In an interactive terminal, `init` opens a target picker and marks detected CLIs.
+For automation, use `--target claude|codex|opencode|auto|all`.
+
+This writes the selected CLI instructions (`.claude/skills/...`, Codex `AGENTS.md`
+plus `.codex/skills/...`, or OpenCode command/agent files), a resolved `config.json`,
+and adds the cache directory to `.gitignore`. Use `--force` to overwrite an existing
+install, or `--with-hooks` to auto-merge the Claude Code PostToolUse update hook into
+`.claude/settings.json` (a reviewable example is also written as a reference copy).
 
 ### Option 2: Install as a reusable local skill
 
@@ -37,7 +44,7 @@ Clone once and symlink into multiple projects:
 
 ```bash
 # Clone to a central location
-git clone https://github.com/<OWNER>/claude-code-codebase-index-skill.git ~/codebase-index
+git clone https://github.com/denfry/codebase-index.git ~/codebase-index
 
 # Install the Python package
 cd ~/codebase-index
@@ -60,8 +67,8 @@ pipx install codebase-index
 uv tool install codebase-index
 
 # From source (editable mode)
-git clone https://github.com/<OWNER>/claude-code-codebase-index-skill.git
-cd claude-code-codebase-index-skill
+git clone https://github.com/denfry/codebase-index.git
+cd codebase-index
 pip install -e ".[dev]"
 ```
 
@@ -106,7 +113,7 @@ Expected output:
 === codebase-index Doctor ===
 
 [OK] Python 3.12 (requires 3.10+)
-[OK] codebase-index package installed (v1.0.1)
+[OK] codebase-index package installed (v1.0.2)
 [OK] tree-sitter is available
 [INFO] Cache directory not yet created: ...
 [INFO] Skill not installed in .claude/skills/

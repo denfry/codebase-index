@@ -108,7 +108,7 @@ pwsh ./install.ps1 -Target claude -InstallDir "D:\skills\codebase-index"
 **Pinning по ветке/тегу** (воспроизводимость и безопасность):
 
 ```sh
-sh install.sh --branch v1.0.1
+sh install.sh --branch v1.0.2
 ```
 
 ---
@@ -151,7 +151,7 @@ sh install.sh --branch v1.0.1
 ```json
 {
   "skill_name": "codebase-index",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "installed_at": "2026-05-29T12:00:00Z",
   "target": "claude",
   "os": "linux",
