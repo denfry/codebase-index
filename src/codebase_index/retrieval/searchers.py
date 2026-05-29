@@ -8,7 +8,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from ..models import Confidence, IndexFreshness, ReadRange, Result, SearchResponse
+from ..models import (
+    Confidence,
+    IndexFreshness,
+    ReadRange,
+    RefSite,
+    RefsResponse,
+    Result,
+    SearchResponse,
+    SymbolDef,
+    SymbolResponse,
+)
 from ..output.redact import redact_snippet
 from ..storage import repo
 
@@ -147,3 +157,36 @@ def _freshness(conn: sqlite3.Connection) -> IndexFreshness:
         built_at=built_at,
         head_commit=head,
     )
+
+
+def symbol_lookup(
+    conn: sqlite3.Connection, name: str, *, kind: Optional[str], exact: bool
+) -> SymbolResponse:
+    rows = repo.symbols_by_name(conn, name, kind=kind, exact=exact)
+    symbols = [
+        SymbolDef(
+            name=row["name"],
+            qualified=row["qualified"],
+            kind=row["kind"],
+            path=row["path"],
+            line_start=row["line_start"],
+            line_end=row["line_end"],
+            signature=row["signature"],
+        )
+        for row in rows
+    ]
+    return SymbolResponse(query=name, index=_freshness(conn), symbols=symbols)
+
+
+def refs_lookup(conn: sqlite3.Connection, name: str, *, kind: str) -> RefsResponse:
+    sites = [
+        RefSite(path=row["path"], line=row["line"], kind="call")
+        for row in repo.refs_for_name(conn, name)
+    ]
+    if kind == "all":
+        sites.extend(
+            RefSite(path=row["path"], line=row["line_start"], kind="definition")
+            for row in repo.symbols_by_name(conn, name, exact=True)
+        )
+    sites.sort(key=lambda site: (site.path, site.line, site.kind))
+    return RefsResponse(query=name, index=_freshness(conn), sites=sites)

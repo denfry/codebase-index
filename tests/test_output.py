@@ -2,7 +2,16 @@ from __future__ import annotations
 
 import json as _json
 
-from codebase_index.models import IndexFreshness, ReadRange, Result, SearchResponse
+from codebase_index.models import (
+    IndexFreshness,
+    ReadRange,
+    RefSite,
+    RefsResponse,
+    Result,
+    SearchResponse,
+    SymbolDef,
+    SymbolResponse,
+)
 from codebase_index.output import json as json_out
 from codebase_index.output import markdown as md_out
 
@@ -46,3 +55,54 @@ def test_markdown_renderer_contains_key_fields():
     assert "1-3" in text
     assert "bootstrap" in text
     assert "high" in text.lower()
+
+
+def test_json_render_accepts_symbol_response():
+    resp = SymbolResponse(
+        query="User",
+        index=IndexFreshness(exists=True, stale=False, built_at="t"),
+        symbols=[
+            SymbolDef(
+                name="User",
+                kind="class",
+                path="src/models/user.py",
+                line_start=4,
+                line_end=6,
+                signature="class User:",
+            )
+        ],
+    )
+    data = _json.loads(json_out.render(resp))
+    assert data["symbols"][0]["name"] == "User"
+
+
+def test_markdown_render_symbols():
+    resp = SymbolResponse(
+        query="User",
+        index=IndexFreshness(exists=True, stale=False, built_at="t"),
+        symbols=[
+            SymbolDef(
+                name="User",
+                kind="class",
+                path="src/models/user.py",
+                line_start=4,
+                line_end=6,
+                signature="class User:",
+            )
+        ],
+    )
+    text = md_out.render_symbols(resp)
+    assert "User" in text and "src/models/user.py" in text and "class" in text
+
+
+def test_markdown_render_refs():
+    resp = RefsResponse(
+        query="f",
+        index=IndexFreshness(exists=True, stale=False, built_at="t"),
+        sites=[
+            RefSite(path="a.py", line=10, kind="call"),
+            RefSite(path="a.py", line=2, kind="definition"),
+        ],
+    )
+    text = md_out.render_refs(resp)
+    assert "a.py" in text and "10" in text and "definition" in text

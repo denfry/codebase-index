@@ -80,3 +80,40 @@ def test_reindex_replaces_chunks_not_duplicates(sample_repo, tmp_path):
     s2 = build_index(cfg, db, root=sample_repo)
     assert s1.chunks == s2.chunks
     db.close()
+
+
+def test_build_populates_symbols_and_edges(sample_repo, tmp_path):
+    cfg = Config()
+    cfg.root = str(sample_repo)
+    db = Database(tmp_path / "index.sqlite").open()
+    stats = build_index(cfg, db, root=sample_repo)
+
+    assert stats.symbols > 0
+    assert repo.count_symbols(db.conn) == stats.symbols
+    defs = repo.symbols_by_name(db.conn, "refresh_access_token")
+    assert any(r["kind"] == "function" and r["path"] == "src/auth/token.py" for r in defs)
+    sites = repo.refs_for_name(db.conn, "refresh_access_token")
+    assert any(s["path"] == "src/auth/token.py" and s["resolved"] == 1 for s in sites)
+    db.close()
+
+
+def test_symbol_body_chunks_linked(sample_repo, tmp_path):
+    cfg = Config()
+    cfg.root = str(sample_repo)
+    db = Database(tmp_path / "index.sqlite").open()
+    build_index(cfg, db, root=sample_repo)
+    linked = db.conn.execute(
+        "SELECT COUNT(*) FROM chunks WHERE symbol_id IS NOT NULL"
+    ).fetchone()[0]
+    assert linked > 0
+    db.close()
+
+
+def test_reindex_symbols_idempotent(sample_repo, tmp_path):
+    cfg = Config()
+    cfg.root = str(sample_repo)
+    db = Database(tmp_path / "index.sqlite").open()
+    s1 = build_index(cfg, db, root=sample_repo)
+    s2 = build_index(cfg, db, root=sample_repo)
+    assert s1.symbols == s2.symbols and s1.chunks == s2.chunks
+    db.close()

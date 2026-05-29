@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Iterable, Optional, Sequence
+from typing import Any, Iterable, Optional, Sequence
 
-from ..parsers.base import Chunk
+from ..parsers.base import Chunk, Symbol
 
 
 def upsert_file(
@@ -89,18 +89,35 @@ def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
 
 
 def replace_chunks(
-    conn: sqlite3.Connection, file_id: int, chunks: Sequence[Chunk]
+    conn: sqlite3.Connection,
+    file_id: int,
+    chunks: Sequence[Chunk],
+    symbol_ids: Optional[Sequence[int]] = None,
 ) -> int:
     conn.execute("DELETE FROM chunks WHERE file_id = ?", (file_id,))
+
+    def _symbol_id(chunk: Chunk) -> Optional[int]:
+        if chunk.symbol_index is not None and symbol_ids is not None:
+            return symbol_ids[chunk.symbol_index]
+        return None
+
     conn.executemany(
         """
         INSERT INTO chunks
             (file_id, line_start, line_end, kind, symbol_id, content, token_est)
         VALUES
-            (?, ?, ?, ?, NULL, ?, ?)
+            (?, ?, ?, ?, ?, ?, ?)
         """,
         [
-            (file_id, c.line_start, c.line_end, c.kind, c.content, c.token_est)
+            (
+                file_id,
+                c.line_start,
+                c.line_end,
+                c.kind,
+                _symbol_id(c),
+                c.content,
+                c.token_est,
+            )
             for c in chunks
         ],
     )
@@ -115,6 +132,101 @@ def chunks_for_file(conn: sqlite3.Connection, file_id: int) -> list[sqlite3.Row]
 
 def count_chunks(conn: sqlite3.Connection) -> int:
     return int(conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0])
+
+
+def replace_symbols(
+    conn: sqlite3.Connection, file_id: int, symbols: Sequence[Symbol]
+) -> list[int]:
+    conn.execute("DELETE FROM symbols WHERE file_id = ?", (file_id,))
+    ids: list[int] = []
+    for symbol in symbols:
+        cur = conn.execute(
+            """
+            INSERT INTO symbols
+                (file_id, name, qualified, kind, line_start, line_end, signature,
+                 parent_id, docstring, in_degree, out_degree)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 0, 0)
+            """,
+            (
+                file_id,
+                symbol.name,
+                symbol.qualified,
+                symbol.kind,
+                symbol.line_start,
+                symbol.line_end,
+                symbol.signature,
+                symbol.docstring,
+            ),
+        )
+        assert cur.lastrowid is not None
+        ids.append(int(cur.lastrowid))
+    for symbol, symbol_id in zip(symbols, ids):
+        if symbol.parent_index is not None:
+            conn.execute(
+                "UPDATE symbols SET parent_id = ? WHERE id = ?",
+                (ids[symbol.parent_index], symbol_id),
+            )
+    return ids
+
+
+def symbols_by_name(
+    conn: sqlite3.Connection,
+    name: str,
+    *,
+    kind: Optional[str] = None,
+    exact: bool = True,
+) -> list[sqlite3.Row]:
+    sql = """
+        SELECT s.*, f.path AS path
+        FROM symbols s JOIN files f ON f.id = s.file_id
+        WHERE s.name {op} ?
+    """.format(op="=" if exact else "LIKE")
+    params: list[Any] = [name if exact else f"{name}%"]
+    if kind:
+        sql += " AND s.kind = ?"
+        params.append(kind)
+    sql += " ORDER BY s.name, f.path, s.line_start"
+    return conn.execute(sql, params).fetchall()
+
+
+def count_symbols(conn: sqlite3.Connection) -> int:
+    return int(conn.execute("SELECT COUNT(*) FROM symbols").fetchone()[0])
+
+
+def replace_edges(
+    conn: sqlite3.Connection, file_id: int, edges: Sequence[dict[str, Any]]
+) -> int:
+    conn.execute("DELETE FROM edges WHERE file_id = ?", (file_id,))
+    conn.executemany(
+        """
+        INSERT INTO edges
+            (edge_type, src_kind, src_id, dst_kind, dst_id, dst_name, file_id, line, resolved)
+        VALUES
+            (:edge_type, :src_kind, :src_id, :dst_kind, :dst_id, :dst_name, :file_id, :line, :resolved)
+        """,
+        [{**edge, "file_id": file_id} for edge in edges],
+    )
+    return len(edges)
+
+
+def count_edges(conn: sqlite3.Connection) -> int:
+    return int(conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0])
+
+
+def refs_for_name(conn: sqlite3.Connection, name: str) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT e.line AS line, f.path AS path, e.edge_type AS edge_type,
+               e.resolved AS resolved, e.src_id AS src_id, e.src_kind AS src_kind,
+               src.name AS src_name, src.qualified AS src_qualified
+        FROM edges e
+        JOIN files f ON f.id = e.file_id
+        LEFT JOIN symbols src ON src.id = e.src_id AND e.src_kind = 'symbol'
+        WHERE e.dst_name = ? AND e.edge_type = 'call'
+        ORDER BY f.path, e.line
+        """,
+        (name,),
+    ).fetchall()
 
 
 def fts_search(
