@@ -67,4 +67,20 @@ target-version = "py310"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-q --cov=codebase_index --cov-report=term-missing --cov-fail-under=80"
+markers = [
+    "slow: marks tests as slow (deselected unless --runslow is passed)",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src/codebase_index"]
+omit = ["*/skill_template/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]

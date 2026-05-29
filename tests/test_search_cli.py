@@ -56,16 +56,16 @@ def test_vector_mode_enabled_runs(tmp_path, monkeypatch):
 
     pytest.importorskip("sqlite_vec")
     import codebase_index.cli as cli_mod
+    import codebase_index.indexer.pipeline as pipe
     from pathlib import Path
-    import conftest
 
     from codebase_index.config import Config
     from codebase_index.indexer.pipeline import build_index
     from codebase_index.storage.db import Database
-    import codebase_index.indexer.pipeline as pipe
+    from tests.conftest import FakeEmbeddingBackend
 
     fixture_root = Path(__file__).parent / "fixtures" / "sample_repo"
-    fake = conftest.FakeEmbeddingBackend()
+    fake = FakeEmbeddingBackend()
     monkeypatch.setattr(pipe, "resolve_backend", lambda cfg, warn=None: fake)
     cfg = Config(root=str(fixture_root))
     cfg.embeddings.enabled = True
