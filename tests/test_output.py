@@ -133,3 +133,36 @@ def test_markdown_is_compact_and_has_snippet():
     assert "src/a.py" in out and "1-6" in out
     assert "```" in out and "def X()" in out
     assert "exact symbol match" in out
+
+
+def test_markdown_render_impact():
+    from codebase_index.models import ImpactNode, ImpactResponse, IndexFreshness
+    from codebase_index.output import markdown as md_out
+
+    resp = ImpactResponse(
+        target="src/models/user.py", direction="up", depth=2,
+        index=IndexFreshness(exists=True, stale=False, built_at="t"),
+        nodes=[
+            ImpactNode(kind="file", path="src/api/service.py", distance=1, via_edge="import"),
+            ImpactNode(kind="symbol", path="src/api/service.py", name="AdminUser",
+                       line_start=5, distance=1, via_edge="extends"),
+        ],
+        files=["src/api/service.py"],
+    )
+    text = md_out.render_impact(resp)
+    assert "src/models/user.py" in text
+    assert "src/api/service.py" in text
+    assert "AdminUser" in text and "extends" in text
+    assert "up" in text
+
+
+def test_markdown_render_impact_empty():
+    from codebase_index.models import ImpactResponse, IndexFreshness
+    from codebase_index.output import markdown as md_out
+
+    resp = ImpactResponse(
+        target="nope", direction="both", depth=2,
+        index=IndexFreshness(exists=True, stale=False), nodes=[], files=[],
+    )
+    text = md_out.render_impact(resp)
+    assert "No impact" in text or "0" in text

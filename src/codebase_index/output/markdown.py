@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..models import RefsResponse, SearchResponse, SymbolResponse
+from ..models import ImpactResponse, RefsResponse, SearchResponse, SymbolResponse
 
 
 def render(resp: SearchResponse | dict) -> str:
@@ -133,3 +133,18 @@ def _header(query: str, exists: bool, stale: bool) -> str:
     if not exists:
         freshness = "NO INDEX"
     return f"**query:** {query}  |  **index:** {freshness}"
+
+
+def render_impact(resp: ImpactResponse) -> str:
+    header = (f"**impact:** `{resp.target}`  ·  **direction:** {resp.direction}  ·  "
+              f"**depth:** {resp.depth}  ·  **affected files:** {len(resp.files)}")
+    lines = [header, ""]
+    if not resp.nodes:
+        return "\n".join(lines + ["_No impact found (target unknown or no edges)._", ""]).rstrip() + "\n"
+    lines.append("| dist | via | kind | node | location |")
+    lines.append("|------|-----|------|------|----------|")
+    for n in sorted(resp.nodes, key=lambda x: (x.distance, x.path, x.line_start or 0)):
+        loc = f"{n.path}:{n.line_start}" if n.line_start else n.path
+        node_name = f"`{n.name}`" if n.name else "—"
+        lines.append(f"| {n.distance} | {n.via_edge or ''} | {n.kind} | {node_name} | `{loc}` |")
+    return "\n".join(lines).rstrip() + "\n"
