@@ -117,6 +117,7 @@ class Candidate:
     content: str
     token_est: int
     bm25: float
+    kind: str = "window"
 
 
 def _subtokens(term: str) -> list[str]:
@@ -150,6 +151,7 @@ def fts_search(conn: sqlite3.Connection, query: str, *, limit: int) -> list[Cand
             content=r["content"],
             token_est=r["token_est"],
             bm25=r["bm25"],
+            kind=r.get("kind", "window"),
         )
         for r in rows
     ]
@@ -189,7 +191,7 @@ def fts_response(
                 line_end=candidate.line_end,
                 symbols=[],
                 score=round(1.0 / rank, 4),
-                reason="lexical match (bm25)",
+                reason="doc match" if candidate.kind == "doc" else "lexical match (bm25)",
                 snippet=snippet,
             )
         )
