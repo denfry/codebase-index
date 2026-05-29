@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from tree_sitter_language_pack import get_language, get_parser
+from tree_sitter import Parser, Query, QueryCursor
+from tree_sitter_language_pack import get_language
 
 from .base import Edge, ParseResult, Symbol
 from .languages import CONTAINER_KINDS, spec_for
@@ -21,17 +22,18 @@ def parse_file(lang: str, text: str) -> ParseResult:
         raise UnsupportedLanguage(lang)
 
     grammar = get_language(spec.ts_name)
-    parser = get_parser(spec.ts_name)
-    tree = parser.parse(text)
+    parser = Parser(grammar)
+    source = text.encode("utf-8")
+    tree = parser.parse(source)
     if tree is None:
         raise ValueError("tree-sitter parser returned no tree")
-    root_attr = tree.root_node
-    root = root_attr() if callable(root_attr) else root_attr
+    root = tree.root_node
 
-    del grammar
     source = text.encode("utf-8")
     symbols = _extract_symbols(root, lang, source)
     edges = _extract_edges(root, symbols, source)
+    edges.extend(_extract_graph_edges(spec, grammar, root, symbols))
+    del grammar
     chunks = build_chunks(text, symbols)
     return ParseResult(chunks=chunks, symbols=symbols, edges=edges)
 
@@ -169,6 +171,35 @@ def _extract_edges(root, symbols: list[Symbol], source: bytes) -> list[Edge]:
                 src_symbol_index=_enclosing_symbol_index(symbols, line),
             )
         )
+    return edges
+
+
+_EDGE_PREFIXES = {"import.": "import", "extends.": "extends", "implements.": "implements"}
+
+
+def _extract_graph_edges(spec, grammar, root, symbols) -> list[Edge]:
+    if not spec.imports_query:
+        return []
+    query = Query(grammar, spec.imports_query)
+    cursor = QueryCursor(query)
+    edges: list[Edge] = []
+    for _pattern_idx, captures in cursor.matches(root):
+        for capture_name, nodes in captures.items():
+            for node in nodes:
+                edge_type = next(
+                    (et for pfx, et in _EDGE_PREFIXES.items() if capture_name.startswith(pfx)),
+                    None,
+                )
+                if edge_type is None:
+                    continue
+                line = _row(node.start_point) + 1
+                src_idx = None if edge_type == "import" else _enclosing_symbol_index(symbols, line)
+                edges.append(Edge(
+                    edge_type=edge_type,
+                    callee_name=_text(node).strip().strip('"').strip("'"),
+                    line=line,
+                    src_symbol_index=src_idx,
+                ))
     return edges
 
 
