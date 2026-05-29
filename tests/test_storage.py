@@ -311,3 +311,57 @@ def test_replace_edges_and_refs_for_name(tmp_path):
     sites = repo.refs_for_name(db.conn, "target")
     assert len(sites) == 1 and sites[0]["line"] == 5 and sites[0]["path"] == "m.py"
     db.close()
+
+
+def _seed_two_files(db):
+    from codebase_index.parsers.base import Symbol
+
+    fid_a = repo.upsert_file(
+        db.conn, path="src/auth/token.py", lang="python", size_bytes=1, sha256="a",
+        mtime_ns=1, git_status=None, parser="treesitter", indexed_at="t", is_generated=False,
+    )
+    fid_b = repo.upsert_file(
+        db.conn, path="src/api/service.py", lang="python", size_bytes=1, sha256="b",
+        mtime_ns=1, git_status=None, parser="treesitter", indexed_at="t", is_generated=False,
+    )
+    a_syms = repo.replace_symbols(db.conn, fid_a, [
+        Symbol(name="refresh_access_token", kind="function", line_start=1, line_end=2,
+               qualified="refresh_access_token"),
+    ])
+    b_syms = repo.replace_symbols(db.conn, fid_b, [
+        Symbol(name="renew", kind="function", line_start=5, line_end=6, qualified="renew"),
+    ])
+    return fid_a, fid_b, a_syms[0], b_syms[0]
+
+
+def test_graph_accessors_resolve_and_walk(tmp_path):
+    db = _open(tmp_path)
+    fid_a, fid_b, target_id, caller_id = _seed_two_files(db)
+
+    # one unresolved cross-file call edge + one unresolved import edge
+    repo.replace_edges(db.conn, fid_b, [
+        {"edge_type": "call", "src_kind": "symbol", "src_id": caller_id,
+         "dst_kind": None, "dst_id": None, "dst_name": "refresh_access_token",
+         "line": 6, "resolved": 0},
+        {"edge_type": "import", "src_kind": "file", "src_id": fid_b,
+         "dst_kind": None, "dst_id": None, "dst_name": "auth.token",
+         "line": 1, "resolved": 0},
+    ])
+
+    assert len(repo.unresolved_edges(db.conn)) == 2
+    assert repo.symbol_id_for_unique_name(db.conn, "refresh_access_token") == target_id
+    assert repo.symbol_id_for_unique_name(db.conn, "nope") is None
+    suffix_rows = repo.files_with_suffix(db.conn, "auth/token.py")
+    assert [r["id"] for r in suffix_rows] == [fid_a]
+    assert repo.file_by_path(db.conn, "src/api/service.py")["id"] == fid_b
+
+    # resolve both edges, recompute degrees
+    repo.resolve_edge(db.conn, repo.unresolved_edges(db.conn)[0]["id"], "symbol", target_id)
+    repo.recompute_degrees(db.conn)
+    assert repo.count_resolved_edges(db.conn) == 1
+    rows = repo.incoming_edges(db.conn, "symbol", target_id)
+    assert rows and rows[0]["src_id"] == caller_id
+    out = repo.outgoing_edges(db.conn, "symbol", caller_id)
+    assert out and out[0]["dst_id"] == target_id
+    assert [r["id"] for r in repo.symbols_in_file(db.conn, fid_a)] == [target_id]
+    db.close()

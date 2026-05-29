@@ -316,3 +316,73 @@ def symbol_search(
             "limit": limit,
         },
     ).fetchall()
+
+
+def unresolved_edges(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, edge_type, dst_name FROM edges "
+        "WHERE resolved = 0 AND dst_name IS NOT NULL ORDER BY id"
+    ).fetchall()
+
+
+def resolve_edge(conn: sqlite3.Connection, edge_id: int, dst_kind: str, dst_id: int) -> None:
+    conn.execute(
+        "UPDATE edges SET dst_kind = ?, dst_id = ?, resolved = 1 WHERE id = ?",
+        (dst_kind, dst_id, edge_id),
+    )
+
+
+def symbol_id_for_unique_name(conn: sqlite3.Connection, name: str) -> Optional[int]:
+    rows = conn.execute(
+        "SELECT id FROM symbols WHERE name = ? LIMIT 2", (name,)
+    ).fetchall()
+    return int(rows[0]["id"]) if len(rows) == 1 else None
+
+
+def files_with_suffix(conn: sqlite3.Connection, suffix: str) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, path FROM files WHERE path = ? OR path LIKE ? ORDER BY length(path), path",
+        (suffix, f"%/{suffix}"),
+    ).fetchall()
+
+
+def file_by_path(conn: sqlite3.Connection, path: str) -> Optional[sqlite3.Row]:
+    return conn.execute("SELECT id, path FROM files WHERE path = ?", (path,)).fetchone()
+
+
+def symbols_in_file(conn: sqlite3.Connection, file_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, name, kind, line_start, in_degree FROM symbols "
+        "WHERE file_id = ? ORDER BY line_start",
+        (file_id,),
+    ).fetchall()
+
+
+def incoming_edges(conn: sqlite3.Connection, kind: str, node_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, edge_type, src_kind, src_id, file_id, line FROM edges "
+        "WHERE resolved = 1 AND dst_kind = ? AND dst_id = ?",
+        (kind, node_id),
+    ).fetchall()
+
+
+def outgoing_edges(conn: sqlite3.Connection, kind: str, node_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, edge_type, dst_kind, dst_id, file_id, line FROM edges "
+        "WHERE resolved = 1 AND src_kind = ? AND src_id = ?",
+        (kind, node_id),
+    ).fetchall()
+
+
+def recompute_degrees(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "UPDATE symbols SET "
+        "out_degree = (SELECT COUNT(*) FROM edges "
+        "  WHERE resolved = 1 AND src_kind = 'symbol' AND src_id = symbols.id), "
+        "in_degree = (SELECT COUNT(*) FROM edges "
+        "  WHERE resolved = 1 AND dst_kind = 'symbol' AND dst_id = symbols.id)"
+    )
+
+
+def count_resolved_edges(conn: sqlite3.Connection) -> int:
+    return int(conn.execute("SELECT COUNT(*) FROM edges WHERE resolved = 1").fetchone()[0])
