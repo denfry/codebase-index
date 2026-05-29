@@ -79,3 +79,33 @@ def test_vector_mode_enabled_runs(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     payload = _json.loads(result.stdout)
     assert payload["mode"] == "vector"
+
+
+def test_search_reports_stale_after_edit(sample_repo, tmp_path, monkeypatch):
+    from pathlib import Path
+    import sqlite3
+
+    from typer.testing import CliRunner
+
+    from codebase_index.cli import app
+
+    runner = CliRunner()
+    assert runner.invoke(app, ["--root", str(sample_repo), "index"]).exit_code == 0
+
+    res = runner.invoke(app, ["--root", str(sample_repo), "--json", "search", "token"])
+    assert res.exit_code == 0, res.output
+    fresh = _json.loads(res.output)
+    assert fresh["index"]["exists"] is True
+    assert fresh["index"]["stale"] is False
+
+    db_path = sample_repo / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("UPDATE files SET mtime_ns = 1")
+    conn.execute("DELETE FROM meta WHERE key = 'head_commit'")
+    conn.commit()
+    conn.close()
+
+    res2 = runner.invoke(app, ["--root", str(sample_repo), "--json", "search", "token"])
+    stale = _json.loads(res2.output)
+    assert stale["index"]["stale"] is True
+    assert stale["index"]["files_changed_since_build"] >= 1

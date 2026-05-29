@@ -8,7 +8,11 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from pathlib import Path
+from typing import Optional
 
+from ..config import Config
+from ..indexer.freshness import compute_freshness
 from . import searchers
 from .budget import apply_budget
 from .fusion import fuse
@@ -68,6 +72,8 @@ def search(
     token_budget: int,
     no_fallback: bool,
     backend=None,
+    root: Optional[Path] = None,
+    config: Optional[Config] = None,
 ) -> dict:
     plan = detect_intent(query)
     lists, weights = _run_retrievers(
@@ -82,10 +88,24 @@ def search(
     if not no_fallback and confidence == Confidence.LOW:
         fallback = _fallback_suggestions(query, ranked)
 
+    if config is not None and root is not None:
+        freshness = compute_freshness(conn, root, config)
+    else:
+        from ..storage import repo
+        built_at = repo.get_meta(conn, "built_at")
+        freshness = {
+            "exists": built_at is not None,
+            "stale": False,
+            "files_changed_since_build": 0,
+            "built_at": built_at,
+            "head_commit": repo.get_meta(conn, "head_commit"),
+        }
+
     return {
         "query": query,
         "intent": plan.intent.value,
         "mode": mode,
+        "index": freshness.model_dump() if hasattr(freshness, "model_dump") else freshness,
         "confidence": confidence.value,
         "results": results,
         "recommended_reads": recommended,
