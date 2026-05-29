@@ -365,3 +365,18 @@ def test_graph_accessors_resolve_and_walk(tmp_path):
     assert out and out[0]["dst_id"] == target_id
     assert [r["id"] for r in repo.symbols_in_file(db.conn, fid_a)] == [target_id]
     db.close()
+
+
+def test_path_mtimes_returns_indexed_paths(tmp_path):
+    db = _open(tmp_path)
+    repo.upsert_file(
+        db.conn, path="src/a.py", lang="python", size_bytes=1, sha256="a",
+        mtime_ns=111, git_status=None, parser="line", indexed_at="t", is_generated=False,
+    )
+    repo.upsert_file(
+        db.conn, path="src/b.py", lang="python", size_bytes=1, sha256="b",
+        mtime_ns=222, git_status=None, parser="line", indexed_at="t", is_generated=False,
+    )
+    mtimes = repo.path_mtimes(db.conn)
+    assert mtimes == {"src/a.py": 111, "src/b.py": 222}
+    db.close()

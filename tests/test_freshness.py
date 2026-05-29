@@ -1,0 +1,47 @@
+from __future__ import annotations
+
+from codebase_index.config import Config
+from codebase_index.indexer.freshness import compute_freshness
+from codebase_index.indexer.pipeline import build_index
+from codebase_index.storage.db import Database
+
+
+def _indexed(sample_repo, tmp_path):
+    cfg = Config()
+    cfg.root = str(sample_repo)
+    db = Database(tmp_path / "index.sqlite").open()
+    build_index(cfg, db, root=sample_repo)
+    return cfg, db
+
+
+def test_missing_index_is_not_fresh(tmp_path):
+    db = Database(tmp_path / "index.sqlite").open()
+    fr = compute_freshness(db.conn, tmp_path, Config())
+    assert fr.exists is False and fr.stale is False
+    db.close()
+
+
+def test_freshly_built_index_is_not_stale(sample_repo, tmp_path):
+    cfg, db = _indexed(sample_repo, tmp_path)
+    fr = compute_freshness(db.conn, sample_repo, cfg)
+    assert fr.exists is True
+    assert fr.stale is False
+    assert fr.files_changed_since_build == 0
+    db.close()
+
+
+def test_edited_file_makes_index_stale(sample_repo, tmp_path, monkeypatch):
+    """An indexed file whose mtime advanced past the build is counted as changed."""
+    cfg, db = _indexed(sample_repo, tmp_path)
+
+    from codebase_index.storage import repo
+    indexed = repo.path_mtimes(db.conn)
+    a_path = next(iter(indexed))
+    repo.set_meta(db.conn, "head_commit", "deadbeef")
+    db.conn.execute("UPDATE files SET mtime_ns = 1 WHERE path = ?", (a_path,))
+    db.conn.commit()
+
+    fr = compute_freshness(db.conn, sample_repo, cfg)
+    assert fr.stale is True
+    assert fr.files_changed_since_build >= 1
+    db.close()

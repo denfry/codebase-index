@@ -433,6 +433,14 @@ def count_vectors(conn: sqlite3.Connection) -> int:
     return int(conn.execute("SELECT COUNT(*) FROM vec_chunks").fetchone()[0])
 
 
+def path_mtimes(conn: sqlite3.Connection) -> dict[str, int]:
+    """Map every indexed file's repo-relative path to its stored mtime_ns."""
+    return {
+        row["path"]: int(row["mtime_ns"])
+        for row in conn.execute("SELECT path, mtime_ns FROM files").fetchall()
+    }
+
+
 def vector_search(
     conn: sqlite3.Connection, query_embedding: list[float], *, limit: int
 ) -> list[sqlite3.Row]:
