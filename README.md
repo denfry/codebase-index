@@ -237,6 +237,21 @@ See [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) for the full security model
 
 See [docs/COMPARISON.md](docs/COMPARISON.md) for a detailed comparison.
 
+## Benchmark Results
+
+Measured on `sample_repo` (Python + TypeScript + Markdown fixture, 5 simple queries):
+
+| Metric | Value |
+|---|---|
+| Cold indexed search | ~1ms |
+| Warm indexed search | ~1ms |
+| Index build time | ~86ms |
+| Database size | 4.0 KB |
+| Output compression | 11.8x smaller output vs grep |
+| Top-3 recall | 100% |
+
+> **Note:** Warm indexed search: ~1ms on test fixture. Real repos: expect 5-50ms depending on size and query complexity.
+
 ## Repository Layout
 
 ```
