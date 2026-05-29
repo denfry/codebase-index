@@ -91,21 +91,22 @@ def search(
     if config is not None and root is not None:
         freshness = compute_freshness(conn, root, config)
     else:
+        from ..models import IndexFreshness
         from ..storage import repo
         built_at = repo.get_meta(conn, "built_at")
-        freshness = {
-            "exists": built_at is not None,
-            "stale": False,
-            "files_changed_since_build": 0,
-            "built_at": built_at,
-            "head_commit": repo.get_meta(conn, "head_commit"),
-        }
+        freshness = IndexFreshness(
+            exists=built_at is not None,
+            stale=False,
+            files_changed_since_build=0,
+            built_at=built_at,
+            head_commit=repo.get_meta(conn, "head_commit"),
+        )
 
     return {
         "query": query,
         "intent": plan.intent.value,
         "mode": mode,
-        "index": freshness.model_dump() if hasattr(freshness, "model_dump") else freshness,
+        "index": freshness.model_dump(),
         "confidence": confidence.value,
         "results": results,
         "recommended_reads": recommended,

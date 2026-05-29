@@ -82,7 +82,6 @@ def test_vector_mode_enabled_runs(tmp_path, monkeypatch):
 
 
 def test_search_reports_stale_after_edit(sample_repo, tmp_path, monkeypatch):
-    from pathlib import Path
     import sqlite3
 
     from typer.testing import CliRunner
