@@ -23,6 +23,16 @@ def test_packaged_skill_matches_dev_copy():
     assert packaged == dev
 
 
+def test_packaged_skill_defines_research_discipline():
+    skill = (_template() / "SKILL.md").read_text(encoding="utf-8")
+
+    assert "## Research modes" in skill
+    assert "## Confidence handling" in skill
+    assert "## Coverage gate" in skill
+    assert "question-specific evidence" in skill
+    assert "Do not optimize for a benchmark repository" in skill
+
+
 def test_packaged_cbx_whitelists_safe_subcommands_only():
     cbx = (_template() / "scripts" / "cbx").read_text(encoding="utf-8")
     assert 'ALLOWED="search explain symbol refs impact stats update index"' in cbx
