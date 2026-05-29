@@ -61,6 +61,98 @@ keeps the prompt small and lets the engine evolve without editing the skill.
 ```
 codebase-index/
 ├── README.md
+├── LICENSE
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── CODE_OF_CONDUCT.md
+├── SECURITY.md
+├── ROADMAP.md
+├── pyproject.toml
+├── .gitignore
+├── .editorconfig
+├── .github/
+│   ├── ISSUE_TEMPLATE/
+│   │   ├── bug_report.yml
+│   │   ├── feature_request.yml
+│   │   └── skill_listing_request.yml
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   ├── workflows/
+│   │   ├── ci.yml
+│   │   └── release.yml
+│   └── FUNDING.yml
+├── docs/
+│   ├── ARCHITECTURE.md          # this file
+│   ├── INSTALLATION.md          # install guide + troubleshooting
+│   ├── QUICKSTART.md            # 5-minute setup
+│   ├── SKILL_DESIGN.md          # skill behavior and extension
+│   ├── RETRIEVAL_PIPELINE.md    # retrieval + ranking detail
+│   ├── DATABASE_SCHEMA.md       # SQLite/FTS5 schema
+│   ├── SECURITY_MODEL.md        # security model + threat model
+│   ├── COMPARISON.md            # vs Cursor, Aider, Cody, grep
+│   ├── FAQ.md                   # user questions
+│   ├── SEO.md                   # repository SEO plan
+│   └── ROADMAP.md               # milestones M0-M9
+├── skill/                       # canonical source of the skill
+│   ├── SKILL.md
+│   ├── scripts/
+│   │   ├── install.py           # skill installation script
+│   │   ├── doctor.py            # environment check
+│   │   └── smoke_test.py        # end-to-end test
+│   └── examples/
+│       ├── basic-usage.md
+│       ├── claude-md-example.md
+│       └── hooks-example.json
+├── src/
+│   └── codebase_index/
+│       ├── __init__.py
+│       ├── cli.py               # Typer app: all commands
+│       ├── config.py            # config load/merge/validate (pydantic)
+│       ├── models.py            # shared pydantic result models
+│       ├── discovery/           # file walking + ignore rules + classification
+│       │   ├── __init__.py
+│       │   ├── walker.py
+│       │   ├── ignore.py        # .gitignore/.claudeignore/.codeindexignore
+│       │   └── classify.py      # language, binary, secret, size gates
+│       ├── parsers/             # turn files into chunks + symbols
+│       │   ├── __init__.py
+│       │   ├── base.py          # Parser protocol + data types
+│       │   ├── treesitter.py    # AST symbol extraction
+│       │   ├── line_chunker.py  # fallback chunking
+│       │   ├── symbol_chunks.py # symbol-aligned chunking
+│       │   └── languages.py     # grammar registry + node→symbol maps
+│       ├── indexer/             # orchestration of a build/update
+│       │   ├── __init__.py
+│       │   └── pipeline.py      # full + incremental build
+│       ├── graph/               # import/call/reference/dependency edges
+│       │   └── __init__.py      # stub — dependency/call graph
+│       ├── storage/             # SQLite persistence
+│       │   ├── __init__.py
+│       │   ├── db.py            # connection, pragmas, migrations
+│       │   ├── schema.sql       # DDL
+│       │   └── repo.py          # typed read/write accessors
+│       ├── retrieval/           # the search engine
+│       │   ├── __init__.py
+│       │   └── searchers.py     # FTS5 searcher + query building
+│       ├── embeddings/          # OPTIONAL, opt-in vector backend
+│       │   └── __init__.py      # stub
+│       ├── output/              # rendering results
+│       │   ├── __init__.py
+│       │   ├── markdown.py      # compact Markdown for Claude
+│       │   ├── json.py          # machine JSON
+│       │   └── redact.py        # secret redaction
+│       └── watch/               # OPTIONAL live indexing
+│           └── __init__.py      # stub
+├── tests/
+│   ├── fixtures/                # sample repos with planted secrets
+│   └── test_*.py                # test suite
+└── examples/
+    ├── queries.md               # example questions → commands
+    ├── config.example.json
+    └── hooks/
+        └── settings.json        # optional PostToolUse auto-update hook
+```
+codebase-index/
+├── README.md
 ├── pyproject.toml
 ├── .gitignore
 ├── docs/

@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "post_tool_use": {
+      "enabled": true,
+      "events": ["Write", "Edit"],
+      "command": "codebase-index update --quiet",
+      "description": "Automatically update the index after file edits"
+    }
+  },
+  "index": {
+    "max_file_bytes": 1048576,
+    "chunk_size": 500,
+    "chunk_overlap": 50
+  },
+  "embeddings": {
+    "backend": "noop",
+    "allow_external": false
+  }
+}

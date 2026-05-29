@@ -1,0 +1,56 @@
+name: Feature Request
+description: Suggest an idea or improvement for codebase-index
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature. Please describe your idea and its use case.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: Is your feature request related to a problem? Describe it.
+      placeholder: "I'm frustrated when..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe what you want to happen.
+      placeholder: "It would be great if codebase-index could..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any alternative solutions or workarounds you've tried.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Which area does this feature primarily affect?
+      options:
+        - Indexing (discovery, parsing, storage)
+        - Retrieval (search, ranking, fusion)
+        - CLI (commands, output format)
+        - Skill (SKILL.md, allowed-tools, workflow)
+        - Configuration (config.json, hooks)
+        - Documentation
+        - Testing / CI
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add any other context, mockups, or examples.

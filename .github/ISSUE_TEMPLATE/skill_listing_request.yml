@@ -1,0 +1,42 @@
+name: Skill Listing Request
+description: Request codebase-index to be listed in a skill directory or marketplace
+title: "[Skill Listing]: "
+labels: ["skill-listing", "distribution"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to request that codebase-index be listed in a skill directory, awesome list, or marketplace.
+
+  - type: input
+    id: directory
+    attributes:
+      label: Directory or marketplace
+      description: Where should codebase-index be listed?
+      placeholder: "Awesome Claude Code Skills, Claude Skill Directory, etc."
+    validations:
+      required: true
+
+  - type: input
+    id: url
+    attributes:
+      label: URL
+      description: Link to the directory or submission page.
+      placeholder: "https://..."
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Listing requirements
+      description: What are the requirements for listing? Are we meeting them?
+      placeholder: |
+        - [ ] MIT license
+        - [ ] README with installation instructions
+        - [ ] Test suite
+        - [ ] ...
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Any additional information about the listing process.
