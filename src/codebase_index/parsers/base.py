@@ -29,9 +29,18 @@ class Symbol:
 
 
 @dataclass
+class Edge:
+    edge_type: str
+    callee_name: str
+    line: int
+    src_symbol_index: Optional[int] = None
+
+
+@dataclass
 class ParseResult:
     chunks: list[Chunk] = field(default_factory=list)
     symbols: list[Symbol] = field(default_factory=list)
+    edges: list[Edge] = field(default_factory=list)
 
 
 class Parser(Protocol):

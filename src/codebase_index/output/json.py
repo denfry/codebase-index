@@ -1,9 +1,9 @@
-"""Machine-readable JSON renderer for SearchResponse."""
+"""Machine-readable JSON renderer for pydantic response models."""
 
 from __future__ import annotations
 
-from ..models import SearchResponse
+from pydantic import BaseModel
 
 
-def render(resp: SearchResponse) -> str:
+def render(resp: BaseModel) -> str:
     return resp.model_dump_json(indent=2)

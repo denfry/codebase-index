@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..models import SearchResponse
+from ..models import RefsResponse, SearchResponse, SymbolResponse
 
 
 def render(resp: SearchResponse) -> str:
@@ -50,3 +50,43 @@ def render(resp: SearchResponse) -> str:
                 lines.append(f"- `{command}`")
 
     return "\n".join(lines).rstrip() + "\n"
+
+
+def render_symbols(resp: SymbolResponse) -> str:
+    lines = [_header(resp.query, resp.index.exists, resp.index.stale)]
+    lines.append("")
+    if not resp.symbols:
+        lines.append("_No symbol definitions found._")
+        return "\n".join(lines).rstrip() + "\n"
+
+    lines.append("| name | kind | path | lines | signature |")
+    lines.append("|------|------|------|-------|-----------|")
+    for symbol in resp.symbols:
+        display = symbol.qualified or symbol.name
+        signature = symbol.signature or ""
+        lines.append(
+            f"| `{display}` | {symbol.kind} | `{symbol.path}` | "
+            f"{symbol.line_start}-{symbol.line_end} | `{signature}` |"
+        )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_refs(resp: RefsResponse) -> str:
+    lines = [_header(resp.query, resp.index.exists, resp.index.stale)]
+    lines.append("")
+    if not resp.sites:
+        lines.append("_No references found._")
+        return "\n".join(lines).rstrip() + "\n"
+
+    lines.append("| kind | path | line |")
+    lines.append("|------|------|------|")
+    for site in resp.sites:
+        lines.append(f"| {site.kind} | `{site.path}` | {site.line} |")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _header(query: str, exists: bool, stale: bool) -> str:
+    freshness = "fresh" if not stale else "STALE"
+    if not exists:
+        freshness = "NO INDEX"
+    return f"**query:** {query}  |  **index:** {freshness}"

@@ -11,7 +11,10 @@ from typing import Optional
 
 from ..config import Config
 from ..discovery.walker import walk
+from ..parsers import languages
+from ..parsers.base import ParseResult
 from ..parsers.line_chunker import chunk_text
+from ..parsers.treesitter import parse_file
 from ..storage import repo
 from ..storage.db import Database
 
@@ -22,6 +25,8 @@ class BuildStats:
     deleted: int = 0
     total_bytes: int = 0
     chunks: int = 0
+    symbols: int = 0
+    edges: int = 0
 
 
 def build_index(config: Config, db: Database, root: Optional[Path] = None) -> BuildStats:
@@ -46,13 +51,14 @@ def build_index(config: Config, db: Database, root: Optional[Path] = None) -> Bu
             is_generated=cand.is_generated,
         )
         text = _read_text(cand.path)
-        file_chunks = chunk_text(
-            text,
-            window_lines=config.chunk.window_lines,
-            overlap_lines=config.chunk.overlap_lines,
-        )
-        repo.replace_chunks(conn, file_id, file_chunks)
-        stats.chunks += len(file_chunks)
+        parse_result = _parse(cand.lang, text, config)
+        symbol_ids = repo.replace_symbols(conn, file_id, parse_result.symbols)
+        repo.replace_chunks(conn, file_id, parse_result.chunks, symbol_ids=symbol_ids)
+        edge_rows = _resolve_edges(parse_result, symbol_ids, file_id)
+        repo.replace_edges(conn, file_id, edge_rows)
+        stats.chunks += len(parse_result.chunks)
+        stats.symbols += len(parse_result.symbols)
+        stats.edges += len(edge_rows)
         seen.add(cand.rel_path)
         stats.indexed += 1
         stats.total_bytes += cand.size_bytes
@@ -79,6 +85,51 @@ def _read_text(path: Path) -> str:
         return path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
         return ""
+
+
+def _parse(lang: Optional[str], text: str, config: Config) -> ParseResult:
+    if lang and languages.is_supported(lang):
+        try:
+            return parse_file(lang, text)
+        except Exception:
+            pass
+    chunks = chunk_text(
+        text,
+        window_lines=config.chunk.window_lines,
+        overlap_lines=config.chunk.overlap_lines,
+    )
+    return ParseResult(chunks=chunks, symbols=[], edges=[])
+
+
+def _resolve_edges(
+    parse_result: ParseResult, symbol_ids: list[int], file_id: int
+) -> list[dict]:
+    name_to_id = {
+        symbol.name: symbol_ids[idx]
+        for idx, symbol in enumerate(parse_result.symbols)
+    }
+    rows: list[dict] = []
+    for edge in parse_result.edges:
+        src_id = (
+            symbol_ids[edge.src_symbol_index]
+            if edge.src_symbol_index is not None
+            else file_id
+        )
+        src_kind = "symbol" if edge.src_symbol_index is not None else "file"
+        dst_id = name_to_id.get(edge.callee_name)
+        rows.append(
+            {
+                "edge_type": edge.edge_type,
+                "src_kind": src_kind,
+                "src_id": src_id,
+                "dst_kind": "symbol" if dst_id is not None else None,
+                "dst_id": dst_id,
+                "dst_name": edge.callee_name,
+                "line": edge.line,
+                "resolved": 1 if dst_id is not None else 0,
+            }
+        )
+    return rows
 
 
 def _utc_now_iso() -> str:

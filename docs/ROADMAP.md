@@ -21,12 +21,14 @@ Milestones are vertical-ish slices: each ends with something runnable and testab
 - `snake_case` is split at index time (plain unicode61 tokenizer); camelCase is expanded at query
   time. A true custom FTS5 tokenizer via APSW is deferred.
 
-## M3 — Tree-sitter symbol extraction
-- `parsers/treesitter.py` + `languages.py` (grammar registry, node→symbol maps for top languages:
-  py, ts/js, go, java, rust, c/c++, ruby, php to start).
+## M3 — Tree-sitter symbol extraction ✅
+- `parsers/treesitter.py` + `languages.py` (grammar registry, node→symbol maps for Python,
+  JavaScript, and TypeScript).
 - Populate `symbols`; symbol-aligned chunks; `symbol` + `refs` (intra-file first).
 - **Exit:** `codebase-index symbol "<name>"` and `refs` work for supported languages; line fallback
   for the rest.
+- Shipped languages: Python, JavaScript, TypeScript. Go/Java/Rust/C/C++/Ruby/PHP follow the recipe
+  in `docs/LANGUAGES.md`. `refs` is intra-file (call sites + defs); cross-file resolution is M5.
 
 ## M4 — Hybrid search + ranking
 - `retrieval/intent.py`, path + symbol searchers, `fusion.py` (RRF), `rerank.py`, `budget.py`.

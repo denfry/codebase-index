@@ -154,21 +154,63 @@ def search(
 
 @app.command()
 def symbol(
+    ctx: typer.Context,
     name: str = typer.Argument(...),
     kind: Optional[str] = typer.Option(None, "--kind", help="Filter by symbol kind."),
     exact: bool = typer.Option(False, "--exact"),
 ) -> None:
     """Locate a symbol definition by name."""
-    _todo("symbol")
+    from .config import load
+    from .models import IndexFreshness, SymbolResponse
+    from .output import json as json_out
+    from .output import markdown as md_out
+    from .retrieval.searchers import symbol_lookup
+    from .storage.db import Database
+
+    is_json = bool(ctx.obj and ctx.obj.get("json"))
+    cfg = load(ctx.obj.get("root") if ctx.obj else None)
+    db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+
+    if not db_path.exists():
+        resp = SymbolResponse(
+            query=name, index=IndexFreshness(exists=False, stale=False), symbols=[]
+        )
+        typer.echo(json_out.render(resp) if is_json else md_out.render_symbols(resp))
+        raise typer.Exit(code=0)
+
+    with Database(db_path) as db:
+        resp = symbol_lookup(db.conn, name, kind=kind, exact=exact)
+    typer.echo(json_out.render(resp) if is_json else md_out.render_symbols(resp))
 
 
 @app.command()
 def refs(
+    ctx: typer.Context,
     symbol_name: str = typer.Argument(...),
     kind: str = typer.Option("all", "--kind", help="callers|all"),
 ) -> None:
     """Find references / callers of a symbol."""
-    _todo("refs")
+    from .config import load
+    from .models import IndexFreshness, RefsResponse
+    from .output import json as json_out
+    from .output import markdown as md_out
+    from .retrieval.searchers import refs_lookup
+    from .storage.db import Database
+
+    is_json = bool(ctx.obj and ctx.obj.get("json"))
+    cfg = load(ctx.obj.get("root") if ctx.obj else None)
+    db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+
+    if not db_path.exists():
+        resp = RefsResponse(
+            query=symbol_name, index=IndexFreshness(exists=False, stale=False), sites=[]
+        )
+        typer.echo(json_out.render(resp) if is_json else md_out.render_refs(resp))
+        raise typer.Exit(code=0)
+
+    with Database(db_path) as db:
+        resp = refs_lookup(db.conn, symbol_name, kind=kind)
+    typer.echo(json_out.render(resp) if is_json else md_out.render_refs(resp))
 
 
 @app.command()
