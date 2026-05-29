@@ -1,0 +1,5 @@
+# Скрипты-инсталляторы должны иметь LF, иначе ломаются на macOS/Linux
+# (shebang "#!/usr/bin/env sh\r" недопустим). PowerShell-файлы — тоже LF для единообразия.
+*.sh    text eol=lf
+*.ps1   text eol=lf
+*.py    text eol=lf
