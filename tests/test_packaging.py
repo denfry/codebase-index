@@ -31,6 +31,10 @@ def test_packaged_skill_defines_research_discipline():
     assert "## Coverage gate" in skill
     assert "question-specific evidence" in skill
     assert "Do not optimize for a benchmark repository" in skill
+    # The skill must surface the tool's own intent classification and the
+    # per-subcommand response shapes, not assume every query returns confidence.
+    assert "## Response shapes by subcommand" in skill
+    assert "the tool's own classification of the question" in skill
 
 
 def test_packaged_cbx_whitelists_safe_subcommands_only():

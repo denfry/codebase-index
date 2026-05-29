@@ -48,7 +48,7 @@ Use `--json` for programmatic parsing; omit for human-readable output.
 
 ## Step-by-step workflow
 
-1. **Classify the question** using the research modes below.
+1. **Classify the question** using the research modes below to pick the first command. This is only a starting hint: when you run `search`, the response carries the tool's own `intent` classification — trust it over your manual guess if they disagree.
 2. **Query the index** using the appropriate subcommand for `$QUERY`.
 3. **Check index freshness** in the response:
    - `index.exists: false` -> run `codebase-index index` first, then re-query.
@@ -63,12 +63,15 @@ Use `--json` for programmatic parsing; omit for human-readable output.
 
 Choose the lightest mode that fits the user's question. Do not optimize for a benchmark repository; optimize for the user's actual intent.
 
+Only `search` returns `intent`, `confidence`, and `recommended_reads` (see "Response shapes by subcommand"). When you want those signals, lead with `search` and use `symbol`/`refs`/`impact` as targeted follow-ups.
+
 | User intent | Primary command | Required evidence |
 |---|---|---|
 | "where is X" / locate implementation | `codebase-index search "$QUERY" --json` or `codebase-index symbol "<name>" --json` | The defining file/range and one citation. |
 | "who calls X" / references | `codebase-index refs "<name>" --json` | Call sites or a clear statement that none were found. |
 | "how does X work" / trace a flow | `codebase-index search "$QUERY" --json` plus `refs` for the entry point when needed | Entry point, core logic, and main consumers. |
-| "what breaks if I change X" / refactoring impact | `codebase-index impact "<file-or-symbol>" --json` plus `refs` for important symbols when needed | Direct dependents, likely failure modes, and confidence level. |
+| "trace the data flow of X" | `codebase-index search "$QUERY" --json`, then `refs`/`impact` to follow where the value is set and consumed | Where the value is produced, the path it travels, and where it is read. |
+| "what breaks if I change X" / refactoring impact | `codebase-index impact "<file-or-symbol>" --json` (add `--direction up\|down\|both` to scope dependents vs. dependencies) plus `refs` for important symbols when needed | Direct dependents, likely failure modes, and confidence level. |
 | architecture / overview | 2-4 targeted `search` queries around the main nouns | Main modules, boundaries, and the parts not inspected. |
 | bug / stack trace | `search` exact error text or symbol names, then `refs` if a caller chain matters | Faulting location, input path, and likely cause. |
 
@@ -84,11 +87,21 @@ The index returns a **ranked retrieval packet** with:
 - `reason` - why this result ranked (for example, "exact symbol match, 4 callers")
 - `snippet` - compact code excerpt (may already answer the question)
 
-Top-level fields:
+Top-level fields (on `search`):
 
+- `intent` - the tool's own classification of the question (`locate_impl`, `how_it_works`, `impact`, `find_refs`, `data_flow`, `debug_error`, `architecture`, `keyword`). Use it to confirm or correct your manual research-mode guess.
 - `recommended_reads` - the precise `{path, line_start, line_end}` list to open next. This is the read plan, not a prison.
 - `confidence` - how much validation is needed before answering.
 - `fallback_suggestions` - ripgrep patterns and paths to try if the index is weak.
+
+## Response shapes by subcommand
+
+`intent`, `confidence`, `recommended_reads`, and `fallback_suggestions` are returned **only by `search`**. The other subcommands return their own shapes with no read plan or confidence — judge sufficiency from the returned entries directly:
+
+- `search` -> `results[]` plus the top-level fields above.
+- `symbol` -> `symbols[]`: each has `name`, `kind`, `path`, `line_start`, `line_end`, `signature`. The match itself is the answer.
+- `refs` -> `sites[]`: each has `path`, `line`, `kind`. The list of call sites is the answer (an empty list means "no references found").
+- `impact` -> `nodes[]` (`kind`, `path`, `name`, `distance`, `via_edge`) plus a ranked `files[]`. Dependents/dependencies are the answer.
 
 ## Confidence handling
 
@@ -97,6 +110,8 @@ Top-level fields:
 - `low`: Use `fallback_suggestions` and say that the index was weak. If fallback also fails, state the uncertainty instead of inventing a complete answer.
 
 High confidence does not mean "read nothing." Medium confidence does not mean "scan the repo." Match validation to the question's risk.
+
+`confidence` is only present on `search` responses. For `symbol`/`refs`/`impact`, there is no confidence field — judge whether the returned `symbols`/`sites`/`nodes` actually answer the question, and run `search` (or a fallback `rg`) if they look incomplete.
 
 ## Coverage gate
 
@@ -108,6 +123,8 @@ Before answering, verify that the evidence matches the question:
 - Config/data questions: did you inspect where values are loaded and where they are consumed?
 - Architecture questions: did you name the boundaries and explicitly say which areas were not inspected?
 - Bug questions: did you connect the observed symptom to a source path and a sink or caller path?
+
+For direct `symbol`/`refs`/`impact` answers, the evidence is the returned `symbols`/`sites`/`nodes` themselves, not `recommended_reads` (those subcommands do not return a read plan).
 
 If the gate fails, run one more targeted index query before falling back to Grep/Glob.
 
@@ -132,6 +149,8 @@ Never start with a full-repo scan when the index exists and is fresh.
 
 ## Examples
 
+Command reference:
+
 ```bash
 # "where is auth token refresh implemented?"
 codebase-index search "auth token refresh" --json
@@ -145,5 +164,34 @@ codebase-index refs "send_email" --json
 # "find the AuthService class"
 codebase-index symbol "AuthService" --json
 ```
+
+### Worked example: a flow question (`search`)
+
+Question: "how does auth token refresh work?"
+
+```bash
+codebase-index search "auth token refresh" --json
+```
+
+The response carries `"intent": "how_it_works"`, `"confidence": "medium"`, and a
+`recommended_reads` list, for example `[{path: "src/auth/token.py", line_start: 88, line_end: 134}]`.
+Because intent is `how_it_works` and confidence is `medium`: Read that range, then run one
+targeted `refs "refresh_token"` to confirm the main consumer. Coverage gate (flow): entry
+point + core logic + one consumer covered. Answer with a citation like
+`src/auth/token.py:88-134`.
+
+### Worked example: an impact question (`impact`)
+
+Question: "what breaks if I change the User model?"
+
+```bash
+codebase-index impact "User" --json
+```
+
+The response has **no** `confidence` or `recommended_reads` — it returns `nodes[]`
+(each with `distance` and `via_edge`) and a ranked `files[]`. Judge coverage from the
+nodes: list the `distance: 1` dependents and the edge that links them, name the likely
+failure modes, and state the affected files. If the nodes look incomplete, run
+`refs "User"` or a fallback `rg` before answering.
 
 Then Read only the returned line ranges and answer with citations.
