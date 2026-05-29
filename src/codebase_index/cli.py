@@ -419,9 +419,25 @@ def clean(yes: bool = typer.Option(False, "--yes", help="Skip confirmation.")) -
 
 
 @app.command()
-def watch(debounce: int = typer.Option(500, "--debounce", help="Debounce window in ms.")) -> None:
-    """(Optional) Live incremental indexing via filesystem events."""
-    _todo("watch")
+def watch(
+    ctx: typer.Context,
+    debounce: int = typer.Option(500, "--debounce", help="Debounce window in ms."),
+) -> None:
+    """Live incremental indexing via filesystem events (requires the 'watch' extra)."""
+    from .config import load
+    from .watch.watcher import run_watch
+
+    cfg = load(ctx.obj.get("root") if ctx.obj else None)
+    db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+    if not db_path.exists():
+        typer.echo("No index found. Run `codebase-index index` before `watch`.")
+        raise typer.Exit(code=1)
+
+    try:
+        run_watch(config=cfg, db_path=db_path, debounce_ms=debounce)
+    except RuntimeError as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":

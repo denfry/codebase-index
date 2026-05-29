@@ -68,3 +68,29 @@ def test_run_watch_without_watchdog_raises_clear_error(monkeypatch):
     except RuntimeError as exc:
         assert "watchdog" in str(exc).lower()
         assert "pip install" in str(exc).lower()
+
+
+def test_watch_cli_errors_clearly_without_watchdog(tmp_path, monkeypatch):
+    import builtins
+
+    from typer.testing import CliRunner
+
+    from codebase_index.cli import app
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "watchdog" or name.startswith("watchdog."):
+            raise ImportError("No module named 'watchdog'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    # an index must exist so we reach the watch wiring (not the early "no index" exit)
+    runner = CliRunner()
+    (tmp_path / ".git").mkdir()
+    assert runner.invoke(app, ["--root", str(tmp_path), "index"]).exit_code == 0
+
+    res = runner.invoke(app, ["--root", str(tmp_path), "watch"])
+    assert res.exit_code != 0
+    assert "watchdog" in res.output.lower()
