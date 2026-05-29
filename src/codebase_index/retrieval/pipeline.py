@@ -20,7 +20,7 @@ _TERM_RE = re.compile(r"[A-Za-z0-9_]+")
 _RRF_K = 60
 
 
-def _run_retrievers(conn, query, *, mode, limit, weights):
+def _run_retrievers(conn, query, *, mode, limit, weights, backend=None):
     lists = {}
     if mode in ("hybrid", "fts"):
         lists["fts"] = searchers.fts_candidates(conn, query, limit=limit)
@@ -28,6 +28,8 @@ def _run_retrievers(conn, query, *, mode, limit, weights):
         lists["symbol"] = searchers.symbol_candidates(conn, query, limit=limit)
     if mode == "hybrid":
         lists["path"] = searchers.path_candidates(conn, query, limit=limit)
+    if mode in ("hybrid", "vector") and backend is not None and getattr(backend, "enabled", False):
+        lists["vector"] = searchers.vector_candidates(conn, query, backend, limit=limit)
     if mode != "hybrid":
         weights = {mode: 1.0}
     return lists, weights
@@ -65,10 +67,11 @@ def search(
     limit: int,
     token_budget: int,
     no_fallback: bool,
+    backend=None,
 ) -> dict:
     plan = detect_intent(query)
     lists, weights = _run_retrievers(
-        conn, query, mode=mode, limit=limit, weights=plan.weights
+        conn, query, mode=mode, limit=limit, weights=plan.weights, backend=backend
     )
     fused = fuse(lists, weights=weights, k=_RRF_K)
     ranked = rerank(fused, query=query, intent=plan.intent)[:limit]
