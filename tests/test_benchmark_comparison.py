@@ -287,3 +287,53 @@ class TestComplexQueriesBenchmark:
         avg_grep_tokens = sum(r.estimated_tokens for r in results if r.method == "grep") / len(COMPLEX_QUERIES)
 
         _print_averages(avg_idx_time, avg_grep_time, avg_idx_tokens, avg_grep_tokens)
+
+
+class TestColdWarmBenchmark:
+    """Measure cold vs warm search performance, build time, and DB size."""
+
+    def test_cold_vs_warm(self, sample_repo: Path, tmp_path: Path):
+        cold_times: list[float] = []
+        warm_times: list[float] = []
+
+        for i, query in enumerate(QUERIES[:3]):
+            cold_db = _build_fresh_index(sample_repo, tmp_path / f"cold_{i}")
+            t, _, _ = _run_index_search(cold_db, query, sample_repo)
+            cold_times.append(t)
+            cold_db.close()
+
+            warm_db = _build_fresh_index(sample_repo, tmp_path / f"warm_{i}")
+            _run_index_search(warm_db, query, sample_repo)
+            t, _, _ = _run_index_search(warm_db, query, sample_repo)
+            warm_times.append(t)
+            warm_db.close()
+
+        avg_cold = sum(cold_times) / len(cold_times)
+        avg_warm = sum(warm_times) / len(warm_times)
+
+        print(f"\n{'=' * 60}")
+        print("  Cold vs Warm Benchmark")
+        print(f"{'=' * 60}")
+        print(f"  Avg cold search: {avg_cold:.0f}ms")
+        print(f"  Avg warm search: {avg_warm:.0f}ms")
+        print(f"{'=' * 60}")
+
+    def test_index_build_time(self, sample_repo: Path, tmp_path: Path):
+        times: list[float] = []
+        for i in range(3):
+            start = time.perf_counter()
+            db = _build_fresh_index(sample_repo, tmp_path / f"build_{i}")
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            times.append(elapsed_ms)
+            db.close()
+
+        avg_build = sum(times) / len(times)
+        print(f"\n  Avg index build time: {avg_build:.0f}ms ({len(times)} runs)")
+
+    def test_database_size(self, sample_repo: Path, tmp_path: Path):
+        db = _build_fresh_index(sample_repo, tmp_path / "size_test")
+        db_path = tmp_path / "size_test" / "bench_index.sqlite"
+        size_kb = db_path.stat().st_size / 1024
+        db.close()
+
+        print(f"\n  Database size after indexing sample_repo: {size_kb:.1f} KB")
