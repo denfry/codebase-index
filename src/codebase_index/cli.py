@@ -63,6 +63,63 @@ def _resolve_backend_for_search(ctx: "typer.Context"):
     return resolve_backend(cfg, warn=lambda m: typer.echo(m, err=True))
 
 
+def _interactive_target_choice(detected: list[str]) -> str:
+    from rich.console import Console
+    from rich.prompt import Prompt
+    from rich.table import Table
+
+    from . import scaffold
+
+    console = Console()
+    table = Table(title="Install codebase-index for a CLI")
+    table.add_column("#", justify="right")
+    table.add_column("Target")
+    table.add_column("Status")
+
+    rows = list(scaffold.CLI_TARGETS) + ["all"]
+    for idx, name in enumerate(rows, start=1):
+        status = "detected" if name in detected else ""
+        if name == "all":
+            status = "install every target"
+        table.add_row(str(idx), name, status)
+    console.print(table)
+
+    default = detected[0] if len(detected) == 1 else "all" if detected else "claude"
+    choices = [*rows, *[str(i) for i in range(1, len(rows) + 1)]]
+    selected = Prompt.ask("Choose CLI target", choices=choices, default=default)
+    if selected.isdigit():
+        return rows[int(selected) - 1]
+    return selected
+
+
+def _resolve_init_targets(root: Path, requested: str | None) -> list[str]:
+    from . import scaffold
+
+    detected = scaffold.detect_cli_targets(root)
+    if requested is None:
+        if sys.stdin.isatty():
+            requested = _interactive_target_choice(detected)
+        else:
+            requested = "claude"
+
+    if requested == "auto":
+        if not detected:
+            typer.echo(
+                "[codebase-index] no CLI targets detected. "
+                "Use --target claude|codex|opencode|all.",
+                err=True,
+            )
+            raise typer.Exit(code=4)
+        typer.echo(f"Detected CLI targets: {', '.join(detected)}")
+        return detected
+    if requested == "all":
+        return list(scaffold.CLI_TARGETS)
+    if requested in scaffold.CLI_TARGETS:
+        return [requested]
+    typer.echo("[codebase-index] invalid target. Use claude, codex, opencode, auto, or all.", err=True)
+    raise typer.Exit(code=2)
+
+
 @app.callback()
 def main(
     ctx: typer.Context,
@@ -79,20 +136,29 @@ def init(
     ctx: typer.Context,
     force: bool = typer.Option(False, "--force", help="Overwrite an existing skill install."),
     with_hooks: bool = typer.Option(False, "--with-hooks", help="Also write a hooks example to review."),
+    target: Optional[str] = typer.Option(
+        None,
+        "--target",
+        help="CLI target: claude, codex, opencode, auto, or all. Prompts when interactive.",
+    ),
 ) -> None:
-    """Scaffold the skill, config.json, and .gitignore rules into the current project."""
+    """Scaffold CLI instructions, config.json, and .gitignore rules into the current project."""
     from . import scaffold
     from .config import find_root
 
     root_opt = ctx.obj.get("root") if ctx.obj else None
     root = Path(root_opt).resolve() if root_opt else find_root()
+    targets = _resolve_init_targets(root, target)
 
+    installed_lines: list[str] = []
     try:
-        scaffold.materialize_skill(root, force=force)
-    except FileExistsError:
+        for name in targets:
+            scaffold.install_target(root, name, force=force)
+            installed_lines.append(f"Installed {name.title():<7} -> {root / scaffold.skill_rel_for_target(name)}")
+    except FileExistsError as exc:
         typer.echo(
-            "[codebase-index] skill already installed at "
-            f"{root / scaffold.SKILL_REL}. Re-run with --force to overwrite."
+            "[codebase-index] target already installed at "
+            f"{exc.args[0]}. Re-run with --force to overwrite."
         )
         raise typer.Exit(code=1)
 
@@ -100,23 +166,26 @@ def init(
     gitignore_changed = scaffold.merge_gitignore(root)
 
     lines = [
-        f"Installed skill   -> {root / scaffold.SKILL_REL}",
+        *installed_lines,
         f"Wrote config      -> {cfg_path}",
         f".gitignore        -> {'updated' if gitignore_changed else 'already covered'}",
     ]
     if with_hooks:
-        hook_path = scaffold.write_hooks_example(root)
-        merged = scaffold.merge_hook_settings(root)
-        state = "enabled in .claude/settings.json" if merged else "already enabled"
-        lines.append(f"Auto-update hook  -> {state}")
-        lines.append(f"Hook example      -> {hook_path} (reference copy)")
+        if "claude" not in targets:
+            lines.append("Auto-update hook  -> skipped (hooks are Claude Code settings)")
+        else:
+            hook_path = scaffold.write_hooks_example(root)
+            merged = scaffold.merge_hook_settings(root)
+            state = "enabled in .claude/settings.json" if merged else "already enabled"
+            lines.append(f"Auto-update hook  -> {state}")
+            lines.append(f"Hook example      -> {hook_path} (reference copy)")
 
     lines += [
         "",
         "Next steps:",
         "  1. codebase-index index      # build the index",
         "  2. codebase-index stats       # verify coverage",
-        "  3. Ask a codebase question in Claude Code — the skill auto-invokes.",
+        "  3. Ask a codebase question in your CLI — the installed instructions will invoke it.",
     ]
     typer.echo("\n".join(lines))
 

@@ -17,8 +17,8 @@ pip install codebase-index
 Or from source:
 
 ```bash
-git clone https://github.com/<OWNER>/claude-code-codebase-index-skill.git
-cd claude-code-codebase-index-skill
+git clone https://github.com/denfry/codebase-index.git
+cd codebase-index
 pip install -e .
 ```
 
@@ -31,7 +31,16 @@ cd your-project
 codebase-index init
 ```
 
-This creates the cache directory and configuration.
+In an interactive terminal, `init` shows a CLI picker for Claude Code, Codex CLI,
+OpenCode, or all detected targets. For scripted setup, pass an explicit target:
+
+```bash
+codebase-index init --target auto      # install into detected CLI targets
+codebase-index init --target codex     # install Codex AGENTS.md + resources
+codebase-index init --target claude    # install Claude Code skill
+```
+
+This creates the cache directory, configuration, and the selected CLI instructions.
 
 ## Step 3: Build the Index
 
@@ -73,17 +82,18 @@ Recommended reads:
   3. src/middleware/auth.ts:5-42
 ```
 
-## Step 5: Use with Claude Code
+## Step 5: Use with Your AI CLI
 
-When the skill is installed (`.claude/skills/codebase-index/`), Claude Code will automatically use the index for codebase questions.
+When installed for Claude Code, Codex CLI, or OpenCode, the generated instructions
+tell the agent to use the local index for codebase questions.
 
-Simply ask Claude:
+Simply ask:
 
 ```
 Where is user authentication implemented?
 ```
 
-Claude will:
+The agent will:
 1. Query the local index
 2. Read only the recommended line ranges
 3. Answer with precise file:line citations

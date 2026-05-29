@@ -18,7 +18,7 @@ set -eu
 # Значения по умолчанию (легко заменить под свой репозиторий / skill)
 # --------------------------------------------------------------------------
 SKILL_NAME="codebase-index"          # имя skill (placeholder: SKILL_NAME)
-SKILL_VERSION="1.0.1"                # версия (placeholder: SKILL_VERSION)
+SKILL_VERSION="1.0.2"                # версия (placeholder: SKILL_VERSION)
 DEFAULT_REPO_URL="https://github.com/denfry/codebase-index"   # OWNER/REPO
 DEFAULT_BRANCH="main"
 

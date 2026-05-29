@@ -41,7 +41,7 @@ $ErrorActionPreference = "Stop"
 # Константы skill (легко заменить под свой проект)
 # --------------------------------------------------------------------------
 $script:SkillName    = "codebase-index"   # placeholder: SKILL_NAME
-$script:SkillVersion = "1.0.1"            # placeholder: SKILL_VERSION
+$script:SkillVersion = "1.0.2"            # placeholder: SKILL_VERSION
 
 # Прокидываем параметры в script-scope, чтобы их видели dot-source'нутые файлы.
 $script:InstallDir         = $InstallDir
