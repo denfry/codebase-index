@@ -127,3 +127,41 @@ class FakeEmbeddingBackend:
 @pytest.fixture
 def fake_backend() -> FakeEmbeddingBackend:
     return FakeEmbeddingBackend()
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--runslow", action="store_true", default=False, help="run slow perf tests"
+    )
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "slow: marks tests as slow (deselected by default)")
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--runslow"):
+        return
+    skip_slow = pytest.mark.skip(reason="need --runslow to run")
+    for item in items:
+        if "slow" in item.keywords:
+            item.add_marker(skip_slow)
+
+
+@pytest.fixture
+def medium_repo(tmp_path) -> Path:
+    """Generate a deterministic ~600-file Python repo for perf budgets (no network)."""
+    root = tmp_path / "medium"
+    for pkg in range(20):
+        pkg_dir = root / f"pkg_{pkg:02d}"
+        pkg_dir.mkdir(parents=True)
+        (pkg_dir / "__init__.py").write_text("", encoding="utf-8")
+        for mod in range(30):
+            body = "\n\n".join(
+                f"def func_{pkg}_{mod}_{i}(x):\n"
+                f'    """Compute step {i} for pkg {pkg} mod {mod}."""\n'
+                f"    return x + {i}"
+                for i in range(8)
+            )
+            (pkg_dir / f"mod_{mod:02d}.py").write_text(body + "\n", encoding="utf-8")
+    return root
