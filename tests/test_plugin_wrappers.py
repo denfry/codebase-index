@@ -14,7 +14,10 @@ def _bash_works() -> bool:
     """Check if bash is a real shell, not the WSL relay on Windows."""
     if BASH is None:
         return False
-    res = subprocess.run([BASH, "-c", "echo ok"], capture_output=True, text=True)
+    try:
+        res = subprocess.run([BASH, "-c", "echo ok"], capture_output=True, text=True)
+    except OSError:
+        return False
     return res.returncode == 0 and res.stdout.strip() == "ok"
 
 

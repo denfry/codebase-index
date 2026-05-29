@@ -33,9 +33,10 @@ codebase-index search "where is authentication implemented?"
 
 ## Status
 
-✅ **`0.1.0` released.** All milestones M0–M9 are implemented: discovery + storage, FTS5 lexical
+✅ **`1.0.1` released.** All milestones M0–M9 are implemented: discovery + storage, FTS5 lexical
 search, tree-sitter symbols/refs, hybrid ranking, graph impact, optional local embeddings, the
-packaged skill + freshness contract, hooks/watch, and a tested, `pipx`-installable release. See
+packaged skill + freshness contract, hooks/watch, and a tested, `pipx`-installable release. The
+1.0.1 patch pins tree-sitter grammars so CI and local goldens use the same parser versions. See
 [CHANGELOG.md](CHANGELOG.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ```
@@ -62,7 +63,7 @@ Or just ask: "install the codebase-index plugin".
 (`scripts/bootstrap.sh` / `.ps1`) creates a private Python virtual environment under
 `~/.claude/plugins/data/codebase-index-*/venv` and installs the pinned
 `codebase-index` package (from `requirements.lock`) into it — using `uv` if present,
-otherwise `python -m venv` + `pip`. It reinstalls only when the pinned version changes.
+otherwise `python -m venv` + `pip`. It reinstalls only when the lock file changes.
 Nothing is installed globally; uninstalling the plugin removes the data directory.
 
 **Prerequisite:** Python 3.10+ on your PATH. The first install needs network access to

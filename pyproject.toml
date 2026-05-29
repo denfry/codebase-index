@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "codebase-index"
-version = "1.0.0"
+version = "1.0.1"
 description = "Local-first hybrid codebase index for Claude Code, exposed as a Skill + CLI."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -31,8 +31,8 @@ dependencies = [
     "rich>=13.0",             # pretty terminal output (humans only; --json stays plain)
     "pydantic>=2.6",          # config + result schemas
     "pathspec>=0.12",         # .gitignore-style matching for ignore files
-    "tree-sitter>=0.21",      # AST parsing core
-    "tree-sitter-language-pack>=0.2",  # bundled grammars for many languages
+    "tree-sitter==0.25.2",      # AST parsing core; pinned to keep goldens stable
+    "tree-sitter-language-pack==1.8.1",  # bundled grammars; pinned to keep CI/local stable
 ]
 
 [project.optional-dependencies]

@@ -14,11 +14,20 @@ BASH = shutil.which("bash")
 def _bash_works() -> bool:
     if BASH is None:
         return False
-    res = subprocess.run([BASH, "-c", "echo ok"], capture_output=True, text=True)
+    try:
+        res = subprocess.run([BASH, "-c", "echo ok"], capture_output=True, text=True)
+    except OSError:
+        return False
     return res.returncode == 0 and res.stdout.strip() == "ok"
 
 
 BASH_OK = _bash_works()
+
+LOCK_TEXT = (
+    "codebase-index==1.0.1\n"
+    "tree-sitter==0.25.2\n"
+    "tree-sitter-language-pack==1.8.1\n"
+)
 
 # A fake `python` that satisfies `-m venv DIR` and `-m pip install ...` without network.
 FAKE_PYTHON = """#!/usr/bin/env bash
@@ -29,6 +38,7 @@ if [ "$1" = "-m" ] && [ "$2" = "venv" ]; then
   exit 0
 fi
 if [ "$1" = "-m" ] && [ "$2" = "pip" ]; then
+  if [ -n "${FAKE_PIP_LOG:-}" ]; then printf '%s\\n' "$*" >> "$FAKE_PIP_LOG"; fi
   if [ "$3" = "install" ]; then
     d="$(cd "$(dirname "$0")" && pwd)"
     # Only create the CLI for a real package install, not the pip upgrade.
@@ -48,7 +58,7 @@ def _stage(tmp_path: Path) -> tuple[Path, Path, dict]:
     root.mkdir()
     shutil.copy(ROOT / "scripts" / "bootstrap.sh", root / "bootstrap.sh")
     (root / "bootstrap.sh").chmod(0o755)
-    (root / "requirements.lock").write_text("codebase-index==0.1.0\n", encoding="utf-8")
+    (root / "requirements.lock").write_text(LOCK_TEXT, encoding="utf-8")
 
     data = tmp_path / "data"
     data.mkdir()
@@ -65,6 +75,7 @@ def _stage(tmp_path: Path) -> tuple[Path, Path, dict]:
     env["CLAUDE_PLUGIN_ROOT"] = str(root)
     env["CLAUDE_PLUGIN_DATA"] = str(data)
     env["CBX_NO_UV"] = "1"  # force the python -m venv + pip fallback
+    env["FAKE_PIP_LOG"] = str(tmp_path / "pip.log")
     return root, data, env
 
 
@@ -81,10 +92,20 @@ def test_cold_run_provisions_venv_and_pointer(tmp_path):
     res = _run(root, env)
     assert res.returncode == 0, res.stderr
     assert (data / "venv" / "bin" / "codebase-index").is_file()
-    assert (data / "requirements.lock").read_text(encoding="utf-8").strip() == "codebase-index==0.1.0"
+    assert (data / "requirements.lock").read_text(encoding="utf-8") == LOCK_TEXT
     # Compare as paths, not raw strings: bootstrap.sh joins with "/", while
     # pathlib on Windows renders "\", so the bytes differ but the path is equal.
     assert Path((root / ".venv-path").read_text(encoding="utf-8").strip()) == data / "venv"
+
+
+@pytest.mark.skipif(not BASH_OK, reason="bash not available or non-functional")
+def test_cold_run_installs_from_requirements_lock(tmp_path):
+    root, data, env = _stage(tmp_path)
+    (root / "requirements.lock").write_text(LOCK_TEXT, encoding="utf-8")
+    res = _run(root, env)
+    assert res.returncode == 0, res.stderr
+    pip_log = Path(env["FAKE_PIP_LOG"]).read_text(encoding="utf-8")
+    assert f"-r {root / 'requirements.lock'}" in pip_log
 
 
 @pytest.mark.skipif(not BASH_OK, reason="bash not available or non-functional")
@@ -144,7 +165,7 @@ def test_powershell_cold_run_provisions_venv(tmp_path):
     root = tmp_path / "root"
     root.mkdir()
     shutil.copy(ROOT / "scripts" / "bootstrap.ps1", root / "bootstrap.ps1")
-    (root / "requirements.lock").write_text("codebase-index==0.1.0\n", encoding="utf-8")
+    (root / "requirements.lock").write_text(LOCK_TEXT, encoding="utf-8")
     data = tmp_path / "data"
     data.mkdir()
 

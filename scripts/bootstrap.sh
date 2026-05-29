@@ -11,7 +11,6 @@ DATA="${CLAUDE_PLUGIN_DATA:?CLAUDE_PLUGIN_DATA not set}"
 VENV="$DATA/venv"
 LOCK_SRC="$ROOT/requirements.lock"
 LOCK_DST="$DATA/requirements.lock"
-SPEC="${CBX_INSTALL_SPEC:-codebase-index==0.1.0}"
 
 mkdir -p "$DATA"
 # Pointer the wrappers read. ROOT is per-version/ephemeral, so rewrite it every session.
@@ -31,11 +30,19 @@ fi
 install() {
   if [ "${CBX_NO_UV:-0}" != "1" ] && command -v uv >/dev/null 2>&1; then
     uv venv "$VENV" >&2
-    uv pip install --python "$VENV/bin/python" "$SPEC" >&2
+    if [ -n "${CBX_INSTALL_SPEC:-}" ]; then
+      uv pip install --python "$VENV/bin/python" "$CBX_INSTALL_SPEC" >&2
+    else
+      uv pip install --python "$VENV/bin/python" -r "$LOCK_SRC" >&2
+    fi
   else
     "$PY" -m venv "$VENV" >&2
     "$VENV/bin/python" -m pip install --upgrade pip >&2
-    "$VENV/bin/python" -m pip install "$SPEC" >&2
+    if [ -n "${CBX_INSTALL_SPEC:-}" ]; then
+      "$VENV/bin/python" -m pip install "$CBX_INSTALL_SPEC" >&2
+    else
+      "$VENV/bin/python" -m pip install -r "$LOCK_SRC" >&2
+    fi
   fi
 }
 
