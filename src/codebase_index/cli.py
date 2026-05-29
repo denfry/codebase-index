@@ -106,7 +106,10 @@ def init(
     ]
     if with_hooks:
         hook_path = scaffold.write_hooks_example(root)
-        lines.append(f"Hooks example     -> {hook_path} (review, then merge into .claude/settings.json)")
+        merged = scaffold.merge_hook_settings(root)
+        state = "enabled in .claude/settings.json" if merged else "already enabled"
+        lines.append(f"Auto-update hook  -> {state}")
+        lines.append(f"Hook example      -> {hook_path} (reference copy)")
 
     lines += [
         "",

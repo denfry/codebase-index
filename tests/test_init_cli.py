@@ -47,10 +47,19 @@ def test_init_force_overwrites(tmp_path):
     assert res.exit_code == 0, res.output
 
 
-def test_init_with_hooks_writes_example(tmp_path):
+def test_init_with_hooks_merges_settings(tmp_path):
     root = _project(tmp_path)
     res = runner.invoke(app, ["--root", str(root), "init", "--with-hooks"])
     assert res.exit_code == 0, res.output
-    hook = root / ".claude" / "skills" / "codebase-index" / "examples" / "hooks" / "settings.json"
-    assert hook.is_file()
+
+    hook_example = root / ".claude" / "skills" / "codebase-index" / "examples" / "hooks" / "settings.json"
+    assert hook_example.is_file()
+
+    settings = json.loads((root / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    cmds = [
+        hk["command"]
+        for entry in settings["hooks"]["PostToolUse"]
+        for hk in entry["hooks"]
+    ]
+    assert any("codebase-index update" in c for c in cmds)
     assert "hook" in res.output.lower()
