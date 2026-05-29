@@ -8,12 +8,33 @@ from typing import Optional
 CONTAINER_KINDS = {"class", "interface", "enum"}
 
 
+_PY_IMPORTS = """
+    (import_from_statement module_name: (dotted_name) @import.module)
+    (import_statement name: (dotted_name) @import.module)
+    (class_definition superclasses: (argument_list (identifier) @extends.base))
+"""
+
+_JS_IMPORTS = """
+    (import_statement source: (string (string_fragment) @import.module))
+    (class_declaration (class_heritage (identifier) @extends.base))
+"""
+
+_TS_IMPORTS = """
+    (import_statement source: (string (string_fragment) @import.module))
+    (class_declaration (class_heritage
+        (extends_clause value: (identifier) @extends.base)))
+    (class_declaration (class_heritage
+        (implements_clause (type_identifier) @implements.iface)))
+"""
+
+
 @dataclass(frozen=True)
 class LangSpec:
     name: str
     ts_name: str
     defs_query: str
     calls_query: str
+    imports_query: str = ""
 
 
 _PYTHON = LangSpec(
@@ -27,6 +48,7 @@ _PYTHON = LangSpec(
         (call function: (identifier) @callee)
         (call function: (attribute attribute: (identifier) @callee))
     """,
+    imports_query=_PY_IMPORTS,
 )
 
 _JS_DEFS = """
@@ -46,6 +68,7 @@ _JAVASCRIPT = LangSpec(
     ts_name="javascript",
     defs_query=_JS_DEFS,
     calls_query=_JS_CALLS,
+    imports_query=_JS_IMPORTS,
 )
 
 _TS_DEFS = """
@@ -63,6 +86,7 @@ _TYPESCRIPT = LangSpec(
     ts_name="typescript",
     defs_query=_TS_DEFS,
     calls_query=_JS_CALLS,
+    imports_query=_TS_IMPORTS,
 )
 
 LANGS: dict[str, LangSpec] = {s.name: s for s in (_PYTHON, _JAVASCRIPT, _TYPESCRIPT)}
