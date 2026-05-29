@@ -11,6 +11,7 @@ from typing import Optional
 
 from ..config import Config
 from ..discovery.walker import walk
+from ..embeddings.backend import resolve_backend
 from ..graph.builder import build_graph
 from ..parsers import languages
 from ..parsers.base import ParseResult
@@ -29,6 +30,7 @@ class BuildStats:
     symbols: int = 0
     edges: int = 0
     edges_resolved: int = 0
+    vectors: int = 0
 
 
 def build_index(config: Config, db: Database, root: Optional[Path] = None) -> BuildStats:
@@ -74,8 +76,35 @@ def build_index(config: Config, db: Database, root: Optional[Path] = None) -> Bu
     graph = build_graph(conn)
     stats.edges_resolved = graph["resolved"]
 
+    if config.embeddings.enabled:
+        stats.vectors = _embed_chunks(config, db, conn)
+
     conn.commit()
     return stats
+
+
+def _embed_chunks(cfg, db, conn) -> int:
+    """Embed every chunk and (re)store its vector. Returns the vector count.
+
+    Fully gated: with embeddings disabled this is never called, so no optional
+    dependency is imported and vec_chunks is never created.
+    """
+    backend = resolve_backend(cfg, warn=lambda m: print(m))
+    if not getattr(backend, "enabled", False):
+        return 0
+    rows = repo.chunks_for_embedding(conn)
+    if not rows:
+        return 0
+    db.enable_vectors()
+    texts = [r["content"] for r in rows]
+    vectors = backend.embed(texts)
+    repo.ensure_vec_tables(conn, dim=backend.dim)
+    repo.clear_vectors(conn)
+    for row, vec in zip(rows, vectors):
+        repo.upsert_chunk_vector(conn, int(row["id"]), vec)
+    built_at = datetime.now(timezone.utc).isoformat()
+    repo.set_vec_meta(conn, model=backend.name, dim=backend.dim, built_at=built_at)
+    return len(rows)
 
 
 def _sha256_file(path: Path) -> str:

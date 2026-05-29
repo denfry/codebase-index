@@ -94,3 +94,36 @@ def seeded_index(tmp_path) -> Database:
     conn.commit()
     yield db
     db.close()
+
+
+_CONCEPTS = ["auth", "user", "db", "http"]
+_KEYWORDS = {
+    "auth": ["auth", "token", "refresh", "access", "credential", "credentials", "renew", "login"],
+    "user": ["user", "profile", "account", "person", "member"],
+    "db": ["db", "database", "query", "sql", "store", "persist"],
+    "http": ["http", "request", "endpoint", "route", "api", "url"],
+}
+
+
+class FakeEmbeddingBackend:
+    enabled = True
+    name = "fake"
+    dim = len(_CONCEPTS)
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        out: list[list[float]] = []
+        for text in texts:
+            low = text.lower()
+            vec = [0.0] * len(_CONCEPTS)
+            for i, concept in enumerate(_CONCEPTS):
+                if any(kw in low for kw in _KEYWORDS[concept]):
+                    vec[i] = 1.0
+            if not any(vec):
+                vec[0] = 0.01
+            out.append(vec)
+        return out
+
+
+@pytest.fixture
+def fake_backend() -> FakeEmbeddingBackend:
+    return FakeEmbeddingBackend()
