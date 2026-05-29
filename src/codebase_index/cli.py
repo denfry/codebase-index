@@ -155,11 +155,42 @@ def index(
 
 @app.command()
 def update(
+    ctx: typer.Context,
     since: Optional[str] = typer.Option(None, "--since", help="Re-index files changed since a git ref."),
-    all_files: bool = typer.Option(False, "--all", help="Force re-check of every file."),
+    all_files: bool = typer.Option(False, "--all", help="Force re-check (hash) of every file."),
 ) -> None:
-    """Incremental re-index (hash/mtime/git aware)."""
-    _todo("update")
+    """Incremental re-index (mtime/sha/git aware). Safe to call from a hook or watcher."""
+    import json as _json
+
+    from .config import load
+    from .indexer.pipeline import update_index
+    from .storage.db import Database
+
+    is_json = bool(ctx.obj and ctx.obj.get("json"))
+    quiet = bool(ctx.obj and ctx.obj.get("quiet"))
+
+    cfg = load(ctx.obj.get("root") if ctx.obj else None)
+    db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+    if not db_path.exists():
+        if is_json:
+            typer.echo(_json.dumps({"indexed": 0, "deleted": 0, "skipped": 0, "exists": False}))
+        elif not quiet:
+            typer.echo("No index found. Run `codebase-index index` first.")
+        raise typer.Exit(code=0)
+
+    with Database(db_path) as db:
+        stats = update_index(cfg, db, root=Path(cfg.root), since=since, all_files=all_files)
+
+    if is_json:
+        typer.echo(
+            _json.dumps(
+                {"indexed": stats.indexed, "deleted": stats.deleted, "skipped": stats.skipped}
+            )
+        )
+    elif not quiet:
+        typer.echo(
+            f"Updated {stats.indexed} file(s); {stats.deleted} pruned; {stats.skipped} unchanged."
+        )
 
 
 # --- retrieval (read-only; these are what the skill calls) --------------------------------------
