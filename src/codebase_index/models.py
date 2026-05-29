@@ -77,3 +77,21 @@ class RefsResponse(BaseModel):
     query: str
     index: IndexFreshness
     sites: list[RefSite] = []
+
+
+class ImpactNode(BaseModel):
+    kind: str                       # 'file' | 'symbol'
+    path: str
+    name: Optional[str] = None      # symbol name (None for file nodes)
+    line_start: Optional[int] = None
+    distance: int                   # BFS hops from the target (1 = direct)
+    via_edge: Optional[str] = None  # edge_type that linked it (import|call|extends|...)
+
+
+class ImpactResponse(BaseModel):
+    target: str
+    direction: str                  # 'up' | 'down' | 'both'
+    depth: int
+    index: IndexFreshness
+    nodes: list[ImpactNode] = []
+    files: list[str] = []           # distinct affected files, ranked
