@@ -22,7 +22,7 @@ codebase-index init
 codebase-index index
 ```
 
-This writes `.claude/skills/codebase-index/` (SKILL.md + `scripts/cbx`/`cbx.ps1`), a resolved `config.json`, and adds the cache directory to `.gitignore`. Use `--force` to overwrite an existing install, or `--with-hooks` to also write a reviewable PostToolUse hooks example.
+This writes `.claude/skills/codebase-index/` (SKILL.md + `scripts/cbx`/`cbx.ps1`), a resolved `config.json`, and adds the cache directory to `.gitignore`. Use `--force` to overwrite an existing install, or `--with-hooks` to auto-merge the PostToolUse update hook into `.claude/settings.json` (a reviewable example is also written as a reference copy).
 
 ### Option 2: Install as a reusable local skill
 
@@ -113,7 +113,9 @@ cp -r skill/ .claude/skills/codebase-index/
 
 ## Post-Tool-Use Hooks (optional)
 
-To keep the index fresh after edits, you can enable a PostToolUse hook in Claude Code. Run `codebase-index init --with-hooks` to write a reviewable example to `.claude/skills/codebase-index/examples/hooks/settings.json`. After reviewing, merge the relevant section into your project's `.claude/settings.json`:
+To keep the index fresh after edits, you can enable a PostToolUse hook in Claude Code. Run `codebase-index init --with-hooks` to **auto-merge** the hook into `.claude/settings.json` (a reviewable example is also written to `.claude/skills/codebase-index/examples/hooks/settings.json` as a reference copy). The merge is idempotent — running `init --with-hooks` again won't duplicate the hook.
+
+Use `codebase-index doctor` to verify which hooks are enabled. For heavy editing sessions, consider `watch` mode instead (see below).
 
 ```json
 {
@@ -133,6 +135,17 @@ To keep the index fresh after edits, you can enable a PostToolUse hook in Claude
   }
 }
 ```
+
+## Watch Mode (optional)
+
+For heavy editing sessions, `watch` mode keeps the index fresh via a debounced filesystem observer. Requires the `[watch]` extra:
+
+```bash
+pip install "codebase-index[watch]"
+codebase-index watch --debounce 500
+```
+
+The watcher coalesces bursts of file edits into a single incremental `update` after a quiet window, so it never blocks or thrashes the edit loop. Ctrl-C to stop. Without `watchdog` installed, `watch` exits with a clear error and install guidance.
 
 ## Cache Location
 
@@ -175,10 +188,22 @@ pip install tree-sitter tree-sitter-language-pack
 
 ### Index is stale after file changes
 
-Run an incremental update:
+Run an incremental update (mtime/sha/git aware, safe to run from a hook or watcher):
 
 ```bash
 codebase-index update
+```
+
+Narrow to git-changed files since a ref:
+
+```bash
+codebase-index update --since HEAD~1
+```
+
+Force re-check of every file:
+
+```bash
+codebase-index update --all
 ```
 
 Or a full rebuild:

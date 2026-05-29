@@ -58,10 +58,8 @@ Milestones are vertical-ish slices: each ends with something runnable and testab
 - **Exit:** `/plugin install codebase-index@<marketplace>` → ask a codebase question → compact reads,
   no manual `pip`/`init`/`index`. Depends on the M9 PyPI release for the non-`CBX_INSTALL_SPEC` path.
 
-## M8 — Hooks + watch mode
-- `examples/hooks/settings.json`; `--with-hooks`; `watch/watcher.py` (debounced, async).
-- `doctor` reports enabled hooks.
-- **Exit:** editing files keeps the index fresh via hook or watch; no blocking of the edit loop.
+## M8 — Hooks + watch mode ✅
+- Shipped: incremental `update` (mtime fast-path + sha verify + prune; `--since <ref>`, `--all`) is the engine the freshness contract calls; `init --with-hooks` auto-merges the `PostToolUse` update hook into `.claude/settings.json` idempotently; `watch` mode (optional `[watch]` extra) coalesces edit bursts into one debounced `update` and degrades to a clear error when watchdog is absent; `doctor` reports enabled hooks, cache-gitignore coverage, and freshness, exiting non-zero under `--strict` on high-severity findings. The full SECURITY.md §6 doctor checklist (secret-leak scan, perms, allowed-tools diff) is M9.
 
 ## M9 — Tests, docs, examples, release
 - Coverage across modules; CLI golden-output tests; perf check on a medium repo.
