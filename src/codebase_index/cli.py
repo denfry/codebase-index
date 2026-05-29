@@ -12,6 +12,7 @@ Conventions:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -29,6 +30,17 @@ app = typer.Typer(
 def _todo(name: str) -> None:
     typer.echo(f"[codebase-index] '{name}' is not implemented yet (M0 scaffold). See docs/ROADMAP.md")
     raise typer.Exit(code=0)
+
+
+def _resolve_db_path(ctx: "typer.Context") -> Path:
+    from .config import load
+
+    override = os.environ.get("CBX_DB_PATH")
+    if override:
+        return Path(override)
+    root_opt = ctx.obj.get("root") if ctx.obj else None
+    cfg = load(root_opt)
+    return Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
 
 
 @app.callback()
@@ -104,52 +116,31 @@ def search(
     token_budget: int = typer.Option(1500, "--token-budget"),
     mode: str = typer.Option("hybrid", "--mode", help="hybrid|fts|symbol|vector"),
     no_fallback: bool = typer.Option(False, "--no-fallback"),
+    json_out: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
-    """Lexical ranked search; hybrid aliases FTS until fusion lands."""
-    from .config import load
-    from .models import IndexFreshness, SearchResponse
-    from .output import json as json_out
-    from .output import markdown as md_out
-    from .retrieval.searchers import fts_response
+    """Hybrid ranked search; returns compact results + recommended_reads."""
+    from .output import json as json_renderer
+    from .output import markdown as md_renderer
+    from .retrieval.pipeline import search as run_search
     from .storage.db import Database
 
-    is_json = bool(ctx.obj and ctx.obj.get("json"))
+    if mode == "vector":
+        typer.echo("[codebase-index] vector mode requires embeddings (M6); use --mode hybrid.")
+        raise typer.Exit(code=2)
 
-    if mode in ("symbol", "vector"):
-        typer.echo(
-            f"[codebase-index] --mode {mode} is not available until a later "
-            "milestone. Use --mode fts."
-        )
-        raise typer.Exit(code=0)
-
-    cfg = load(ctx.obj.get("root") if ctx.obj else None)
-    db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
-
+    db_path = _resolve_db_path(ctx)
     if not db_path.exists():
-        resp = SearchResponse(
-            query=query,
-            intent="keyword",
-            index=IndexFreshness(exists=False, stale=False),
-            confidence="low",
-            results=[],
-            recommended_reads=[],
-            fallback_suggestions={} if no_fallback else {"ripgrep": [f'rg -n "{query}"']},
-        )
-        typer.echo(json_out.render(resp) if is_json else md_out.render(resp))
-        raise typer.Exit(code=0)
+        typer.echo("No index found. Run `codebase-index index`.")
+        raise typer.Exit(code=1)
 
     with Database(db_path) as db:
-        resp = fts_response(
-            db.conn,
-            query,
-            limit=limit,
-            token_budget=token_budget,
-            root=Path(cfg.root),
+        payload = run_search(
+            db.conn, query, mode=mode, limit=limit,
+            token_budget=token_budget, no_fallback=no_fallback,
         )
-    if no_fallback:
-        resp.fallback_suggestions = {}
 
-    typer.echo(json_out.render(resp) if is_json else md_out.render(resp))
+    want_json = json_out or (ctx.obj and ctx.obj.get("json"))
+    typer.echo(json_renderer.render(payload) if want_json else md_renderer.render(payload))
 
 
 @app.command()
@@ -225,11 +216,29 @@ def impact(
 
 @app.command()
 def explain(
+    ctx: typer.Context,
     query: str = typer.Argument(...),
-    token_budget: int = typer.Option(1500, "--token-budget"),
+    token_budget: int = typer.Option(2200, "--token-budget"),
+    json_out: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Intent-aware bundle for 'how does X work' / overview questions."""
-    _todo("explain")
+    from .output import json as json_renderer
+    from .output import markdown as md_renderer
+    from .retrieval.pipeline import search as run_search
+    from .storage.db import Database
+
+    db_path = _resolve_db_path(ctx)
+    if not db_path.exists():
+        typer.echo("No index found. Run `codebase-index index`.")
+        raise typer.Exit(code=1)
+
+    q = query if any(w in query.lower() for w in ("how", "architecture", "overview")) else f"how does {query} work"
+    with Database(db_path) as db:
+        payload = run_search(db.conn, q, mode="hybrid", limit=10,
+                             token_budget=token_budget, no_fallback=False)
+
+    want_json = json_out or (ctx.obj and ctx.obj.get("json"))
+    typer.echo(json_renderer.render(payload) if want_json else md_renderer.render(payload))
 
 
 # --- diagnostics / maintenance ------------------------------------------------------------------
