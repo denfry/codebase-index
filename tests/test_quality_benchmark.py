@@ -56,7 +56,6 @@ class TestQualityBenchmark:
                 mode="hybrid", limit=10, token_budget=5000, no_fallback=False,
             )
 
-            result_paths = {r["path"] for r in result.get("results", [])}
             result_symbols = set()
             for r in result.get("results", []):
                 result_symbols.update(r.get("symbols", []))

@@ -19,8 +19,8 @@ from typing import Optional
 
 # Force UTF-8 output on Windows to avoid cp1251 encoding errors
 if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding="utf-8")
-    sys.stderr.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+    sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
 
 import typer
 
