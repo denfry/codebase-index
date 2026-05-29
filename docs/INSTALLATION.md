@@ -71,6 +71,21 @@ pip install -e ".[watch]"
 pip install -e ".[embeddings-local,watch,dev]"
 ```
 
+### Verify a clean install
+
+On a machine with only Python + pipx:
+
+```bash
+pipx install codebase-index
+cd /path/to/your/repo
+codebase-index init           # writes .claude/skills/codebase-index/ + .gitignore rules
+codebase-index index          # builds .claude/cache/codebase-index/index.sqlite
+codebase-index --json search "<a term from your code>"   # -> {"index": {"exists": true, ...}}
+```
+
+If `search` returns `"exists": true` with results, the install is healthy. Maintainers can run the
+same path automatically with `python scripts/release_smoke.py`.
+
 ## Verify Installation
 
 ```bash

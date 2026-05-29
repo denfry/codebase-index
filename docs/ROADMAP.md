@@ -61,10 +61,17 @@ Milestones are vertical-ish slices: each ends with something runnable and testab
 ## M8 — Hooks + watch mode ✅
 - Shipped: incremental `update` (mtime fast-path + sha verify + prune; `--since <ref>`, `--all`) is the engine the freshness contract calls; `init --with-hooks` auto-merges the `PostToolUse` update hook into `.claude/settings.json` idempotently; `watch` mode (optional `[watch]` extra) coalesces edit bursts into one debounced `update` and degrades to a clear error when watchdog is absent; `doctor` reports enabled hooks, cache-gitignore coverage, and freshness, exiting non-zero under `--strict` on high-severity findings. The full SECURITY.md §6 doctor checklist (secret-leak scan, perms, allowed-tools diff) is M9.
 
-## M9 — Tests, docs, examples, release
+## M9 — Tests, docs, examples, release ✅
 - Coverage across modules; CLI golden-output tests; perf check on a medium repo.
 - `examples/queries.md`, finalized docs, CHANGELOG, PyPI release, tagged GitHub release.
 - **Exit:** `pipx install codebase-index` + `init` + ask a question works on a clean machine.
+
+*Shipped: golden-file tests lock CLI `--json` output; a `--runslow` perf smoke test guards
+index/search latency on a synthetic medium repo; coverage is gated (`--cov-fail-under`) in a
+CI matrix (Ubuntu/macOS/Windows × py3.10–3.13). `CHANGELOG.md` tracks releases; a tag-triggered
+release pipeline builds, runs `twine check` + a clean-venv install smoke, publishes a GitHub
+release, and pushes to PyPI via trusted publishing. `pipx install codebase-index` → `init` →
+`index` → ask a question is verified end-to-end by `scripts/release_smoke.py`.*
 
 ---
 
