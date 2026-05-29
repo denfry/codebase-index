@@ -89,7 +89,7 @@ def _config_path(root: Path) -> Path:
 
 def load(root: Optional[Path] = None) -> Config:
     """Discover the project root and return the resolved, validated Config."""
-    resolved_root = find_root(root)
+    resolved_root = Path(root).resolve() if root is not None else find_root()
     data: dict = {}
     cfg_file = _config_path(resolved_root)
     if cfg_file.is_file():

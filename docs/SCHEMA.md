@@ -102,20 +102,20 @@ CREATE TABLE meta (
 ## Full-text search (FTS5)
 
 ```sql
--- External-content FTS over chunks. Code-aware tokenizer splits camelCase/snake_case.
+-- External-content FTS over chunks.
 CREATE VIRTUAL TABLE fts_chunks USING fts5(
     content,
     symbol_names,            -- denormalized: names of symbols in this chunk
     path UNINDEXED,
     content='chunks',
     content_rowid='id',
-    tokenize = "unicode61 remove_diacritics 2 tokenchars '_'"
+    tokenize = "unicode61 remove_diacritics 2"
 );
 -- Triggers keep fts_chunks in sync with chunks (INSERT/UPDATE/DELETE). bm25() used for ranking.
 ```
 
-> Note: a custom tokenizer that also splits `camelCase` is registered at runtime; `tokenchars '_'`
-> keeps snake_case identifiers searchable as units while still matching subtokens.
+> Note: underscores are token separators, so `snake_case` identifiers are searchable by their
+> parts. camelCase splitting is handled at query time; a true custom tokenizer (APSW) is deferred.
 
 ## Optional vector table (opt-in only)
 

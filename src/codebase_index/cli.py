@@ -98,15 +98,58 @@ def update(
 # --- retrieval (read-only; these are what the skill calls) --------------------------------------
 @app.command()
 def search(
+    ctx: typer.Context,
     query: str = typer.Argument(..., help="Search query."),
     limit: int = typer.Option(10, "--limit"),
     token_budget: int = typer.Option(1500, "--token-budget"),
     mode: str = typer.Option("hybrid", "--mode", help="hybrid|fts|symbol|vector"),
     no_fallback: bool = typer.Option(False, "--no-fallback"),
-    json_out: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
-    """Hybrid ranked search; returns compact results + recommended_reads."""
-    _todo("search")
+    """Lexical ranked search; hybrid aliases FTS until fusion lands."""
+    from .config import load
+    from .models import IndexFreshness, SearchResponse
+    from .output import json as json_out
+    from .output import markdown as md_out
+    from .retrieval.searchers import fts_response
+    from .storage.db import Database
+
+    is_json = bool(ctx.obj and ctx.obj.get("json"))
+
+    if mode in ("symbol", "vector"):
+        typer.echo(
+            f"[codebase-index] --mode {mode} is not available until a later "
+            "milestone. Use --mode fts."
+        )
+        raise typer.Exit(code=0)
+
+    cfg = load(ctx.obj.get("root") if ctx.obj else None)
+    db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+
+    if not db_path.exists():
+        resp = SearchResponse(
+            query=query,
+            intent="keyword",
+            index=IndexFreshness(exists=False, stale=False),
+            confidence="low",
+            results=[],
+            recommended_reads=[],
+            fallback_suggestions={} if no_fallback else {"ripgrep": [f'rg -n "{query}"']},
+        )
+        typer.echo(json_out.render(resp) if is_json else md_out.render(resp))
+        raise typer.Exit(code=0)
+
+    with Database(db_path) as db:
+        resp = fts_response(
+            db.conn,
+            query,
+            limit=limit,
+            token_budget=token_budget,
+            root=Path(cfg.root),
+        )
+    if no_fallback:
+        resp.fallback_suggestions = {}
+
+    typer.echo(json_out.render(resp) if is_json else md_out.render(resp))
 
 
 @app.command()
