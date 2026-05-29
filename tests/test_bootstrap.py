@@ -82,7 +82,9 @@ def test_cold_run_provisions_venv_and_pointer(tmp_path):
     assert res.returncode == 0, res.stderr
     assert (data / "venv" / "bin" / "codebase-index").is_file()
     assert (data / "requirements.lock").read_text(encoding="utf-8").strip() == "codebase-index==0.1.0"
-    assert (root / ".venv-path").read_text(encoding="utf-8").strip() == str(data / "venv")
+    # Compare as paths, not raw strings: bootstrap.sh joins with "/", while
+    # pathlib on Windows renders "\", so the bytes differ but the path is equal.
+    assert Path((root / ".venv-path").read_text(encoding="utf-8").strip()) == data / "venv"
 
 
 @pytest.mark.skipif(not BASH_OK, reason="bash not available or non-functional")
@@ -109,8 +111,24 @@ def test_lock_change_triggers_reinstall(tmp_path):
 @pytest.mark.skipif(not BASH_OK, reason="bash not available or non-functional")
 def test_missing_python_reports_clearly(tmp_path):
     root, data, env = _stage(tmp_path)
-    env["PATH"] = str(tmp_path / "empty")  # no python anywhere
-    (tmp_path / "empty").mkdir()
+    # Remove python from PATH while KEEPING coreutils (mkdir/diff/cp/rm) — on
+    # Git Bash for Windows those live in a different dir than python, so the
+    # script can run far enough to hit its "Python not found" branch instead of
+    # dying at `mkdir`. (Wiping PATH entirely would also remove mkdir itself.)
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    util_dirs = {
+        str(Path(p).parent)
+        for p in (shutil.which("mkdir"), shutil.which("diff"), shutil.which("cp"), shutil.which("rm"))
+        if p
+    }
+    python_dirs = {
+        str(Path(p).parent)
+        for p in (shutil.which("python"), shutil.which("python3"))
+        if p
+    }
+    safe_dirs = [d for d in util_dirs if d not in python_dirs]
+    env["PATH"] = os.pathsep.join([str(empty), *safe_dirs])  # no python on PATH
     res = _run(root, env)
     assert res.returncode == 0  # SessionStart must not hard-fail the session
     assert "Python 3.10+" in res.stderr
@@ -156,4 +174,6 @@ def test_powershell_cold_run_provisions_venv(tmp_path):
         capture_output=True, text=True, env=env,
     )
     assert res.returncode == 0, res.stderr
-    assert (root / ".venv-path").read_text(encoding="utf-8").strip() == str(data / "venv")
+    # Compare as paths, not raw strings: bootstrap.sh joins with "/", while
+    # pathlib on Windows renders "\", so the bytes differ but the path is equal.
+    assert Path((root / ".venv-path").read_text(encoding="utf-8").strip()) == data / "venv"
