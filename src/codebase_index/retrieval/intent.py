@@ -21,14 +21,14 @@ _RULES: list[tuple[re.Pattern[str], Intent]] = [
 ]
 
 _PLANS: dict[Intent, IntentPlan] = {
-    Intent.LOCATE_IMPL: IntentPlan(Intent.LOCATE_IMPL, {"symbol": 1.0, "path": 0.7, "fts": 0.4}, 1500),
-    Intent.HOW_IT_WORKS: IntentPlan(Intent.HOW_IT_WORKS, {"fts": 1.0, "symbol": 0.7, "path": 0.3}, 2200, graph_strategy="down"),
-    Intent.IMPACT: IntentPlan(Intent.IMPACT, {"symbol": 1.0, "path": 0.6, "fts": 0.3}, 1800, graph_strategy="up"),
-    Intent.FIND_REFS: IntentPlan(Intent.FIND_REFS, {"symbol": 1.0, "fts": 0.3, "path": 0.2}, 1500, graph_strategy="refs"),
-    Intent.DATA_FLOW: IntentPlan(Intent.DATA_FLOW, {"symbol": 0.9, "fts": 0.8, "path": 0.3}, 2000, graph_strategy="both"),
-    Intent.DEBUG_ERROR: IntentPlan(Intent.DEBUG_ERROR, {"fts": 1.0, "symbol": 0.6, "path": 0.3}, 1800),
-    Intent.ARCHITECTURE: IntentPlan(Intent.ARCHITECTURE, {"fts": 0.6, "symbol": 0.4, "path": 0.5}, 2500, summaries_first=True),
-    Intent.KEYWORD: IntentPlan(Intent.KEYWORD, {"fts": 1.0, "symbol": 0.6, "path": 0.5}, 1500),
+    Intent.LOCATE_IMPL: IntentPlan(Intent.LOCATE_IMPL, {"symbol": 1.0, "path": 0.7, "fts": 0.4, "vector": 0.2}, 1500),
+    Intent.HOW_IT_WORKS: IntentPlan(Intent.HOW_IT_WORKS, {"fts": 1.0, "symbol": 0.7, "path": 0.3, "vector": 0.8}, 2200, graph_strategy="down"),
+    Intent.IMPACT: IntentPlan(Intent.IMPACT, {"symbol": 1.0, "path": 0.6, "fts": 0.3, "vector": 0.3}, 1800, graph_strategy="up"),
+    Intent.FIND_REFS: IntentPlan(Intent.FIND_REFS, {"symbol": 1.0, "fts": 0.3, "path": 0.2, "vector": 0.2}, 1500, graph_strategy="refs"),
+    Intent.DATA_FLOW: IntentPlan(Intent.DATA_FLOW, {"symbol": 0.9, "fts": 0.8, "path": 0.3, "vector": 0.6}, 2000, graph_strategy="both"),
+    Intent.DEBUG_ERROR: IntentPlan(Intent.DEBUG_ERROR, {"fts": 1.0, "symbol": 0.6, "path": 0.3, "vector": 0.4}, 1800),
+    Intent.ARCHITECTURE: IntentPlan(Intent.ARCHITECTURE, {"fts": 0.6, "symbol": 0.4, "path": 0.5, "vector": 0.5}, 2500, summaries_first=True),
+    Intent.KEYWORD: IntentPlan(Intent.KEYWORD, {"fts": 1.0, "symbol": 0.6, "path": 0.5, "vector": 0.7}, 1500),
 }
 
 

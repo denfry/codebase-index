@@ -73,3 +73,15 @@ class Database:
                 f"Index schema_version {current} is newer than supported {SCHEMA_VERSION}; "
                 "rebuild the index with an updated CLI."
             )
+
+    def enable_vectors(self) -> None:
+        """Load the sqlite-vec extension into this connection (optional extra)."""
+        try:
+            import sqlite_vec  # type: ignore[import-untyped]
+        except ImportError as exc:
+            raise RuntimeError(
+                "Vector search needs the optional extra: pip install codebase-index[embeddings]"
+            ) from exc
+        self.conn.enable_load_extension(True)
+        sqlite_vec.load(self.conn)
+        self.conn.enable_load_extension(False)

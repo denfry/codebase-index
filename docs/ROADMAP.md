@@ -35,31 +35,43 @@ Milestones are vertical-ish slices: each ends with something runnable and testab
 - `confidence` + `fallback_suggestions`; `search --mode hybrid` (default); `explain`.
 - **Exit:** hybrid results outrank single-retriever on the fixture queries; token budget enforced.
 
-## M5 — Graph edges + impact
-- `graph/builder.py`: import/call/reference/inheritance edges; target resolution; degree denorm.
-- `graph/expand.py` + `impact` command (up/down/both, depth).
-- **Exit:** `codebase-index impact "<file/symbol>"` returns a sensible blast radius on fixtures.
+## M5 — Graph edges + impact ✅
+- `parsers/languages.py`: `imports_query` slot with import/extends/implements patterns (Python end-to-end; JS/TS query slots wired).
+- `parsers/treesitter.py`: extract import + inheritance edges via capture-prefixed queries.
+- `graph/builder.py`: cross-file edge resolution by unambiguous symbol name / module→file suffix; degree denormalization.
+- `graph/expand.py`: bounded BFS impact walk (up/down/both, depth).
+- **Exit:** `codebase-index impact "<file/symbol>" --direction up|down|both --depth N` returns a sensible blast radius on fixtures. Ambiguous symbol names are left unresolved by design.
 
-## M6 — Optional embeddings / vector backend
-- `embeddings/backend.py` protocol, `local.py`, `noop.py`; `sqlite-vec` `vec_chunks`.
-- Vector searcher wired into fusion; all behind `embeddings.enabled`. External backend gated by
-  SECURITY.md rules.
+## M6 — Optional embeddings / vector backend ✅
+- `embeddings/` package (protocol + noop default + lazy local + gated external), `sqlite-vec` `vec_chunks` store loaded on demand, indexer embedding pass behind `embeddings.enabled`, and a vector retriever fused into hybrid with per-intent weights. External backend refused unless `allow_external` + `$CBX_EMBEDDINGS_API_KEY` + an endpoint warning (SECURITY.md §4). Disabled path imports no optional dep and is byte-for-byte unchanged.
 - **Exit:** with extras installed + enabled, semantic queries improve recall; disabled path unchanged.
 
-## M7 — Claude Code Skill packaging
-- Finalize `skill/SKILL.md` + `scripts/cbx`(.ps1); `skill_template/` shipped in wheel; `init` writes it.
-- Freshness contract honored end-to-end (skill triggers `update`/`index`).
-- **Exit:** fresh `init` → ask a question in Claude Code → skill returns compact reads; manual QA.
+## M7 — Claude Code Skill packaging ✅
+- Shipped: `init` materializes the wheel-bundled skill template (SKILL.md + cbx/cbx.ps1) to `.claude/skills/codebase-index/`, writes resolved `config.json`, and idempotently gitignores the cache (`--force` to overwrite). The freshness contract is honored end-to-end — `search` returns real `stale`/`files_changed_since_build` (git clean-tree fast-path + mtime diff), so the skill triggers `update`/`index` per SKILL.md. `--with-hooks` writes a reviewable hooks example; auto-merging hooks + `watch` are M8.
 
-## M8 — Hooks + watch mode
-- `examples/hooks/settings.json`; `--with-hooks`; `watch/watcher.py` (debounced, async).
-- `doctor` reports enabled hooks.
-- **Exit:** editing files keeps the index fresh via hook or watch; no blocking of the edit loop.
+## M7.5 — One-command plugin install
+- Repo doubles as a Claude Code plugin (`.claude-plugin/plugin.json` + `marketplace.json`).
+- `SessionStart` hook (`scripts/bootstrap.sh`/`.ps1`) provisions a venv in `${CLAUDE_PLUGIN_DATA}`
+  with the pinned CLI (uv-preferred, pip fallback), reinstalling only when `requirements.lock` changes.
+- `bin/cbx` + `bin/codebase-index` wrappers resolve the venv via a `.venv-path` pointer and keep the
+  subcommand whitelist.
+- **Exit:** `/plugin install codebase-index@<marketplace>` → ask a codebase question → compact reads,
+  no manual `pip`/`init`/`index`. Depends on the M9 PyPI release for the non-`CBX_INSTALL_SPEC` path.
 
-## M9 — Tests, docs, examples, release
+## M8 — Hooks + watch mode ✅
+- Shipped: incremental `update` (mtime fast-path + sha verify + prune; `--since <ref>`, `--all`) is the engine the freshness contract calls; `init --with-hooks` auto-merges the `PostToolUse` update hook into `.claude/settings.json` idempotently; `watch` mode (optional `[watch]` extra) coalesces edit bursts into one debounced `update` and degrades to a clear error when watchdog is absent; `doctor` reports enabled hooks, cache-gitignore coverage, and freshness, exiting non-zero under `--strict` on high-severity findings. The full SECURITY.md §6 doctor checklist (secret-leak scan, perms, allowed-tools diff) is M9.
+
+## M9 — Tests, docs, examples, release ✅
 - Coverage across modules; CLI golden-output tests; perf check on a medium repo.
 - `examples/queries.md`, finalized docs, CHANGELOG, PyPI release, tagged GitHub release.
 - **Exit:** `pipx install codebase-index` + `init` + ask a question works on a clean machine.
+
+*Shipped: golden-file tests lock CLI `--json` output; a `--runslow` perf smoke test guards
+index/search latency on a synthetic medium repo; coverage is gated (`--cov-fail-under`) in a
+CI matrix (Ubuntu/macOS/Windows × py3.10–3.13). `CHANGELOG.md` tracks releases; a tag-triggered
+release pipeline builds, runs `twine check` + a clean-venv install smoke, publishes a GitHub
+release, and pushes to PyPI via trusted publishing. `pipx install codebase-index` → `init` →
+`index` → ask a question is verified end-to-end by `scripts/release_smoke.py`.*
 
 ---
 

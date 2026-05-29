@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from ..config import Config
+from ..indexer.freshness import compute_freshness
 from ..models import (
     Confidence,
     IndexFreshness,
@@ -115,6 +117,7 @@ class Candidate:
     content: str
     token_est: int
     bm25: float
+    kind: str = "window"
 
 
 def _subtokens(term: str) -> list[str]:
@@ -148,6 +151,7 @@ def fts_search(conn: sqlite3.Connection, query: str, *, limit: int) -> list[Cand
             content=r["content"],
             token_est=r["token_est"],
             bm25=r["bm25"],
+            kind=r.get("kind", "window"),  # type: ignore[attr-defined]
         )
         for r in rows
     ]
@@ -160,8 +164,8 @@ def fts_response(
     limit: int,
     token_budget: int,
     root: Path,
+    config: Optional[Config] = None,
 ) -> SearchResponse:
-    del root
     candidates = fts_search(conn, query, limit=limit)
     results: list[Result] = []
     recommended: list[ReadRange] = []
@@ -187,7 +191,7 @@ def fts_response(
                 line_end=candidate.line_end,
                 symbols=[],
                 score=round(1.0 / rank, 4),
-                reason="lexical match (bm25)",
+                reason="doc match" if candidate.kind == "doc" else "lexical match (bm25)",
                 snippet=snippet,
             )
         )
@@ -196,7 +200,7 @@ def fts_response(
     return SearchResponse(
         query=query,
         intent="keyword",
-        index=_freshness(conn),
+        index=_freshness(conn, root, config),
         confidence=confidence,
         results=results,
         recommended_reads=recommended,
@@ -226,15 +230,18 @@ def _fallbacks(query: str) -> dict[str, list[str]]:
     return {"ripgrep": [f'rg -n "{primary}"', f'rg -ni "{primary}"']}
 
 
-def _freshness(conn: sqlite3.Connection) -> IndexFreshness:
+def _freshness(
+    conn: sqlite3.Connection, root: Optional[Path] = None, config: Optional[Config] = None
+) -> IndexFreshness:
+    if config is not None and root is not None:
+        return compute_freshness(conn, root, config)
     built_at = repo.get_meta(conn, "built_at")
-    head = repo.get_meta(conn, "head_commit")
     return IndexFreshness(
         exists=built_at is not None,
         stale=False,
         files_changed_since_build=0,
         built_at=built_at,
-        head_commit=head,
+        head_commit=repo.get_meta(conn, "head_commit"),
     )
 
 
@@ -269,3 +276,34 @@ def refs_lookup(conn: sqlite3.Connection, name: str, *, kind: str) -> RefsRespon
         )
     sites.sort(key=lambda site: (site.path, site.line, site.kind))
     return RefsResponse(query=name, index=_freshness(conn), sites=sites)
+
+
+def vector_candidates(
+    conn: sqlite3.Connection, query: str, backend, *, limit: int
+) -> list["M4Candidate"]:
+    """Semantic retriever: embed the query, KNN over vec_chunks.
+
+    `backend` must be an enabled EmbeddingBackend; callers pass None/Noop when
+    embeddings are disabled and simply skip this retriever. sqlite-vec `distance`
+    is smaller-is-better, so the candidate score negates it for "higher is better".
+    """
+    if backend is None or not getattr(backend, "enabled", False):
+        return []
+    query = query.strip()
+    if not query:
+        return []
+    vec = backend.embed([query])[0]
+    out: list[M4Candidate] = []
+    for row in repo.vector_search(conn, vec, limit=limit):
+        out.append(
+            M4Candidate(
+                path=row["path"],
+                line_start=row["line_start"],
+                line_end=row["line_end"],
+                source="vector",
+                score=-float(row["distance"]),
+                content=row["content"],
+                token_est=int(row["token_est"]),
+            )
+        )
+    return out

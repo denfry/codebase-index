@@ -77,3 +77,35 @@ def test_no_symbols_falls_back_to_windows():
     text = "x = 1\ny = 2\n"
     chunks = build_chunks(text, [])
     assert chunks and all(c.kind == "window" for c in chunks)
+
+
+PY_GRAPH = '''\
+from auth.token import refresh_access_token
+from models.user import User
+
+
+class AdminUser(User):
+    def renew(self, refresh_token):
+        return refresh_access_token(refresh_token)
+'''
+
+
+def test_python_import_and_inheritance_edges():
+    pr = parse_file("python", PY_GRAPH)
+    by_type = {}
+    for e in pr.edges:
+        by_type.setdefault(e.edge_type, []).append(e)
+
+    modules = sorted(e.callee_name for e in by_type["import"])
+    assert modules == ["auth.token", "models.user"]
+    assert all(e.src_symbol_index is None for e in by_type["import"])
+
+    extends = by_type["extends"]
+    assert len(extends) == 1
+    base = extends[0]
+    assert base.callee_name == "User"
+    admin_idx = next(i for i, s in enumerate(pr.symbols) if s.name == "AdminUser")
+    assert base.src_symbol_index == admin_idx
+
+    assert any(e.edge_type == "call" and e.callee_name == "refresh_access_token"
+               for e in pr.edges)

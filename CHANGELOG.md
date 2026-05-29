@@ -1,39 +1,28 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+All notable changes to this project are documented here. The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-
-### Added
-- SQLite + FTS5 storage layer with schema migration support
-- Tree-sitter symbol extraction for Python, JavaScript, TypeScript
-- Hybrid retrieval: FTS5 lexical search + symbol match + path match
-- Token-budgeted retrieval packets with ranked results
-- Secret redaction for snippets (private keys, AWS keys, assigned secrets)
-- Path-based ignore matching (`.gitignore`, `.codeindexignore`, `.claudeignore`)
-- Built-in denylist for secrets, binaries, generated files, dependency directories
-- Incremental indexing with file hash tracking
-- CLI commands: `init`, `index`, `search`, `symbol`, `refs`, `impact`, `stats`, `doctor`, `clean`
-- Claude Code Skill (`skill/SKILL.md`) for automatic skill selection
-- JSON and Markdown output renderers
-- Pydantic config models with project root discovery
-- Test suite with fixture-based sample repository
-
-### Planned
-- Dependency and call graph expansion
-- Optional local embeddings with `sqlite-vec`
-- Optional hooks for post-tool-use auto-update
-- MCP bridge for external tool integration
-- Live file watching for incremental reindexing
 
 ## [0.1.0] - 2026-05-29
 
 ### Added
-- Initial repository scaffolding
-- Architecture design and database schema
-- Module skeletons for all core components
-- Claude Code Skill draft
-- Test fixtures and initial test suite
+- Local-first codebase index exposed as a Claude Code Skill + `codebase-index` CLI.
+- `index` / `update`: discovery with layered ignore rules, secret/binary/size gates, and
+  incremental re-index (M1, M8).
+- `search`: FTS5 lexical + hybrid retrieval with RRF fusion, intent detection, token budgeting,
+  confidence scoring, and fallback suggestions (M2, M4).
+- `symbol` / `refs`: tree-sitter symbol extraction and reference lookup across supported languages
+  with line-based fallback (M3).
+- `impact`: dependency/call-graph blast-radius analysis (M5).
+- Optional, opt-in local embeddings / `sqlite-vec` vector backend, gated behind `embeddings.enabled`
+  and SECURITY.md rules (M6).
+- `init`: materializes the bundled skill template, resolved `config.json`, and `.gitignore` rules;
+  end-to-end freshness contract so the skill triggers `update`/`index` (M7).
+- Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
+- `doctor`, `stats`, `clean` diagnostics/maintenance commands.
+
+[Unreleased]: https://github.com/denfry/codebase-index/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/denfry/codebase-index/releases/tag/v0.1.0
