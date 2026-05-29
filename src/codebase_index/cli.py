@@ -206,12 +206,34 @@ def refs(
 
 @app.command()
 def impact(
+    ctx: typer.Context,
     target: str = typer.Argument(..., help="File path or symbol name."),
     depth: int = typer.Option(2, "--depth"),
     direction: str = typer.Option("up", "--direction", help="up|down|both"),
 ) -> None:
     """Blast radius: what is affected if `target` changes (graph walk)."""
-    _todo("impact")
+    from .config import load
+    from .graph.expand import impact_lookup
+    from .models import ImpactResponse, IndexFreshness
+    from .output import json as json_out
+    from .output import markdown as md_out
+    from .storage.db import Database
+
+    is_json = bool(ctx.obj and ctx.obj.get("json"))
+    cfg = load(ctx.obj.get("root") if ctx.obj else None)
+    db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+
+    if not db_path.exists():
+        empty = ImpactResponse(
+            target=target, direction=direction, depth=depth,
+            index=IndexFreshness(exists=False, stale=False), nodes=[], files=[],
+        )
+        typer.echo(json_out.render(empty) if is_json else md_out.render_impact(empty))
+        raise typer.Exit(code=0)
+
+    with Database(db_path) as db:
+        resp = impact_lookup(db.conn, target, depth=depth, direction=direction)
+    typer.echo(json_out.render(resp) if is_json else md_out.render_impact(resp))
 
 
 @app.command()
