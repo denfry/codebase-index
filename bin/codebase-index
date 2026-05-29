@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Alias for cbx so a byte-identical SKILL.md (which calls `codebase-index`) works
+# inside the plugin while keeping the same subcommand whitelist and venv resolution.
+exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cbx" "$@"
