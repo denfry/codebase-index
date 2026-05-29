@@ -386,3 +386,67 @@ def recompute_degrees(conn: sqlite3.Connection) -> None:
 
 def count_resolved_edges(conn: sqlite3.Connection) -> int:
     return int(conn.execute("SELECT COUNT(*) FROM edges WHERE resolved = 1").fetchone()[0])
+
+
+def ensure_vec_tables(conn: sqlite3.Connection, *, dim: int) -> None:
+    """Create vec_chunks (sqlite-vec) + vec_meta if absent. dim is fixed per build."""
+    dim = int(dim)
+    conn.execute(
+        f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0("
+        f"chunk_id INTEGER PRIMARY KEY, embedding FLOAT[{dim}])"
+    )
+    conn.execute("CREATE TABLE IF NOT EXISTS vec_meta (model TEXT, dim INTEGER, built_at TEXT)")
+
+
+def set_vec_meta(conn: sqlite3.Connection, *, model: str, dim: int, built_at: str) -> None:
+    conn.execute("DELETE FROM vec_meta")
+    conn.execute(
+        "INSERT INTO vec_meta (model, dim, built_at) VALUES (?,?,?)", (model, int(dim), built_at)
+    )
+
+
+def get_vec_meta(conn: sqlite3.Connection) -> "Optional[sqlite3.Row]":
+    return conn.execute("SELECT model, dim, built_at FROM vec_meta LIMIT 1").fetchone()
+
+
+def chunks_for_embedding(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute("SELECT id, content FROM chunks ORDER BY id").fetchall()
+
+
+def upsert_chunk_vector(
+    conn: sqlite3.Connection, chunk_id: int, embedding: list[float]
+) -> None:
+    import sqlite_vec
+
+    conn.execute("DELETE FROM vec_chunks WHERE chunk_id = ?", (int(chunk_id),))
+    conn.execute(
+        "INSERT INTO vec_chunks (chunk_id, embedding) VALUES (?, ?)",
+        (int(chunk_id), sqlite_vec.serialize_float32(embedding)),
+    )
+
+
+def clear_vectors(conn: sqlite3.Connection) -> None:
+    conn.execute("DELETE FROM vec_chunks")
+
+
+def count_vectors(conn: sqlite3.Connection) -> int:
+    return int(conn.execute("SELECT COUNT(*) FROM vec_chunks").fetchone()[0])
+
+
+def vector_search(
+    conn: sqlite3.Connection, query_embedding: list[float], *, limit: int
+) -> list[sqlite3.Row]:
+    """KNN over vec_chunks; joins back to chunks/files for a uniform result row."""
+    import sqlite_vec
+
+    return conn.execute(
+        "SELECT v.chunk_id AS chunk_id, v.distance AS distance, f.path AS path, "
+        "       c.line_start AS line_start, c.line_end AS line_end, "
+        "       c.content AS content, c.token_est AS token_est "
+        "FROM vec_chunks v "
+        "JOIN chunks c ON c.id = v.chunk_id "
+        "JOIN files f ON f.id = c.file_id "
+        "WHERE v.embedding MATCH ? AND k = ? "
+        "ORDER BY v.distance",
+        (sqlite_vec.serialize_float32(query_embedding), int(limit)),
+    ).fetchall()
