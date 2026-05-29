@@ -11,17 +11,18 @@ Complete installation instructions for `codebase-index`.
 
 ## Installation Methods
 
-### Option 1: Install as a Claude Code Skill (recommended)
+### Option 1: Install via `init` command (recommended)
 
-Clone the repository directly into your project's skills directory:
+Install the package and scaffold the skill into your project:
 
 ```bash
 cd your-project
-git clone https://github.com/<OWNER>/claude-code-codebase-index-skill.git .claude/skills/codebase-index
-cd .claude/skills/codebase-index
-pip install -e .
-python -m codebase_index doctor
+pip install codebase-index
+codebase-index init
+codebase-index index
 ```
+
+This writes `.claude/skills/codebase-index/` (SKILL.md + `scripts/cbx`/`cbx.ps1`), a resolved `config.json`, and adds the cache directory to `.gitignore`. Use `--force` to overwrite an existing install, or `--with-hooks` to also write a reviewable PostToolUse hooks example.
 
 ### Option 2: Install as a reusable local skill
 
@@ -110,41 +111,28 @@ python skill/scripts/install.py
 cp -r skill/ .claude/skills/codebase-index/
 ```
 
-## Configuration
+## Post-Tool-Use Hooks (optional)
 
-Create a `.codeindex.json` file in your project root:
+To keep the index fresh after edits, you can enable a PostToolUse hook in Claude Code. Run `codebase-index init --with-hooks` to write a reviewable example to `.claude/skills/codebase-index/examples/hooks/settings.json`. After reviewing, merge the relevant section into your project's `.claude/settings.json`:
 
 ```json
 {
-  "index": {
-    "max_file_bytes": 1048576,
-    "chunk_size": 500,
-    "chunk_overlap": 50
-  },
-  "embeddings": {
-    "backend": "noop",
-    "allow_external": false
-  },
   "hooks": {
-    "post_tool_use": {
-      "enabled": false,
-      "events": ["Write", "Edit"],
-      "command": "codebase-index update --quiet"
-    }
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "codebase-index update --quiet >/dev/null 2>&1 &",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
   }
 }
 ```
-
-### Configuration Options
-
-| Option | Default | Description |
-|---|---|---|
-| `index.max_file_bytes` | 1048576 (1 MB) | Maximum file size to index |
-| `index.chunk_size` | 500 | Target tokens per chunk |
-| `index.chunk_overlap` | 50 | Overlap tokens between chunks |
-| `embeddings.backend` | "noop" | Embedding backend: "noop", "local", or "external" |
-| `embeddings.allow_external` | false | Allow sending code to external embedding APIs |
-| `hooks.post_tool_use.enabled` | false | Enable automatic index updates after edits |
 
 ## Cache Location
 

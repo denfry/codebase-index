@@ -229,9 +229,9 @@ def _fallbacks(query: str) -> dict[str, list[str]]:
 
 
 def _freshness(
-    conn: sqlite3.Connection, root: Path, config: Optional[Config]
+    conn: sqlite3.Connection, root: Optional[Path] = None, config: Optional[Config] = None
 ) -> IndexFreshness:
-    if config is not None:
+    if config is not None and root is not None:
         return compute_freshness(conn, root, config)
     built_at = repo.get_meta(conn, "built_at")
     return IndexFreshness(

@@ -46,10 +46,8 @@ Milestones are vertical-ish slices: each ends with something runnable and testab
 - `embeddings/` package (protocol + noop default + lazy local + gated external), `sqlite-vec` `vec_chunks` store loaded on demand, indexer embedding pass behind `embeddings.enabled`, and a vector retriever fused into hybrid with per-intent weights. External backend refused unless `allow_external` + `$CBX_EMBEDDINGS_API_KEY` + an endpoint warning (SECURITY.md §4). Disabled path imports no optional dep and is byte-for-byte unchanged.
 - **Exit:** with extras installed + enabled, semantic queries improve recall; disabled path unchanged.
 
-## M7 — Claude Code Skill packaging
-- Finalize `skill/SKILL.md` + `scripts/cbx`(.ps1); `skill_template/` shipped in wheel; `init` writes it.
-- Freshness contract honored end-to-end (skill triggers `update`/`index`).
-- **Exit:** fresh `init` → ask a question in Claude Code → skill returns compact reads; manual QA.
+## M7 — Claude Code Skill packaging ✅
+- Shipped: `init` materializes the wheel-bundled skill template (SKILL.md + cbx/cbx.ps1) to `.claude/skills/codebase-index/`, writes resolved `config.json`, and idempotently gitignores the cache (`--force` to overwrite). The freshness contract is honored end-to-end — `search` returns real `stale`/`files_changed_since_build` (git clean-tree fast-path + mtime diff), so the skill triggers `update`/`index` per SKILL.md. `--with-hooks` writes a reviewable hooks example; auto-merging hooks + `watch` are M8.
 
 ## M8 — Hooks + watch mode
 - `examples/hooks/settings.json`; `--with-hooks`; `watch/watcher.py` (debounced, async).
