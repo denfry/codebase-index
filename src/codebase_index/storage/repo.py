@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from typing import Any, Iterable, Optional, Sequence
 
@@ -251,4 +252,67 @@ def fts_search(
         LIMIT ?
         """,
         (match_query, limit),
+    ).fetchall()
+
+
+def path_search(
+    conn: sqlite3.Connection, query: str, *, limit: int
+) -> list[sqlite3.Row]:
+    """Match files whose path contains query tokens. Score = number of tokens hit."""
+    tokens = [t for t in re.split(r"[\s/.\\]+", query.strip()) if t]
+    if not tokens:
+        return []
+    score_expr = " + ".join(["(path LIKE ?)"] * len(tokens))
+    like_args = [f"%{t}%" for t in tokens]
+    return conn.execute(
+        f"""
+        SELECT id AS file_id, path, mtime_ns, is_generated,
+               ({score_expr}) AS hits
+        FROM files
+        WHERE {' OR '.join(['path LIKE ?'] * len(tokens))}
+        ORDER BY hits DESC, length(path) ASC
+        LIMIT ?
+        """,
+        (*like_args, *like_args, limit),
+    ).fetchall()
+
+
+def symbol_search(
+    conn: sqlite3.Connection,
+    name: str,
+    *,
+    limit: int,
+    kind: Optional[str] = None,
+    exact: bool = False,
+) -> list[sqlite3.Row]:
+    """Symbol lookup: exact name first, then prefix, then substring (fuzzy)."""
+    name = name.strip()
+    if not name:
+        return []
+    kind_clause = "AND s.kind = :kind" if kind else ""
+    name_clause = "s.name = :exact COLLATE NOCASE" if exact else (
+        "(s.name = :exact COLLATE NOCASE "
+        "OR s.name LIKE :prefix COLLATE NOCASE "
+        "OR s.name LIKE :sub COLLATE NOCASE)"
+    )
+    return conn.execute(
+        f"""
+        SELECT s.name, s.kind, s.signature, s.line_start, s.line_end,
+               s.in_degree, s.out_degree, f.path, f.mtime_ns, f.is_generated,
+               (s.name = :exact COLLATE NOCASE) AS is_exact
+        FROM symbols s
+        JOIN files f ON f.id = s.file_id
+        WHERE {name_clause} {kind_clause}
+        ORDER BY is_exact DESC,
+                 (s.name LIKE :prefix COLLATE NOCASE) DESC,
+                 s.in_degree DESC
+        LIMIT :limit
+        """,
+        {
+            "exact": name,
+            "prefix": f"{name}%",
+            "sub": f"%{name}%",
+            "kind": kind,
+            "limit": limit,
+        },
     ).fetchall()
