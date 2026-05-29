@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from ..config import Config
+from ..indexer.freshness import compute_freshness
 from ..models import (
     Confidence,
     IndexFreshness,
@@ -160,8 +162,8 @@ def fts_response(
     limit: int,
     token_budget: int,
     root: Path,
+    config: Optional[Config] = None,
 ) -> SearchResponse:
-    del root
     candidates = fts_search(conn, query, limit=limit)
     results: list[Result] = []
     recommended: list[ReadRange] = []
@@ -196,7 +198,7 @@ def fts_response(
     return SearchResponse(
         query=query,
         intent="keyword",
-        index=_freshness(conn),
+        index=_freshness(conn, root, config),
         confidence=confidence,
         results=results,
         recommended_reads=recommended,
@@ -226,15 +228,18 @@ def _fallbacks(query: str) -> dict[str, list[str]]:
     return {"ripgrep": [f'rg -n "{primary}"', f'rg -ni "{primary}"']}
 
 
-def _freshness(conn: sqlite3.Connection) -> IndexFreshness:
+def _freshness(
+    conn: sqlite3.Connection, root: Path, config: Optional[Config]
+) -> IndexFreshness:
+    if config is not None:
+        return compute_freshness(conn, root, config)
     built_at = repo.get_meta(conn, "built_at")
-    head = repo.get_meta(conn, "head_commit")
     return IndexFreshness(
         exists=built_at is not None,
         stale=False,
         files_changed_since_build=0,
         built_at=built_at,
-        head_commit=head,
+        head_commit=repo.get_meta(conn, "head_commit"),
     )
 
 

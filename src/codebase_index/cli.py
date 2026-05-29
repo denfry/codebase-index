@@ -174,6 +174,7 @@ def search(
     json_out: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Hybrid ranked search; returns compact results + recommended_reads."""
+    from .config import load
     from .output import json as json_renderer
     from .output import markdown as md_renderer
     from .retrieval.pipeline import search as run_search
@@ -194,12 +195,16 @@ def search(
         typer.echo("No index found. Run `codebase-index index`.")
         raise typer.Exit(code=1)
 
+    root_opt = ctx.obj.get("root") if ctx.obj else None
+    cfg = load(root_opt)
+
     with Database(db_path) as db:
         if backend is not None and getattr(backend, "enabled", False):
             db.enable_vectors()
         payload = run_search(
             db.conn, query, mode=mode, limit=limit,
             token_budget=token_budget, no_fallback=no_fallback, backend=backend,
+            root=Path(cfg.root), config=cfg,
         )
 
     want_json = json_out or (ctx.obj and ctx.obj.get("json"))
