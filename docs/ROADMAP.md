@@ -7,7 +7,7 @@ Milestones are vertical-ish slices: each ends with something runnable and testab
 - `pyproject.toml`, module skeletons with responsibilities, CLI command stubs.
 - **Exit:** `pip install -e .` works; `codebase-index --help` lists all commands (stubs ok).
 
-## M1 — Storage + discovery + ignore rules
+## M1 — Storage + discovery + ignore rules ✅
 - `storage/db.py`: connection, pragmas, apply `schema.sql`, `meta.schema_version`.
 - `discovery/`: walker, layered ignore (`pathspec`), `classify.py` (lang/binary/size/secret gates).
 - **Exit:** `codebase-index index` populates `files` correctly; secrets/binaries/build dirs excluded.
