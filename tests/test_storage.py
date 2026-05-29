@@ -380,3 +380,21 @@ def test_path_mtimes_returns_indexed_paths(tmp_path):
     mtimes = repo.path_mtimes(db.conn)
     assert mtimes == {"src/a.py": 111, "src/b.py": 222}
     db.close()
+
+
+def test_fingerprints_returns_mtime_size_and_sha(tmp_path):
+    db = _open(tmp_path)
+    repo.upsert_file(
+        db.conn, path="src/a.py", lang="python", size_bytes=10, sha256="aaa",
+        mtime_ns=111, git_status=None, parser="line", indexed_at="t", is_generated=False,
+    )
+    repo.upsert_file(
+        db.conn, path="src/b.py", lang="python", size_bytes=20, sha256="bbb",
+        mtime_ns=222, git_status=None, parser="line", indexed_at="t", is_generated=False,
+    )
+    fps = repo.fingerprints(db.conn)
+    assert fps == {
+        "src/a.py": (111, 10, "aaa"),
+        "src/b.py": (222, 20, "bbb"),
+    }
+    db.close()
