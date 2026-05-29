@@ -2,5 +2,18 @@
   "built_at": "<TS>",
   "exists": true,
   "files": 6,
-  "head_commit": "<SHA>"
+  "head_commit": "<SHA>",
+  "symbols": 7,
+  "treesitter_coverage": [
+    {
+      "files": 3,
+      "lang": "python",
+      "symbols": 6
+    },
+    {
+      "files": 2,
+      "lang": "typescript",
+      "symbols": 1
+    }
+  ]
 }

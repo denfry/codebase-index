@@ -11,6 +11,8 @@ _LANG_BY_SUFFIX = {
     ".tsx": "typescript",
     ".js": "javascript",
     ".jsx": "javascript",
+    ".mjs": "javascript",
+    ".cjs": "javascript",
     ".go": "go",
     ".java": "java",
     ".rs": "rust",
@@ -18,9 +20,16 @@ _LANG_BY_SUFFIX = {
     ".h": "c",
     ".cpp": "cpp",
     ".cc": "cpp",
+    ".cxx": "cpp",
     ".hpp": "cpp",
+    ".hh": "cpp",
+    ".hxx": "cpp",
+    ".cs": "csharp",
     ".rb": "ruby",
     ".php": "php",
+    ".kt": "kotlin",
+    ".kts": "kotlin",
+    ".lua": "lua",
     ".md": "markdown",
     ".json": "json",
     ".yml": "yaml",
@@ -29,6 +38,13 @@ _LANG_BY_SUFFIX = {
     ".sql": "sql",
 }
 
+# Authoritative set of *code* languages routed to tree-sitter (Guardrail 1). Every entry MUST
+# have a working extraction path — a Tier-A LangSpec or the Tier-B generic walker. This is
+# enforced by tests/test_multilang_symbols.py (registry consistency), so the two registries
+# cannot silently drift. Note: yaml/json/markdown/toml/sql have grammars too but are *data/prose*
+# (Tier C) and deliberately stay on the line-chunk + FTS floor.
+#
+# `lua` here has no Tier-A spec on purpose: it exercises the Tier-B generic path end-to-end.
 _TREE_SITTER_LANGS = {
     "python",
     "typescript",
@@ -38,8 +54,11 @@ _TREE_SITTER_LANGS = {
     "rust",
     "c",
     "cpp",
+    "csharp",
     "ruby",
     "php",
+    "kotlin",
+    "lua",
 }
 
 _SECRET_NAMES = {

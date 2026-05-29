@@ -1,6 +1,13 @@
-# Installation Guide
+# Installation Guide: codebase-index for Claude Code
 
-Complete installation instructions for `codebase-index`.
+This page explains how to install `codebase-index` and make the skill available in Claude Code.
+
+## Choose Your Path
+
+- New user: use **Option 1**.
+- Working across many repos: use **Option 2**.
+- CLI-only usage (without skill scaffolding): use **Option 3**.
+- Advanced local features (watch/embeddings): use **Option 4**.
 
 ## Requirements
 
@@ -242,3 +249,16 @@ cat .codeindex.json | grep allow_external
 ```
 
 Set `allow_external` to `false` to disable external API calls.
+
+## Recommended Flow for First-Time Users
+
+```bash
+pip install codebase-index
+cd your-project
+codebase-index init
+codebase-index index
+codebase-index doctor
+codebase-index search "where is authentication implemented?"
+```
+
+If the command returns ranked results and recommended reads, your setup is complete.

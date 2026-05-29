@@ -13,10 +13,9 @@ from ..config import Config
 from ..discovery.walker import walk
 from ..embeddings.backend import resolve_backend
 from ..graph.builder import build_graph
-from ..parsers import languages
 from ..parsers.base import ParseResult
 from ..parsers.line_chunker import chunk_text
-from ..parsers.treesitter import parse_file
+from ..parsers.treesitter import UnsupportedLanguage, parse_file
 from ..storage import repo
 from ..storage.db import Database
 from .doc_chunks import extract_doc_chunks
@@ -33,6 +32,15 @@ class BuildStats:
     edges: int = 0
     edges_resolved: int = 0
     vectors: int = 0
+    parse_failed: int = 0
+    treesitter_zero_symbols: int = 0
+
+
+@dataclass
+class _ParseOutcome:
+    result: ParseResult
+    parse_failed: bool = False
+    zero_symbols: bool = False
 
 
 def build_index(config: Config, db: Database, root: Optional[Path] = None) -> BuildStats:
@@ -57,7 +65,10 @@ def build_index(config: Config, db: Database, root: Optional[Path] = None) -> Bu
             is_generated=cand.is_generated,
         )
         text = _read_text(cand.path)
-        parse_result = _parse(cand.lang, text, config)
+        outcome = _parse(cand.lang, cand.parser, text, config)
+        parse_result = outcome.result
+        stats.parse_failed += int(outcome.parse_failed)
+        stats.treesitter_zero_symbols += int(outcome.zero_symbols)
         symbol_ids = repo.replace_symbols(conn, file_id, parse_result.symbols)
         repo.replace_chunks(conn, file_id, parse_result.chunks, symbol_ids=symbol_ids)
         doc_chunks = extract_doc_chunks(text, cand.rel_path, cand.lang)
@@ -128,18 +139,31 @@ def _read_text(path: Path) -> str:
         return ""
 
 
-def _parse(lang: Optional[str], text: str, config: Config) -> ParseResult:
-    if lang and languages.is_supported(lang):
+def _parse(lang: Optional[str], parser: str, text: str, config: Config) -> _ParseOutcome:
+    """Parse a file to a ParseResult, recording (never swallowing) parse failures.
+
+    Routing is owned by `classify` (Guardrail 1): only files classify labels `treesitter`
+    attempt tree-sitter; everything else stays on the line-chunk + FTS floor (Tier C).
+    """
+    failed = False
+    if lang and parser == "treesitter":
         try:
-            return parse_file(lang, text)
+            result = parse_file(lang, text)
+            return _ParseOutcome(result=result, zero_symbols=not result.symbols)
+        except UnsupportedLanguage:
+            # classify routed a tree-sitter lang with no extraction path — a Guardrail 1
+            # breach. Count it loudly instead of pretending the file parsed.
+            failed = True
         except Exception:
-            pass
+            # Any other parse error: record it (Guardrail 2) and fall back to line chunks,
+            # so one bad file never silently looks identical to a clean parse.
+            failed = True
     chunks = chunk_text(
         text,
         window_lines=config.chunk.window_lines,
         overlap_lines=config.chunk.overlap_lines,
     )
-    return ParseResult(chunks=chunks, symbols=[], edges=[])
+    return _ParseOutcome(result=ParseResult(chunks=chunks, symbols=[], edges=[]), parse_failed=failed)
 
 
 def _resolve_edges(

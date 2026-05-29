@@ -222,6 +222,26 @@ def count_symbols(conn: sqlite3.Connection) -> int:
     return int(conn.execute("SELECT COUNT(*) FROM symbols").fetchone()[0])
 
 
+def treesitter_coverage(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Per-language (files, symbols) for tree-sitter files only.
+
+    Powers Guardrail 2: a tree-sitter language with files but ~0 symbols is a yellow flag
+    (silent extraction failure), surfaced by `doctor`.
+    """
+    return conn.execute(
+        """
+        SELECT f.lang AS lang,
+               COUNT(DISTINCT f.id) AS files,
+               COUNT(s.id) AS symbols
+        FROM files f
+        LEFT JOIN symbols s ON s.file_id = f.id
+        WHERE f.parser = 'treesitter'
+        GROUP BY f.lang
+        ORDER BY files DESC
+        """
+    ).fetchall()
+
+
 def replace_edges(
     conn: sqlite3.Connection, file_id: int, edges: Sequence[dict[str, Any]]
 ) -> int:
