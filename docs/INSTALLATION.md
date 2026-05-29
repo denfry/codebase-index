@@ -11,17 +11,18 @@ Complete installation instructions for `codebase-index`.
 
 ## Installation Methods
 
-### Option 1: Install as a Claude Code Skill (recommended)
+### Option 1: Install via `init` command (recommended)
 
-Clone the repository directly into your project's skills directory:
+Install the package and scaffold the skill into your project:
 
 ```bash
 cd your-project
-git clone https://github.com/<OWNER>/claude-code-codebase-index-skill.git .claude/skills/codebase-index
-cd .claude/skills/codebase-index
-pip install -e .
-python -m codebase_index doctor
+pip install codebase-index
+codebase-index init
+codebase-index index
 ```
+
+This writes `.claude/skills/codebase-index/` (SKILL.md + `scripts/cbx`/`cbx.ps1`), a resolved `config.json`, and adds the cache directory to `.gitignore`. Use `--force` to overwrite an existing install, or `--with-hooks` to auto-merge the PostToolUse update hook into `.claude/settings.json` (a reviewable example is also written as a reference copy).
 
 ### Option 2: Install as a reusable local skill
 
@@ -70,6 +71,21 @@ pip install -e ".[watch]"
 pip install -e ".[embeddings-local,watch,dev]"
 ```
 
+### Verify a clean install
+
+On a machine with only Python + pipx:
+
+```bash
+pipx install codebase-index
+cd /path/to/your/repo
+codebase-index init           # writes .claude/skills/codebase-index/ + .gitignore rules
+codebase-index index          # builds .claude/cache/codebase-index/index.sqlite
+codebase-index --json search "<a term from your code>"   # -> {"index": {"exists": true, ...}}
+```
+
+If `search` returns `"exists": true` with results, the install is healthy. Maintainers can run the
+same path automatically with `python scripts/release_smoke.py`.
+
 ## Verify Installation
 
 ```bash
@@ -110,41 +126,41 @@ python skill/scripts/install.py
 cp -r skill/ .claude/skills/codebase-index/
 ```
 
-## Configuration
+## Post-Tool-Use Hooks (optional)
 
-Create a `.codeindex.json` file in your project root:
+To keep the index fresh after edits, you can enable a PostToolUse hook in Claude Code. Run `codebase-index init --with-hooks` to **auto-merge** the hook into `.claude/settings.json` (a reviewable example is also written to `.claude/skills/codebase-index/examples/hooks/settings.json` as a reference copy). The merge is idempotent — running `init --with-hooks` again won't duplicate the hook.
+
+Use `codebase-index doctor` to verify which hooks are enabled. For heavy editing sessions, consider `watch` mode instead (see below).
 
 ```json
 {
-  "index": {
-    "max_file_bytes": 1048576,
-    "chunk_size": 500,
-    "chunk_overlap": 50
-  },
-  "embeddings": {
-    "backend": "noop",
-    "allow_external": false
-  },
   "hooks": {
-    "post_tool_use": {
-      "enabled": false,
-      "events": ["Write", "Edit"],
-      "command": "codebase-index update --quiet"
-    }
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "codebase-index update --quiet >/dev/null 2>&1 &",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
   }
 }
 ```
 
-### Configuration Options
+## Watch Mode (optional)
 
-| Option | Default | Description |
-|---|---|---|
-| `index.max_file_bytes` | 1048576 (1 MB) | Maximum file size to index |
-| `index.chunk_size` | 500 | Target tokens per chunk |
-| `index.chunk_overlap` | 50 | Overlap tokens between chunks |
-| `embeddings.backend` | "noop" | Embedding backend: "noop", "local", or "external" |
-| `embeddings.allow_external` | false | Allow sending code to external embedding APIs |
-| `hooks.post_tool_use.enabled` | false | Enable automatic index updates after edits |
+For heavy editing sessions, `watch` mode keeps the index fresh via a debounced filesystem observer. Requires the `[watch]` extra:
+
+```bash
+pip install "codebase-index[watch]"
+codebase-index watch --debounce 500
+```
+
+The watcher coalesces bursts of file edits into a single incremental `update` after a quiet window, so it never blocks or thrashes the edit loop. Ctrl-C to stop. Without `watchdog` installed, `watch` exits with a clear error and install guidance.
 
 ## Cache Location
 
@@ -187,10 +203,22 @@ pip install tree-sitter tree-sitter-language-pack
 
 ### Index is stale after file changes
 
-Run an incremental update:
+Run an incremental update (mtime/sha/git aware, safe to run from a hook or watcher):
 
 ```bash
 codebase-index update
+```
+
+Narrow to git-changed files since a ref:
+
+```bash
+codebase-index update --since HEAD~1
+```
+
+Force re-check of every file:
+
+```bash
+codebase-index update --all
 ```
 
 Or a full rebuild:

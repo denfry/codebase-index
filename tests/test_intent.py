@@ -34,3 +34,13 @@ def test_architecture_returns_summaries_first():
 
 def test_every_plan_has_positive_budget():
     assert detect_intent("anything").token_budget > 0
+
+
+def test_semantic_intents_have_vector_weight():
+    for q in ["how does token refresh work", "leftpad", "trace data flow of refresh_token"]:
+        assert detect_intent(q).weight("vector") > 0.0
+
+
+def test_locate_impl_still_favors_symbol_over_vector():
+    plan = detect_intent("where is refresh_access_token implemented")
+    assert plan.weight("symbol") > plan.weight("vector")

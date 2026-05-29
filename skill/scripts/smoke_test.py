@@ -10,20 +10,31 @@ Runs a minimal end-to-end test:
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
+# Force UTF-8 output on Windows
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+
 
 def run(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess:
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
     return subprocess.run(
         cmd,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=60,
         cwd=str(cwd),
+        env=env,
     )
 
 
@@ -91,7 +102,7 @@ def main() -> int:
 
         # Stats
         print("[4/4] Checking stats...")
-        result = run([sys.executable, "-m", "codebase_index", "stats", "--json"], project)
+        result = run([sys.executable, "-m", "codebase_index", "--json", "stats"], project)
         if result.returncode != 0:
             print(f"[FAIL] stats failed: {result.stderr}")
             return 1

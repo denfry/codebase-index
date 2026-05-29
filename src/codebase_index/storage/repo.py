@@ -125,6 +125,34 @@ def replace_chunks(
     return len(chunks)
 
 
+def append_chunks(
+    conn: sqlite3.Connection,
+    file_id: int,
+    chunks: Sequence[Chunk],
+) -> int:
+    """Append chunks without deleting existing ones (for doc chunks)."""
+    conn.executemany(
+        """
+        INSERT INTO chunks
+            (file_id, line_start, line_end, kind, symbol_id, content, token_est)
+        VALUES
+            (?, ?, ?, ?, NULL, ?, ?)
+        """,
+        [
+            (
+                file_id,
+                c.line_start,
+                c.line_end,
+                c.kind,
+                c.content,
+                c.token_est,
+            )
+            for c in chunks
+        ],
+    )
+    return len(chunks)
+
+
 def chunks_for_file(conn: sqlite3.Connection, file_id: int) -> list[sqlite3.Row]:
     return conn.execute(
         "SELECT * FROM chunks WHERE file_id = ? ORDER BY line_start", (file_id,)
@@ -243,7 +271,8 @@ def fts_search(
                c.line_end       AS line_end,
                c.content        AS content,
                c.token_est      AS token_est,
-               bm25(fts_chunks) AS bm25
+               bm25(fts_chunks) AS bm25,
+               c.kind           AS kind
         FROM fts_chunks
         JOIN chunks c ON c.id = fts_chunks.rowid
         JOIN files f ON f.id = c.file_id
@@ -315,4 +344,156 @@ def symbol_search(
             "kind": kind,
             "limit": limit,
         },
+    ).fetchall()
+
+
+def unresolved_edges(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, edge_type, dst_name FROM edges "
+        "WHERE resolved = 0 AND dst_name IS NOT NULL ORDER BY id"
+    ).fetchall()
+
+
+def resolve_edge(conn: sqlite3.Connection, edge_id: int, dst_kind: str, dst_id: int) -> None:
+    conn.execute(
+        "UPDATE edges SET dst_kind = ?, dst_id = ?, resolved = 1 WHERE id = ?",
+        (dst_kind, dst_id, edge_id),
+    )
+
+
+def symbol_id_for_unique_name(conn: sqlite3.Connection, name: str) -> Optional[int]:
+    rows = conn.execute(
+        "SELECT id FROM symbols WHERE name = ? LIMIT 2", (name,)
+    ).fetchall()
+    return int(rows[0]["id"]) if len(rows) == 1 else None
+
+
+def files_with_suffix(conn: sqlite3.Connection, suffix: str) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, path FROM files WHERE path = ? OR path LIKE ? ORDER BY length(path), path",
+        (suffix, f"%/{suffix}"),
+    ).fetchall()
+
+
+def file_by_path(conn: sqlite3.Connection, path: str) -> Optional[sqlite3.Row]:
+    return conn.execute("SELECT id, path FROM files WHERE path = ?", (path,)).fetchone()
+
+
+def symbols_in_file(conn: sqlite3.Connection, file_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, name, kind, line_start, in_degree FROM symbols "
+        "WHERE file_id = ? ORDER BY line_start",
+        (file_id,),
+    ).fetchall()
+
+
+def incoming_edges(conn: sqlite3.Connection, kind: str, node_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, edge_type, src_kind, src_id, file_id, line FROM edges "
+        "WHERE resolved = 1 AND dst_kind = ? AND dst_id = ?",
+        (kind, node_id),
+    ).fetchall()
+
+
+def outgoing_edges(conn: sqlite3.Connection, kind: str, node_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT id, edge_type, dst_kind, dst_id, file_id, line FROM edges "
+        "WHERE resolved = 1 AND src_kind = ? AND src_id = ?",
+        (kind, node_id),
+    ).fetchall()
+
+
+def recompute_degrees(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "UPDATE symbols SET "
+        "out_degree = (SELECT COUNT(*) FROM edges "
+        "  WHERE resolved = 1 AND src_kind = 'symbol' AND src_id = symbols.id), "
+        "in_degree = (SELECT COUNT(*) FROM edges "
+        "  WHERE resolved = 1 AND dst_kind = 'symbol' AND dst_id = symbols.id)"
+    )
+
+
+def count_resolved_edges(conn: sqlite3.Connection) -> int:
+    return int(conn.execute("SELECT COUNT(*) FROM edges WHERE resolved = 1").fetchone()[0])
+
+
+def ensure_vec_tables(conn: sqlite3.Connection, *, dim: int) -> None:
+    """Create vec_chunks (sqlite-vec) + vec_meta if absent. dim is fixed per build."""
+    dim = int(dim)
+    conn.execute(
+        f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0("
+        f"chunk_id INTEGER PRIMARY KEY, embedding FLOAT[{dim}])"
+    )
+    conn.execute("CREATE TABLE IF NOT EXISTS vec_meta (model TEXT, dim INTEGER, built_at TEXT)")
+
+
+def set_vec_meta(conn: sqlite3.Connection, *, model: str, dim: int, built_at: str) -> None:
+    conn.execute("DELETE FROM vec_meta")
+    conn.execute(
+        "INSERT INTO vec_meta (model, dim, built_at) VALUES (?,?,?)", (model, int(dim), built_at)
+    )
+
+
+def get_vec_meta(conn: sqlite3.Connection) -> "Optional[sqlite3.Row]":
+    return conn.execute("SELECT model, dim, built_at FROM vec_meta LIMIT 1").fetchone()
+
+
+def chunks_for_embedding(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute("SELECT id, content FROM chunks ORDER BY id").fetchall()
+
+
+def upsert_chunk_vector(
+    conn: sqlite3.Connection, chunk_id: int, embedding: list[float]
+) -> None:
+    import sqlite_vec  # type: ignore[import-untyped]
+
+    conn.execute("DELETE FROM vec_chunks WHERE chunk_id = ?", (int(chunk_id),))
+    conn.execute(
+        "INSERT INTO vec_chunks (chunk_id, embedding) VALUES (?, ?)",
+        (int(chunk_id), sqlite_vec.serialize_float32(embedding)),
+    )
+
+
+def clear_vectors(conn: sqlite3.Connection) -> None:
+    conn.execute("DELETE FROM vec_chunks")
+
+
+def count_vectors(conn: sqlite3.Connection) -> int:
+    return int(conn.execute("SELECT COUNT(*) FROM vec_chunks").fetchone()[0])
+
+
+def path_mtimes(conn: sqlite3.Connection) -> dict[str, int]:
+    """Map every indexed file's repo-relative path to its stored mtime_ns."""
+    return {
+        row["path"]: int(row["mtime_ns"])
+        for row in conn.execute("SELECT path, mtime_ns FROM files").fetchall()
+    }
+
+
+def fingerprints(conn: sqlite3.Connection) -> dict[str, tuple[int, int, str]]:
+    """Map every indexed path to its (mtime_ns, size_bytes, sha256) for incremental update."""
+    return {
+        row["path"]: (int(row["mtime_ns"]), int(row["size_bytes"]), row["sha256"])
+        for row in conn.execute(
+            "SELECT path, mtime_ns, size_bytes, sha256 FROM files"
+        ).fetchall()
+    }
+
+
+def vector_search(
+    conn: sqlite3.Connection, query_embedding: list[float], *, limit: int
+) -> list[sqlite3.Row]:
+    """KNN over vec_chunks; joins back to chunks/files for a uniform result row."""
+    import sqlite_vec  # type: ignore[import-untyped]
+
+    return conn.execute(
+        "SELECT v.chunk_id AS chunk_id, v.distance AS distance, f.path AS path, "
+        "       c.line_start AS line_start, c.line_end AS line_end, "
+        "       c.content AS content, c.token_est AS token_est "
+        "FROM vec_chunks v "
+        "JOIN chunks c ON c.id = v.chunk_id "
+        "JOIN files f ON f.id = c.file_id "
+        "WHERE v.embedding MATCH ? AND k = ? "
+        "ORDER BY v.distance",
+        (sqlite_vec.serialize_float32(query_embedding), int(limit)),
     ).fetchall()

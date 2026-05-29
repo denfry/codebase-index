@@ -1,0 +1,31 @@
+- query: "where is auth token refresh implemented"
+  expected_files:
+    - "src/auth/token.py"
+  expected_symbols:
+    - "refresh_access_token"
+  intent: "implementation_location"
+
+- query: "how does the User model work"
+  expected_files:
+    - "src/models/user.py"
+  expected_symbols:
+    - "User"
+  intent: "how_it_works"
+
+- query: "who calls send_email"
+  expected_files: []
+  expected_symbols: []
+  intent: "callers"
+  note: "not in sample_repo — tests 0-result behavior"
+
+- query: "find the database connection setup"
+  expected_files: []
+  expected_symbols: []
+  intent: "implementation_location"
+  note: "not in sample_repo — tests 0-result behavior"
+
+- query: "explain the retrieval pipeline architecture"
+  expected_files: []
+  expected_symbols: []
+  intent: "architecture"
+  note: "not in sample_repo — tests 0-result behavior"

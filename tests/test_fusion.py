@@ -28,3 +28,9 @@ def test_weights_change_order():
 def test_zero_weight_source_excluded():
     fused = fuse({"fts": [_c("a.py", "fts", 1.0)]}, weights={"fts": 0.0}, k=60)
     assert fused == []
+
+
+def test_vector_source_participates_in_fusion():
+    vec = [Candidate(path="v.py", line_start=1, line_end=2, source="vector", score=0.9)]
+    fused = fuse({"vector": vec}, weights={"vector": 1.0}, k=60)
+    assert fused and fused[0].path == "v.py"
