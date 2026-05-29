@@ -62,23 +62,83 @@ def fts_candidates(conn: sqlite3.Connection, query: str, *, limit: int) -> list[
     return out
 
 
+# Natural-language filler that is never a useful symbol query term. Kept deliberately small:
+# anything that could plausibly be an identifier (get/set/run/...) is NOT a stopword.
+_SYMBOL_STOPWORDS = {
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "how", "does",
+    "do", "did", "what", "where", "which", "who", "whom", "when", "why", "to", "of", "in",
+    "on", "for", "and", "or", "with", "from", "it", "this", "that", "these", "those",
+    "into", "during", "if", "via", "across", "between", "about", "their", "its",
+}
+
+
+def _salient_terms(query: str) -> list[str]:
+    """Lower-cased query terms worth matching against symbol names (dedup, order-preserving)."""
+    out: list[str] = []
+    for t in _TERM_RE.findall(query):
+        tl = t.lower()
+        if len(tl) < 3 or tl in _SYMBOL_STOPWORDS:
+            continue
+        out.append(tl)
+    return list(dict.fromkeys(out))
+
+
+def _name_subtokens(name: str) -> set[str]:
+    """camelCase + snake_case split of a symbol name, lower-cased (e.g. ReligionManager ->
+    {religion, manager}; refresh_access_token -> {refresh, access, token})."""
+    return {s.lower() for s in _subtokens(name)}
+
+
 def symbol_candidates(
     conn: sqlite3.Connection, query: str, *, limit: int, kind: str | None = None
 ) -> list[M4Candidate]:
-    ids = _TERM_RE.findall(query)
-    if not ids:
+    """Symbol retriever that scores by how many query terms a symbol's name covers.
+
+    The old behaviour searched only the single longest term, so "religion manager" matched
+    the bare `Religion` class (exact) and never reached `ReligionManager`. Now every salient
+    term is searched and candidates are ranked by camelCase/underscore-split *coverage* of the
+    query, so the multi-word concept lands on the multi-word symbol.
+    """
+    terms = _salient_terms(query)
+    if not terms:
         return []
-    name = max(ids, key=len)
+
+    term_set = set(terms)
+    joined = "".join(terms)
+    rows_by_key: dict[tuple, sqlite3.Row] = {}
+    for term in terms:
+        for row in repo.symbol_search(conn, term, limit=limit, kind=kind):
+            key = (row["path"], row["line_start"], row["name"])
+            rows_by_key.setdefault(key, row)
+
+    scored: list[tuple] = []
+    for row in rows_by_key.values():
+        subs = _name_subtokens(row["name"])
+        name_l = (row["name"] or "").lower()
+        covered = sum(1 for t in terms if t in subs or t in name_l)
+        tightness = len(subs & term_set) / len(subs) if subs else 0.0
+        # Exact-match precedence is for *precise* lookups only. With one salient term it's a
+        # real identifier query; with many it must match the whole camelCase-joined name
+        # (e.g. "religion manager" -> ReligionManager). A single shared term ("token" hitting
+        # a generated `Token` type) must NOT count as exact.
+        exact = (len(terms) == 1 and bool(row["is_exact"])) or (bool(joined) and name_l == joined)
+        # Ranking: most query terms covered, then exact-name match, then a tighter name
+        # (fewer junk subtokens), then more-referenced (in_degree), then a shorter name.
+        sort_key = (covered, int(exact), tightness, int(row["in_degree"]), -len(name_l))
+        score = covered + tightness + (2.0 if exact else 0.0)
+        scored.append((sort_key, score, exact, row))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+
     out: list[M4Candidate] = []
-    rows = repo.symbol_search(conn, name, limit=limit, kind=kind)
-    for rank, row in enumerate(rows):
+    for sort_key, score, exact, row in scored[:limit]:
         out.append(
             M4Candidate(
                 path=row["path"],
                 line_start=row["line_start"],
                 line_end=row["line_end"],
                 source="symbol",
-                score=1.0 / (1 + rank),
+                score=float(score),
                 kind=row["kind"],
                 symbol=row["name"],
                 content=row["signature"],
@@ -86,7 +146,7 @@ def symbol_candidates(
                 in_degree=int(row["in_degree"]),
                 out_degree=int(row["out_degree"]),
                 is_generated=bool(row["is_generated"]),
-                exact_symbol=bool(row["is_exact"]),
+                exact_symbol=exact,
             )
         )
     return out

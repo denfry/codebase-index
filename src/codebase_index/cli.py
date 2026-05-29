@@ -149,11 +149,19 @@ def index(
                     "indexed": stats.indexed,
                     "deleted": stats.deleted,
                     "total_bytes": stats.total_bytes,
+                    "symbols": stats.symbols,
+                    "parse_failed": stats.parse_failed,
+                    "treesitter_zero_symbols": stats.treesitter_zero_symbols,
                 }
             )
         )
     elif not (ctx.obj and ctx.obj.get("quiet")):
         typer.echo(f"Indexed {stats.indexed} files ({stats.deleted} pruned).")
+        if stats.parse_failed or stats.treesitter_zero_symbols:
+            typer.echo(
+                f"  parse failures: {stats.parse_failed}; "
+                f"tree-sitter files with 0 symbols: {stats.treesitter_zero_symbols}"
+            )
 
 
 @app.command()
@@ -388,22 +396,32 @@ def stats(ctx: typer.Context) -> None:
 
     with Database(db_path) as db:
         files = repo.count_files(db.conn)
+        symbols = repo.count_symbols(db.conn)
         built_at = repo.get_meta(db.conn, "built_at")
         head = repo.get_meta(db.conn, "head_commit")
+        coverage = [
+            {"lang": r["lang"], "files": r["files"], "symbols": r["symbols"]}
+            for r in repo.treesitter_coverage(db.conn)
+        ]
 
     if ctx.obj and ctx.obj.get("json"):
         typer.echo(
             _json.dumps(
                 {
                     "files": files,
+                    "symbols": symbols,
                     "built_at": built_at,
                     "head_commit": head,
+                    "treesitter_coverage": coverage,
                     "exists": True,
                 }
             )
         )
     else:
-        typer.echo(f"files={files}  built_at={built_at}  head={head}")
+        typer.echo(f"files={files}  symbols={symbols}  built_at={built_at}  head={head}")
+        for r in coverage:
+            flag = "  ⚠ 0 symbols" if (r["symbols"] or 0) == 0 and r["files"] >= 3 else ""
+            typer.echo(f"  {r['lang']}: {r['files']} files, {r['symbols']} symbols{flag}")
 
 
 @app.command()

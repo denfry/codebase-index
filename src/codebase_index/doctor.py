@@ -84,7 +84,35 @@ def run_doctor(root: Path, config: Config) -> list[Finding]:
             )
         )
 
+        # 4. Symbol-extraction coverage (Guardrail 2): a tree-sitter language with many files
+        #    but ~0 symbols means extraction silently failed (the original Java bug).
+        from .storage import repo
+        from .storage.db import Database
+
+        with Database(db_path) as db:
+            coverage = repo.treesitter_coverage(db.conn)
+        dead = [r["lang"] for r in coverage if r["files"] >= _ZERO_SYMBOL_FILE_THRESHOLD
+                and (r["symbols"] or 0) == 0]
+        findings.append(
+            Finding(
+                id="symbol_extraction",
+                ok=not dead,
+                severity="medium",
+                detail=(
+                    "tree-sitter languages extract symbols"
+                    if not dead
+                    else f"no symbols extracted for tree-sitter language(s): {', '.join(dead)} "
+                    "— extraction path likely broken"
+                ),
+            )
+        )
+
     return findings
+
+
+# Threshold above which a tree-sitter language with zero symbols is treated as broken rather
+# than just a tiny/empty repo.
+_ZERO_SYMBOL_FILE_THRESHOLD = 3
 
 
 def has_high_severity_failure(findings: list[Finding]) -> bool:
