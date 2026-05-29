@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "codebase-index update --quiet >/dev/null 2>&1 &",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

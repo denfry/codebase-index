@@ -44,8 +44,11 @@ Documentation = "https://github.com/your-org/codebase-index/tree/main/docs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/codebase_index"]
-# Ship the skill template + scripts inside the wheel so `init` can materialize them.
-artifacts = ["src/codebase_index/skill_template/**"]
+
+# Ship the skill template (SKILL.md + scripts + hooks example) inside the wheel so
+# `init` can materialize it via importlib.resources in both editable and zip installs.
+[tool.hatch.build.targets.wheel.force-include]
+"src/codebase_index/skill_template" = "codebase_index/skill_template"
 
 [tool.ruff]
 line-length = 100
