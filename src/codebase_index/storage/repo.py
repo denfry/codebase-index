@@ -416,7 +416,7 @@ def chunks_for_embedding(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 def upsert_chunk_vector(
     conn: sqlite3.Connection, chunk_id: int, embedding: list[float]
 ) -> None:
-    import sqlite_vec
+    import sqlite_vec  # type: ignore[import-untyped]
 
     conn.execute("DELETE FROM vec_chunks WHERE chunk_id = ?", (int(chunk_id),))
     conn.execute(
@@ -437,7 +437,7 @@ def vector_search(
     conn: sqlite3.Connection, query_embedding: list[float], *, limit: int
 ) -> list[sqlite3.Row]:
     """KNN over vec_chunks; joins back to chunks/files for a uniform result row."""
-    import sqlite_vec
+    import sqlite_vec  # type: ignore[import-untyped]
 
     return conn.execute(
         "SELECT v.chunk_id AS chunk_id, v.distance AS distance, f.path AS path, "

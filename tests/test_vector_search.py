@@ -4,7 +4,6 @@ from __future__ import annotations
 import pytest
 
 from codebase_index.storage import repo
-from codebase_index.storage.db import Database
 
 pytest.importorskip("sqlite_vec")
 

@@ -77,7 +77,7 @@ class Database:
     def enable_vectors(self) -> None:
         """Load the sqlite-vec extension into this connection (optional extra)."""
         try:
-            import sqlite_vec
+            import sqlite_vec  # type: ignore[import-untyped]
         except ImportError as exc:
             raise RuntimeError(
                 "Vector search needs the optional extra: pip install codebase-index[embeddings]"

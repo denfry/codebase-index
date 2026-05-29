@@ -42,10 +42,8 @@ Milestones are vertical-ish slices: each ends with something runnable and testab
 - `graph/expand.py`: bounded BFS impact walk (up/down/both, depth).
 - **Exit:** `codebase-index impact "<file/symbol>" --direction up|down|both --depth N` returns a sensible blast radius on fixtures. Ambiguous symbol names are left unresolved by design.
 
-## M6 — Optional embeddings / vector backend
-- `embeddings/backend.py` protocol, `local.py`, `noop.py`; `sqlite-vec` `vec_chunks`.
-- Vector searcher wired into fusion; all behind `embeddings.enabled`. External backend gated by
-  SECURITY.md rules.
+## M6 — Optional embeddings / vector backend ✅
+- `embeddings/` package (protocol + noop default + lazy local + gated external), `sqlite-vec` `vec_chunks` store loaded on demand, indexer embedding pass behind `embeddings.enabled`, and a vector retriever fused into hybrid with per-intent weights. External backend refused unless `allow_external` + `$CBX_EMBEDDINGS_API_KEY` + an endpoint warning (SECURITY.md §4). Disabled path imports no optional dep and is byte-for-byte unchanged.
 - **Exit:** with extras installed + enabled, semantic queries improve recall; disabled path unchanged.
 
 ## M7 — Claude Code Skill packaging

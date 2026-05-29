@@ -24,7 +24,7 @@ def test_missing_extra_gives_actionable_error(monkeypatch):
 
 
 def test_real_local_embed_shape():
-    st = pytest.importorskip("sentence_transformers")
+    pytest.importorskip("sentence_transformers")
     backend = LocalBackend(model_name="all-MiniLM-L6-v2")
     vecs = backend.embed(["hello world", "goodbye"])
     assert len(vecs) == 2
