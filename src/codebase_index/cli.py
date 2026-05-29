@@ -407,9 +407,37 @@ def stats(ctx: typer.Context) -> None:
 
 
 @app.command()
-def doctor(strict: bool = typer.Option(False, "--strict", help="Exit non-zero on high-severity findings.")) -> None:
+def doctor(
+    ctx: typer.Context,
+    strict: bool = typer.Option(False, "--strict", help="Exit non-zero on high-severity findings."),
+) -> None:
     """Diagnose configuration and security issues (see docs/SECURITY.md)."""
-    _todo("doctor")
+    import json as _json
+
+    from .config import load
+    from .doctor import has_high_severity_failure, run_doctor
+
+    cfg = load(ctx.obj.get("root") if ctx.obj else None)
+    findings = run_doctor(Path(cfg.root), cfg)
+
+    if ctx.obj and ctx.obj.get("json"):
+        typer.echo(
+            _json.dumps(
+                {
+                    "findings": [
+                        {"id": f.id, "ok": f.ok, "severity": f.severity, "detail": f.detail}
+                        for f in findings
+                    ]
+                }
+            )
+        )
+    else:
+        for f in findings:
+            mark = "OK " if f.ok else ("!! " if f.severity == "high" else "-- ")
+            typer.echo(f"{mark}[{f.severity}] {f.id}: {f.detail}")
+
+    if strict and has_high_severity_failure(findings):
+        raise typer.Exit(code=1)
 
 
 @app.command()
