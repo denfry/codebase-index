@@ -12,6 +12,13 @@
 [![SQLite](https://img.shields.io/badge/database-SQLite-blue.svg)](docs/DATABASE_SCHEMA.md)
 [![Tree-sitter](https://img.shields.io/badge/parsing-Tree--sitter-orange.svg)](docs/ARCHITECTURE.md)
 
+## Status
+
+✅ **`0.1.0` released.** All milestones M0–M9 are implemented: discovery + storage, FTS5 lexical
+search, tree-sitter symbols/refs, hybrid ranking, graph impact, optional local embeddings, the
+packaged skill + freshness contract, hooks/watch, and a tested, `pipx`-installable release. See
+[CHANGELOG.md](CHANGELOG.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
+
 ```
 You:    "Where is user authentication implemented?"
 Claude: → searches local index (symbols + FTS5 + graph)
@@ -413,7 +420,7 @@ See [ROADMAP.md](ROADMAP.md) for the full milestone plan.
 | M7 | ✅ Done | Claude Code Skill packaging |
 | M7.5 | ✅ Done | One-command plugin install |
 | M8 | Planned | Hooks + watch mode |
-| M9 | Planned | Public release |
+| M9 | ✅ Done | Public release |
 
 ## License
 
