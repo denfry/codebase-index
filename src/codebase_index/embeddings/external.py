@@ -30,6 +30,7 @@ def _http_transport(endpoint: str, api_key: str, model: str, texts: list[str]) -
 
 class ExternalBackend:
     enabled = True
+    dim: int = 0
 
     def __init__(
         self,
@@ -44,13 +45,6 @@ class ExternalBackend:
         self._endpoint = endpoint
         self._api_key = api_key
         self._transport = transport or _http_transport
-        self._dim: Optional[int] = None
-
-    @property
-    def dim(self) -> int:
-        if self._dim is None:
-            raise EmbeddingError("External backend dim is unknown until the first embed() call.")
-        return self._dim
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
@@ -58,5 +52,5 @@ class ExternalBackend:
         vecs = self._transport(self._endpoint, self._api_key, self.model_name, list(texts))
         if not vecs or not vecs[0]:
             raise EmbeddingError("External embedding endpoint returned no vectors.")
-        self._dim = len(vecs[0])
+        self.dim = len(vecs[0])
         return [[float(x) for x in v] for v in vecs]
