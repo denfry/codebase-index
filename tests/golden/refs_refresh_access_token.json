@@ -1,0 +1,27 @@
+{
+  "index": {
+    "built_at": "<TS>",
+    "exists": true,
+    "files_changed_since_build": 0,
+    "head_commit": "<SHA>",
+    "stale": false
+  },
+  "query": "refresh_access_token",
+  "sites": [
+    {
+      "kind": "call",
+      "line": 11,
+      "path": "src/api/service.py"
+    },
+    {
+      "kind": "definition",
+      "line": 4,
+      "path": "src/auth/token.py"
+    },
+    {
+      "kind": "call",
+      "line": 11,
+      "path": "src/auth/token.py"
+    }
+  ]
+}
