@@ -53,3 +53,25 @@ def test_config_hash_stable_and_sensitive():
     d = Config()
     d.retrieval.token_budget = 9999
     assert d.config_hash() == a.config_hash()
+
+
+def test_config_hash_changes_when_embeddings_toggled():
+    off = Config()
+    on = Config()
+    on.embeddings.enabled = True
+    assert off.config_hash() != on.config_hash()
+
+
+def test_config_hash_changes_when_embedding_model_changes():
+    a = Config()
+    b = Config()
+    b.embeddings.model = "some-other-model"
+    assert a.config_hash() != b.config_hash()
+
+
+def test_config_hash_ignores_external_endpoint():
+    a = Config()
+    b = Config()
+    b.embeddings.endpoint = "https://example.test/embed"
+    b.embeddings.allow_external = True
+    assert a.config_hash() == b.config_hash()

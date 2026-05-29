@@ -63,6 +63,11 @@ class Config(BaseModel):
             "extra_ignore": self.extra_ignore,
             "chunk": self.chunk.model_dump(),
             "redaction": self.redaction,
+            "embeddings": {
+                "enabled": self.embeddings.enabled,
+                "backend": self.embeddings.backend,
+                "model": self.embeddings.model,
+            },
         }
         blob = json.dumps(relevant, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()
