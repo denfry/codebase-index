@@ -106,7 +106,7 @@ Expected output:
 === codebase-index Doctor ===
 
 [OK] Python 3.12 (requires 3.10+)
-[OK] codebase-index package installed (v0.1.0)
+[OK] codebase-index package installed (v1.0.1)
 [OK] tree-sitter is available
 [INFO] Cache directory not yet created: ...
 [INFO] Skill not installed in .claude/skills/

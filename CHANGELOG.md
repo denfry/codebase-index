@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-05-29
+
+### Fixed
+- Pinned `tree-sitter` and `tree-sitter-language-pack` in package metadata and the plugin
+  bootstrap lock so CI and local installs use the same grammars.
+- Regenerated CLI golden snapshots against the pinned grammar set.
+
 ## [1.0.0] - 2026-05-29
 
 ### Fixed
@@ -42,6 +49,7 @@ All notable changes to this project are documented here. The format is based on
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/1.0.0...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/1.0.1...HEAD
+[1.0.1]: https://github.com/denfry/codebase-index/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/denfry/codebase-index/compare/v0.1.0...1.0.0
 [0.1.0]: https://github.com/denfry/codebase-index/releases/tag/v0.1.0

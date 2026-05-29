@@ -7,7 +7,6 @@ if (-not $root -or -not $data) { Write-Error "CLAUDE_PLUGIN_ROOT/DATA not set"; 
 $venv = Join-Path $data "venv"
 $lockSrc = Join-Path $root "requirements.lock"
 $lockDst = Join-Path $data "requirements.lock"
-$spec = if ($env:CBX_INSTALL_SPEC) { $env:CBX_INSTALL_SPEC } else { "codebase-index==0.1.0" }
 
 New-Item -ItemType Directory -Force -Path $data | Out-Null
 Set-Content -Path (Join-Path $root ".venv-path") -Value $venv
@@ -29,11 +28,19 @@ try {
     $useUv = ($env:CBX_NO_UV -ne "1") -and (Get-Command uv -ErrorAction SilentlyContinue)
     if ($useUv) {
         & uv venv $venv
-        & uv pip install --python (Join-Path $venv "Scripts\python.exe") $spec
+        if ($env:CBX_INSTALL_SPEC) {
+            & uv pip install --python (Join-Path $venv "Scripts\python.exe") $env:CBX_INSTALL_SPEC
+        } else {
+            & uv pip install --python (Join-Path $venv "Scripts\python.exe") -r $lockSrc
+        }
     } else {
         & $py.Source -m venv $venv
         & (Join-Path $venv "Scripts\python.exe") -m pip install --upgrade pip
-        & (Join-Path $venv "Scripts\python.exe") -m pip install $spec
+        if ($env:CBX_INSTALL_SPEC) {
+            & (Join-Path $venv "Scripts\python.exe") -m pip install $env:CBX_INSTALL_SPEC
+        } else {
+            & (Join-Path $venv "Scripts\python.exe") -m pip install -r $lockSrc
+        }
     }
     Copy-Item $lockSrc $lockDst -Force
 } catch {

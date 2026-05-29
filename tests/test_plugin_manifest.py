@@ -35,8 +35,14 @@ def test_plugin_version_matches_pyproject():
 
 def test_requirements_lock_pins_package_version():
     version = _load(".claude-plugin/plugin.json")["version"]
-    lock = (ROOT / "requirements.lock").read_text(encoding="utf-8").strip()
-    assert lock == f"codebase-index=={version}"
+    lock_lines = (ROOT / "requirements.lock").read_text(encoding="utf-8").splitlines()
+    assert f"codebase-index=={version}" in lock_lines
+
+
+def test_requirements_lock_pins_tree_sitter_grammars():
+    lock_lines = (ROOT / "requirements.lock").read_text(encoding="utf-8").splitlines()
+    assert "tree-sitter==0.25.2" in lock_lines
+    assert "tree-sitter-language-pack==1.8.1" in lock_lines
 
 
 def test_session_start_hook_runs_bootstrap():
