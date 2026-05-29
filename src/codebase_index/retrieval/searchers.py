@@ -269,3 +269,34 @@ def refs_lookup(conn: sqlite3.Connection, name: str, *, kind: str) -> RefsRespon
         )
     sites.sort(key=lambda site: (site.path, site.line, site.kind))
     return RefsResponse(query=name, index=_freshness(conn), sites=sites)
+
+
+def vector_candidates(
+    conn: sqlite3.Connection, query: str, backend, *, limit: int
+) -> list["M4Candidate"]:
+    """Semantic retriever: embed the query, KNN over vec_chunks.
+
+    `backend` must be an enabled EmbeddingBackend; callers pass None/Noop when
+    embeddings are disabled and simply skip this retriever. sqlite-vec `distance`
+    is smaller-is-better, so the candidate score negates it for "higher is better".
+    """
+    if backend is None or not getattr(backend, "enabled", False):
+        return []
+    query = query.strip()
+    if not query:
+        return []
+    vec = backend.embed([query])[0]
+    out: list[M4Candidate] = []
+    for row in repo.vector_search(conn, vec, limit=limit):
+        out.append(
+            M4Candidate(
+                path=row["path"],
+                line_start=row["line_start"],
+                line_end=row["line_end"],
+                source="vector",
+                score=-float(row["distance"]),
+                content=row["content"],
+                token_est=int(row["token_est"]),
+            )
+        )
+    return out
