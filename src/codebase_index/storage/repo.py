@@ -441,6 +441,16 @@ def path_mtimes(conn: sqlite3.Connection) -> dict[str, int]:
     }
 
 
+def fingerprints(conn: sqlite3.Connection) -> dict[str, tuple[int, int, str]]:
+    """Map every indexed path to its (mtime_ns, size_bytes, sha256) for incremental update."""
+    return {
+        row["path"]: (int(row["mtime_ns"]), int(row["size_bytes"]), row["sha256"])
+        for row in conn.execute(
+            "SELECT path, mtime_ns, size_bytes, sha256 FROM files"
+        ).fetchall()
+    }
+
+
 def vector_search(
     conn: sqlite3.Connection, query_embedding: list[float], *, limit: int
 ) -> list[sqlite3.Row]:
