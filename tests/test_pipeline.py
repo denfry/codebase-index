@@ -117,3 +117,39 @@ def test_reindex_symbols_idempotent(sample_repo, tmp_path):
     s2 = build_index(cfg, db, root=sample_repo)
     assert s1.symbols == s2.symbols and s1.chunks == s2.chunks
     db.close()
+
+
+def test_build_resolves_cross_file_edges_and_degrees(sample_repo, tmp_path):
+    cfg = Config()
+    cfg.root = str(sample_repo)
+    db = Database(tmp_path / "index.sqlite").open()
+    stats = build_index(cfg, db, root=sample_repo)
+
+    assert stats.edges_resolved > 0
+    assert repo.count_resolved_edges(db.conn) >= stats.edges_resolved
+
+    target = repo.symbol_id_for_unique_name(db.conn, "refresh_access_token")
+    assert target is not None
+    inc = repo.incoming_edges(db.conn, "symbol", target)
+    assert any(r["edge_type"] == "call" for r in inc)
+
+    user_id = repo.symbol_id_for_unique_name(db.conn, "User")
+    deg = db.conn.execute(
+        "SELECT in_degree FROM symbols WHERE id = ?", (user_id,)
+    ).fetchone()["in_degree"]
+    assert deg >= 1
+
+    user_file = repo.file_by_path(db.conn, "src/models/user.py")
+    fimp = repo.incoming_edges(db.conn, "file", user_file["id"])
+    assert any(r["edge_type"] == "import" for r in fimp)
+    db.close()
+
+
+def test_reindex_graph_idempotent(sample_repo, tmp_path):
+    cfg = Config()
+    cfg.root = str(sample_repo)
+    db = Database(tmp_path / "index.sqlite").open()
+    s1 = build_index(cfg, db, root=sample_repo)
+    s2 = build_index(cfg, db, root=sample_repo)
+    assert s1.edges == s2.edges and s1.edges_resolved == s2.edges_resolved
+    db.close()

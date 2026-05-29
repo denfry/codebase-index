@@ -11,6 +11,7 @@ from typing import Optional
 
 from ..config import Config
 from ..discovery.walker import walk
+from ..graph.builder import build_graph
 from ..parsers import languages
 from ..parsers.base import ParseResult
 from ..parsers.line_chunker import chunk_text
@@ -27,6 +28,7 @@ class BuildStats:
     chunks: int = 0
     symbols: int = 0
     edges: int = 0
+    edges_resolved: int = 0
 
 
 def build_index(config: Config, db: Database, root: Optional[Path] = None) -> BuildStats:
@@ -68,6 +70,10 @@ def build_index(config: Config, db: Database, root: Optional[Path] = None) -> Bu
     repo.set_meta(conn, "config_hash", config.config_hash())
     if head := _git_head(root):
         repo.set_meta(conn, "head_commit", head)
+
+    graph = build_graph(conn)
+    stats.edges_resolved = graph["resolved"]
+
     conn.commit()
     return stats
 
