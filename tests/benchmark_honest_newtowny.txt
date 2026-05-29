@@ -1,0 +1,124 @@
+
+====================================================================================================
+  HONEST BENCHMARK  -  codebase-index skill  vs  realistic no-skill (ripgrep) agent
+====================================================================================================
+  Repo            : C:\Users\denfry\IdeaProjects\NewTowny
+  Text files seen : 574
+  Token counter   : tiktoken/cl100k_base
+  Read model      : top-3 hits, 80-line window (both sides symmetric)
+  NOTE: latency below is context-only. Index = real CLI (incl. process start);
+        baseline = pure-Python scan. Real ripgrep is far faster than this scan,
+        so do NOT read these as a skill-vs-no-skill wall-clock claim.
+====================================================================================================
+
+Q: where is a new town created and persisted
+   salient terms     : ['new', 'town', 'created', 'persisted']
+   INDEX (top-3)       :     27 tok  | 2 files, 0 lines  | confidence=medium  | 1349ms
+   INDEX (full plan) :    654 tok  | 7 files
+   rg + window       :   3566 tok  | 243 lines  | 492 files matched, 8165 match-lines  | 339ms
+   rg + wholefile    :  58755 tok  | 3905 lines
+   top-3 file overlap : 0/3
+
+Q: how does the war system damage and capture work
+   salient terms     : ['war', 'system', 'damage', 'capture']
+   INDEX (top-3)       :     34 tok  | 2 files, 0 lines  | confidence=medium  | 1371ms
+   INDEX (full plan) :    122 tok  | 4 files
+   rg + window       :   6482 tok  | 243 lines  | 255 files matched, 2782 match-lines  | 291ms
+   rg + wholefile    :  72974 tok  | 3758 lines
+   top-3 file overlap : 1/3
+
+Q: player join event listener registration
+   salient terms     : ['player', 'join', 'event', 'listener', 'registration']
+   INDEX (top-3)       :     16 tok  | 3 files, 0 lines  | confidence=medium  | 1321ms
+   INDEX (full plan) :    703 tok  | 7 files
+   rg + window       :   6055 tok  | 243 lines  | 234 files matched, 4671 match-lines  | 312ms
+   rg + wholefile    : 379169 tok  | 7732 lines
+   top-3 file overlap : 0/3
+
+Q: battle pass reward catalog and tiers
+   salient terms     : ['battle', 'pass', 'reward', 'catalog', 'tiers']
+   INDEX (top-3)       :     27 tok  | 2 files, 0 lines  | confidence=medium  | 1334ms
+   INDEX (full plan) :    106 tok  | 6 files
+   rg + window       :   5788 tok  | 243 lines  | 102 files matched, 832 match-lines  | 336ms
+   rg + wholefile    :  17601 tok  | 1102 lines
+   top-3 file overlap : 1/3
+
+Q: economy balance deposit and withdraw
+   salient terms     : ['economy', 'balance', 'deposit', 'withdraw']
+   INDEX (top-3)       :     25 tok  | 2 files, 0 lines  | confidence=medium  | 1319ms
+   INDEX (full plan) :     95 tok  | 5 files
+   rg + window       :   2264 tok  | 238 lines  | 70 files matched, 297 match-lines  | 269ms
+   rg + wholefile    :   9342 tok  | 963 lines
+   top-3 file overlap : 2/3
+
+Q: where are religions and governments config loaded
+   salient terms     : ['religions', 'governments', 'config', 'loaded']
+   INDEX (top-3)       :     27 tok  | 2 files, 0 lines  | confidence=medium  | 1335ms
+   INDEX (full plan) :     93 tok  | 9 files
+   rg + window       :   2318 tok  | 243 lines  | 116 files matched, 718 match-lines  | 266ms
+   rg + wholefile    :  11825 tok  | 1334 lines
+   top-3 file overlap : 0/3
+
+Q: admin command handling and permissions
+   salient terms     : ['admin', 'command', 'handling', 'permissions']
+   INDEX (top-3)       :     39 tok  | 3 files, 0 lines  | confidence=medium  | 1330ms
+   INDEX (full plan) :   1099 tok  | 8 files
+   rg + window       :   9941 tok  | 243 lines  | 127 files matched, 1570 match-lines  | 264ms
+   rg + wholefile    : 347489 tok  | 6393 lines
+   top-3 file overlap : 0/3
+
+Q: how is player data saved to the database
+   salient terms     : ['player', 'data', 'saved', 'database']
+   INDEX (top-3)       :     20 tok  | 2 files, 0 lines  | confidence=low  | 1324ms
+   INDEX (full plan) :     66 tok  | 5 files
+   rg + window       :   8412 tok  | 243 lines  | 273 files matched, 4371 match-lines  | 285ms
+   rg + wholefile    : 382602 tok  | 8140 lines
+   top-3 file overlap : 0/3
+
+Q: nether and end resource generation
+   salient terms     : ['nether', 'end', 'resource', 'generation']
+   INDEX (top-3)       :     35 tok  | 3 files, 0 lines  | confidence=low  | 1371ms
+   INDEX (full plan) :    126 tok  | 10 files
+   rg + window       :   7004 tok  | 243 lines  | 369 files matched, 3295 match-lines  | 268ms
+   rg + wholefile    : 391589 tok  | 7984 lines
+   top-3 file overlap : 0/3
+
+Q: town experience and level bonus calculation
+   salient terms     : ['town', 'experience', 'level', 'bonus', 'calculation']
+   INDEX (top-3)       :     24 tok  | 3 files, 0 lines  | confidence=low  | 1330ms
+   INDEX (full plan) :   1161 tok  | 9 files
+   rg + window       :   4214 tok  | 243 lines  | 518 files matched, 8313 match-lines  | 307ms
+   rg + wholefile    :  57965 tok  | 3903 lines
+   top-3 file overlap : 0/3
+
+====================================================================================================
+  AGGREGATE (tokens that actually enter context to answer the question)
+----------------------------------------------------------------------------------------------------
+  Avg INDEX (top-3)      :       27 tok/query   <- symmetric with baseline
+  Avg INDEX (full plan) :      422 tok/query   (if agent reads every recommended_read)
+  Avg rg + window       :     5604 tok/query   (index top-3 uses 0% of baseline; 204.5x vs index)
+  Avg rg + wholefile    :   172931 tok/query   (index top-3 uses 0% of baseline; 6311.4x vs index)
+----------------------------------------------------------------------------------------------------
+  Avg top-3 file overlap (index vs rg): 0.40/3   <- how often both surface the same files
+====================================================================================================
+
+====================================================================================================
+  ANSWER QUALITY  -  recall@3 vs objective ground truth (file that defines the answer)
+----------------------------------------------------------------------------------------------------
+  [Iindex Bgrep]  war/WarManager.java                            how does the war system manage capture and sieges
+  [Iindex Bgrep]  BattlePassCatalog.java                         battle pass reward catalog tiers and rewards
+  [ index  grep]  managers/ReligionManager.java                  religion manager belief and faith handling
+  [Iindex  grep]  listeners/NewPlayerListener.java               new player join welcome listener
+  [Iindex  grep]  commands/AdminCommand.java                     admin command handling and dispatch
+  [Iindex  grep]  banner/TownBannerManager.java                  town banner rendering and management
+  [ index Bgrep]  quests/listeners/QuestListener.java            quest progress event listener
+  [Iindex Bgrep]  builds/building/BuildingBonusManager.java      building bonus calculation manager
+  [Iindex  grep]  repositories/DynastyRepository.java            dynasty persistence repository
+  [ index  grep]  listeners/SkillListener.java                   player skill event listener
+----------------------------------------------------------------------------------------------------
+  Index    recall@3 :    70%  (7/10)
+  rg+window recall@3:    40%  (4/10)
+----------------------------------------------------------------------------------------------------
+  VERDICT: WIN  (recall@3 >= baseline AND tokens lower)
+====================================================================================================
+

@@ -8,7 +8,7 @@ from tree_sitter import Parser, Query, QueryCursor
 from tree_sitter_language_pack import get_language
 
 from .base import Edge, ParseResult, Symbol
-from .languages import CONTAINER_KINDS, spec_for
+from .languages import CONTAINER_KINDS, has_grammar, spec_for
 from .symbol_chunks import build_chunks
 
 
@@ -18,10 +18,13 @@ class UnsupportedLanguage(Exception):
 
 def parse_file(lang: str, text: str) -> ParseResult:
     spec = spec_for(lang)
-    if spec is None:
+    # Tier A (hand-tuned spec) or Tier B (any loadable grammar). Only raise when no grammar
+    # exists at all, so "any language with a grammar" produces symbols, not a silent fallback.
+    ts_name = spec.ts_name if spec is not None else lang
+    if spec is None and not has_grammar(lang):
         raise UnsupportedLanguage(lang)
 
-    grammar = get_language(spec.ts_name)
+    grammar = get_language(ts_name)
     parser = Parser(grammar)
     source = text.encode("utf-8")
     tree = parser.parse(source)
@@ -29,10 +32,13 @@ def parse_file(lang: str, text: str) -> ParseResult:
         raise ValueError("tree-sitter parser returned no tree")
     root = tree.root_node
 
-    source = text.encode("utf-8")
-    symbols = _extract_symbols(root, lang, source)
+    if spec is not None:
+        symbols = _extract_symbols(root, lang, source)
+    else:
+        symbols = _extract_symbols_generic(root, source)
     edges = _extract_edges(root, symbols, source)
-    edges.extend(_extract_graph_edges(spec, grammar, root, symbols))
+    if spec is not None:
+        edges.extend(_extract_graph_edges(spec, grammar, root, symbols))
     del grammar
     chunks = build_chunks(text, symbols)
     return ParseResult(chunks=chunks, symbols=symbols, edges=edges)
@@ -65,7 +71,7 @@ def _extract_symbols(root, lang: str, source: bytes) -> list[Symbol]:
         kind = _definition_kind(def_node, lang)
         if kind is None:
             continue
-        name_node = _field(def_node, "name")
+        name_node = _name_node(def_node)
         if name_node is None:
             continue
         raw.append(
@@ -95,6 +101,44 @@ def _extract_symbols(root, lang: str, source: bytes) -> list[Symbol]:
     return [item.symbol for item in raw]
 
 
+# Maps a tree-sitter node `type` to a coarse symbol kind. Node types are largely unique across
+# grammars, so a single table covers Java/Go/Rust/C/C++/C#/Ruby/PHP/Kotlin/JS/TS at once.
+_DEF_KINDS: dict[str, str] = {
+    # functions
+    "function_declaration": "function",  # go, kotlin, js
+    "function_definition": "function",  # c, cpp, php  (python handled separately below)
+    "function_item": "function",  # rust
+    "function_signature_item": "function",  # rust trait method signatures
+    # methods
+    "method_declaration": "method",  # go, java, csharp
+    "method_definition": "method",  # js/ts
+    "constructor_declaration": "method",  # java, csharp
+    "method": "method",  # ruby
+    # classes / type-like containers
+    "class_declaration": "class",  # java, csharp, php, kotlin, js/ts
+    "class_specifier": "class",  # cpp
+    "class": "class",  # ruby
+    "object_declaration": "class",  # kotlin
+    "record_declaration": "record",  # java
+    "struct_item": "struct",  # rust
+    "struct_specifier": "struct",  # c, cpp
+    "struct_declaration": "struct",  # csharp
+    "interface_declaration": "interface",  # java, csharp, php, ts
+    "trait_item": "trait",  # rust
+    "trait_declaration": "trait",  # php
+    "enum_declaration": "enum",  # java, csharp, ts
+    "enum_item": "enum",  # rust
+    "enum_specifier": "enum",  # c/cpp
+    "impl_item": "impl",  # rust
+    # modules / namespaces (NOT containers — a function inside stays a function, not a method)
+    "mod_item": "module",  # rust
+    "module": "module",  # ruby
+    "namespace_definition": "module",  # cpp
+    "namespace_declaration": "module",  # csharp
+    "type_alias_declaration": "type",  # ts
+}
+
+
 def _definition_kind(node, lang: str) -> Optional[str]:
     kind = _kind(node)
     if lang == "python":
@@ -103,23 +147,120 @@ def _definition_kind(node, lang: str) -> Optional[str]:
         if kind == "class_definition":
             return "class"
         return None
-    if kind == "function_declaration":
-        return "function"
-    if kind == "class_declaration":
-        return "class"
-    if kind == "method_definition":
-        return "method"
-    if kind == "interface_declaration":
-        return "interface"
-    if kind == "enum_declaration":
-        return "enum"
-    if kind == "type_alias_declaration":
+    if kind == "type_spec":  # go: refine struct/interface from the underlying type
+        underlying = _field(node, "type")
+        u = _kind(underlying) if underlying is not None else ""
+        if u == "struct_type":
+            return "struct"
+        if u == "interface_type":
+            return "interface"
         return "type"
+    mapped = _DEF_KINDS.get(kind)
+    if mapped is not None:
+        return mapped
     if kind == "variable_declarator":
         value = _field(node, "value")
         if value is not None and _kind(value) in {"arrow_function", "function_expression"}:
             return "function"
     return None
+
+
+# Identifier-like node types that can carry a definition's name across grammars.
+_NAME_NODE_TYPES = {
+    "identifier",
+    "type_identifier",
+    "field_identifier",
+    "property_identifier",
+    "simple_identifier",
+    "constant",
+    "name",
+    "namespace_identifier",
+}
+
+
+def _name_node(def_node):
+    """Find the name node for a definition, tolerating grammars without a "name" field.
+
+    Handles: field "name" (most), Rust `impl_item` (field "type"), C/C++ function definitions
+    (name nested under the declarator), and fieldless grammars (Kotlin) via a child scan.
+    """
+    named = _field(def_node, "name")
+    if named is not None:
+        return named
+    kind = _kind(def_node)
+    if kind == "impl_item":
+        return _field(def_node, "type")
+    if kind == "function_definition":  # c / cpp: descend the declarator chain
+        decl = _field(def_node, "declarator")
+        return _declarator_identifier(decl) if decl is not None else None
+    for child in _named_children(def_node):
+        if _kind(child) in _NAME_NODE_TYPES:
+            return child
+    return None
+
+
+def _declarator_identifier(node):
+    if node is None:
+        return None
+    if _kind(node) in {"identifier", "field_identifier"}:
+        return node
+    inner = _field(node, "declarator")
+    if inner is not None:
+        return _declarator_identifier(inner)
+    for child in _named_children(node):
+        found = _declarator_identifier(child)
+        if found is not None:
+            return found
+    return None
+
+
+def _extract_symbols_generic(root, source: bytes) -> list[Symbol]:
+    """Tier B: harvest definition-like nodes from an untuned grammar.
+
+    Any node whose `type` ends in declaration/definition/_item/_specifier and that has an
+    identifier-like named child is treated as a symbol; kind is a coarse keyword mapping.
+    """
+    raw: list[_Sym] = []
+    for node in _walk(root):
+        ntype = _kind(node)
+        if not ntype.endswith(("declaration", "definition", "_item", "_specifier")):
+            continue
+        name_node = _name_node(node)
+        if name_node is None:
+            continue
+        raw.append(
+            _Sym(
+                Symbol(
+                    name=_node_text(name_node, source),
+                    kind=_generic_kind(ntype),
+                    line_start=_row(_start_point(node)) + 1,
+                    line_end=_row(_end_point(node)) + 1,
+                    signature=_signature(node, source),
+                ),
+                node,
+            )
+        )
+    raw.sort(key=lambda item: (item.start_byte, -(item.end_byte - item.start_byte)))
+    for item in raw:
+        parent = _enclosing(raw, item)
+        if parent is None:
+            item.symbol.qualified = item.symbol.name
+            continue
+        item.symbol.parent_index = raw.index(parent)
+        if item.symbol.kind == "function" and parent.symbol.kind in CONTAINER_KINDS:
+            item.symbol.kind = "method"
+        item.symbol.qualified = (
+            f"{parent.symbol.qualified or parent.symbol.name}.{item.symbol.name}"
+        )
+    return [item.symbol for item in raw]
+
+
+def _generic_kind(ntype: str) -> str:
+    low = ntype.lower()
+    for key in ("class", "struct", "enum", "interface", "trait", "module", "namespace"):
+        if key in low:
+            return "struct" if key == "struct" else key
+    return "function"
 
 
 def _signature(def_node, source: bytes) -> str:
@@ -215,17 +356,31 @@ def _enclosing_symbol_index(symbols: list[Symbol], line: int) -> Optional[int]:
     return best_idx
 
 
+_CALLEE_LEAVES = {"identifier", "property_identifier", "field_identifier", "simple_identifier"}
+
+
 def _callee_node(node):
     kind = _kind(node)
-    if kind not in {"call", "call_expression"}:
+    if kind == "method_invocation":  # java: obj.method(...) / method(...)
+        return _field(node, "name")
+    if kind == "macro_invocation":  # rust: name!(...)
+        return _field(node, "macro")
+    if kind not in {"call", "call_expression", "invocation_expression", "function_call_expression"}:
         return None
-    fn = _field(node, "function")
+    # ruby `call` uses field "method"; everything else uses field "function".
+    fn = _field(node, "function") or _field(node, "method")
     if fn is None:
         return None
-    if _kind(fn) in {"identifier", "property_identifier"}:
+    if _kind(fn) in _CALLEE_LEAVES:
         return fn
-    attr = _field(fn, "attribute") or _field(fn, "property")
-    if attr is not None and _kind(attr) in {"identifier", "property_identifier"}:
+    # member / selector / scoped / field access: take the trailing identifier.
+    attr = (
+        _field(fn, "attribute")
+        or _field(fn, "property")
+        or _field(fn, "field")
+        or _field(fn, "name")
+    )
+    if attr is not None and _kind(attr) in _CALLEE_LEAVES:
         return attr
     return None
 

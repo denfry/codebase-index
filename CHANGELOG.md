@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-29
+
+### Fixed
+- Multi-language tree-sitter symbol extraction. Previously a repo of 303 Java files produced
+  **0 symbols**, silently disabling `symbol`/`refs`/`impact`. Java now yields 3,543 symbols;
+  Go/Rust/C/C++/C#/Ruby/PHP/Kotlin plus a Tier-B generic path are covered.
+
+### Added
+- Symbol-aware retrieval ranking: candidates are scored by how many query terms their
+  camelCase/underscore-split name covers, so multi-word concepts land on multi-word symbols.
+  recall@3 against objective ground truth improved 20% → 70% (vs 40% for a disciplined grep agent)
+  while using ~13× fewer tokens to answer.
+- Parse guardrails with `parse_failed` / `treesitter_zero_symbols` counters and `doctor` reporting
+  to lock symbol extraction against silent regression.
+- Multi-CLI installer for Claude Code / Codex / OpenCode.
+- Honest benchmark harness (`tests/benchmark_honest.py`) comparing the index against a no-skill
+  grep agent on a real repository.
+
 ## [0.1.0] - 2026-05-29
 
 ### Added
@@ -24,5 +42,6 @@ All notable changes to this project are documented here. The format is based on
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/1.0.0...HEAD
+[1.0.0]: https://github.com/denfry/codebase-index/compare/v0.1.0...1.0.0
 [0.1.0]: https://github.com/denfry/codebase-index/releases/tag/v0.1.0

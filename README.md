@@ -1,6 +1,6 @@
-# codebase-index
+# codebase-index: Claude Code Skill for Local Code Search
 
-> A local-first **Claude Code Skill** for Cursor-like codebase indexing, hybrid code search, symbol lookup, and token-efficient project context.
+> `codebase-index` is a local-first Claude Code skill for codebase indexing, symbol lookup, and hybrid code search, so you can find where code lives without scanning the whole repository.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
@@ -11,6 +11,25 @@
 [![No Network By Default](https://img.shields.io/badge/no%20network%20by%20default-yes-green.svg)](#safety-and-privacy)
 [![SQLite](https://img.shields.io/badge/database-SQLite-blue.svg)](docs/DATABASE_SCHEMA.md)
 [![Tree-sitter](https://img.shields.io/badge/parsing-Tree--sitter-orange.svg)](docs/ARCHITECTURE.md)
+
+## Start Here (First Time on GitHub)
+
+If you are opening this repository for the first time, follow this order:
+
+1. [Quick Start (5 minutes)](docs/QUICKSTART.md)
+2. [Installation Guide](docs/INSTALLATION.md)
+3. [How the skill works](skill/SKILL.md)
+4. [FAQ](docs/FAQ.md)
+
+If you only need the shortest path, run:
+
+```bash
+pip install codebase-index
+cd your-project
+codebase-index init
+codebase-index index
+codebase-index search "where is authentication implemented?"
+```
 
 ## Status
 
@@ -50,7 +69,7 @@ Nothing is installed globally; uninstalling the plugin removes the data director
 fetch the package; later sessions are offline. The skill builds its index on your first
 codebase question — no manual `index` step.
 
-## Claude Code Skill for Codebase Indexing
+## What This Skill Does
 
 `codebase-index` is a **Claude Code Skill** that gives Claude Cursor-like codebase awareness. When you ask a question about your project, Claude searches a local hybrid index instead of scanning the entire repository. The skill returns compact, ranked retrieval packets with files, symbols, line ranges, snippets, and "next files to read" — helping Claude answer codebase questions with far fewer tokens.
 
@@ -107,6 +126,21 @@ Recommended reads:
 ```
 
 ## Installation
+
+If you are new to this repo, start with [docs/QUICKSTART.md](docs/QUICKSTART.md).  
+If you want all install options and troubleshooting, use [docs/INSTALLATION.md](docs/INSTALLATION.md).
+
+**Multi-CLI installer (Claude Code + Codex CLI + OpenCode):** one command via
+`install.sh` / `install.ps1` — see [docs/installer.md](docs/installer.md).
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/denfry/codebase-index/main/install.sh | sh
+```
+```powershell
+# Windows PowerShell
+irm https://raw.githubusercontent.com/denfry/codebase-index/main/install.ps1 | iex
+```
 
 ### Option 1: Clone as a Claude Code Skill
 
@@ -204,8 +238,8 @@ Answer with precise file:line citations
 - [x] **Incremental indexing** — Only changed files are re-indexed
 - [x] **Token-budgeted output** — Configurable max output size
 - [x] **Secret redaction** — Masks keys, tokens, and credentials in snippets
-- [ ] **Optional embeddings** — Local or remote vector search (planned)
-- [ ] **Optional hooks** — Auto-update index after file edits (planned)
+- [x] **Optional embeddings** — Local or remote vector search (opt-in)
+- [x] **Optional hooks/watch** — Auto-update index after file edits
 - [ ] **Optional MCP wrapper** — Model Context Protocol bridge (planned)
 
 ## Safety and Privacy

@@ -1,6 +1,12 @@
-# Quick Start
+# Quick Start: Install and Run codebase-index in 5 Minutes
 
-Get codebase-index running in 5 minutes.
+Use this guide if you are new to `codebase-index` and want the fastest path to your first useful search result.
+
+## Before You Start
+
+- Python 3.10+
+- A local project directory (`your-project`)
+- Terminal access (macOS, Linux, or Windows PowerShell)
 
 ## Step 1: Install
 
@@ -43,7 +49,7 @@ Indexing...
   Index built in 3.2s
 ```
 
-## Step 4: Ask Your First Question
+## Step 4: Run Your First Search
 
 ```bash
 codebase-index search "where is authentication implemented?"
@@ -93,6 +99,14 @@ Each result includes:
 - **Reason** — why this result ranked (e.g., "exact symbol match")
 - **Recommended reads** — exact line ranges to open
 
+## What Success Looks Like
+
+After this quick start, you should have:
+
+- Local index files in `.claude/cache/codebase-index/`
+- Search results with ranked files and line ranges
+- A repeatable workflow for symbol lookup and impact checks
+
 ## Next Steps
 
 - Look up a specific symbol: `codebase-index symbol "AuthService"`
@@ -101,4 +115,5 @@ Each result includes:
 - View stats: `codebase-index stats`
 - Run diagnostics: `codebase-index doctor`
 
-For more details, see [INSTALLATION.md](INSTALLATION.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
+For full setup details, see [INSTALLATION.md](INSTALLATION.md).  
+To understand internals, see [ARCHITECTURE.md](ARCHITECTURE.md).

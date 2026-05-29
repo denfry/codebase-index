@@ -3,7 +3,7 @@
   "name": "codebase-index",
   "displayName": "Codebase Index",
   "description": "Local-first hybrid codebase index. Auto-provisions its Python CLI on first session start; the skill searches the index so Claude reads only the most relevant files.",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "author": { "name": "codebase-index contributors" },
   "repository": "https://github.com/your-org/codebase-index",
   "license": "MIT",
