@@ -35,10 +35,12 @@ Milestones are vertical-ish slices: each ends with something runnable and testab
 - `confidence` + `fallback_suggestions`; `search --mode hybrid` (default); `explain`.
 - **Exit:** hybrid results outrank single-retriever on the fixture queries; token budget enforced.
 
-## M5 — Graph edges + impact
-- `graph/builder.py`: import/call/reference/inheritance edges; target resolution; degree denorm.
-- `graph/expand.py` + `impact` command (up/down/both, depth).
-- **Exit:** `codebase-index impact "<file/symbol>"` returns a sensible blast radius on fixtures.
+## M5 — Graph edges + impact ✅
+- `parsers/languages.py`: `imports_query` slot with import/extends/implements patterns (Python end-to-end; JS/TS query slots wired).
+- `parsers/treesitter.py`: extract import + inheritance edges via capture-prefixed queries.
+- `graph/builder.py`: cross-file edge resolution by unambiguous symbol name / module→file suffix; degree denormalization.
+- `graph/expand.py`: bounded BFS impact walk (up/down/both, depth).
+- **Exit:** `codebase-index impact "<file/symbol>" --direction up|down|both --depth N` returns a sensible blast radius on fixtures. Ambiguous symbol names are left unresolved by design.
 
 ## M6 — Optional embeddings / vector backend
 - `embeddings/backend.py` protocol, `local.py`, `noop.py`; `sqlite-vec` `vec_chunks`.
