@@ -13,11 +13,13 @@ Milestones are vertical-ish slices: each ends with something runnable and testab
 - **Exit:** `codebase-index index` populates `files` correctly; secrets/binaries/build dirs excluded.
 - Tests: `test_ignore.py`, `test_discovery.py`, `test_storage.py`.
 
-## M2 — FTS5 lexical indexing
+## M2 — FTS5 lexical indexing ✅
 - `parsers/line_chunker.py`: window chunks with overlap + token estimate.
 - `fts_chunks` virtual table + sync triggers + code-aware tokenizer.
 - `retrieval/searchers.py` (FTS only) + `output/` renderers + `search --mode fts`.
 - **Exit:** `codebase-index search "<q>"` returns ranked lexical results with line ranges/snippets.
+- `snake_case` is split at index time (plain unicode61 tokenizer); camelCase is expanded at query
+  time. A true custom FTS5 tokenizer via APSW is deferred.
 
 ## M3 — Tree-sitter symbol extraction
 - `parsers/treesitter.py` + `languages.py` (grammar registry, node→symbol maps for top languages:

@@ -86,7 +86,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS fts_chunks USING fts5(
     path UNINDEXED,
     content='chunks',
     content_rowid='id',
-    tokenize = "unicode61 remove_diacritics 2 tokenchars '_'"
+    tokenize = "unicode61 remove_diacritics 2"
 );
 
 CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
