@@ -13,8 +13,14 @@ Conventions:
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from typing import Optional
+
+# Force UTF-8 output on Windows to avoid cp1251 encoding errors
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
 
 import typer
 
@@ -41,6 +47,20 @@ def _resolve_db_path(ctx: "typer.Context") -> Path:
     root_opt = ctx.obj.get("root") if ctx.obj else None
     cfg = load(root_opt)
     return Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+
+
+def _resolve_backend_for_search(ctx: "typer.Context"):
+    """Resolve an embedding backend from config for query-time vector search.
+
+    Returns a NoopBackend (enabled=False) when embeddings are off, so callers can
+    branch on `backend.enabled`. Network/external gating is enforced by
+    resolve_backend (SECURITY.md §4).
+    """
+    from .config import load
+    from .embeddings.backend import resolve_backend
+
+    cfg = load(ctx.obj.get("root") if ctx.obj else None)
+    return resolve_backend(cfg, warn=lambda m: typer.echo(m, err=True))
 
 
 @app.callback()
@@ -124,9 +144,15 @@ def search(
     from .retrieval.pipeline import search as run_search
     from .storage.db import Database
 
-    if mode == "vector":
-        typer.echo("[codebase-index] vector mode requires embeddings (M6); use --mode hybrid.")
-        raise typer.Exit(code=2)
+    backend = None
+    if mode in ("vector", "hybrid"):
+        backend = _resolve_backend_for_search(ctx)
+        if mode == "vector" and not getattr(backend, "enabled", False):
+            typer.echo(
+                "[codebase-index] vector mode needs embeddings.enabled = true and the "
+                "[embeddings] extra. Use --mode hybrid or enable embeddings."
+            )
+            raise typer.Exit(code=2)
 
     db_path = _resolve_db_path(ctx)
     if not db_path.exists():
@@ -134,9 +160,11 @@ def search(
         raise typer.Exit(code=1)
 
     with Database(db_path) as db:
+        if backend is not None and getattr(backend, "enabled", False):
+            db.enable_vectors()
         payload = run_search(
             db.conn, query, mode=mode, limit=limit,
-            token_budget=token_budget, no_fallback=no_fallback,
+            token_budget=token_budget, no_fallback=no_fallback, backend=backend,
         )
 
     want_json = json_out or (ctx.obj and ctx.obj.get("json"))
