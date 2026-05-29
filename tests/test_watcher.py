@@ -19,8 +19,10 @@ def test_debouncer_coalesces_burst_into_one_run():
     runs: list[int] = []
     d = DebouncedIndexer(lambda: runs.append(1), window_s=0.5, clock=clock)
 
-    d.notify(); clock.advance(0.1)
-    d.notify(); clock.advance(0.1)
+    d.notify()
+    clock.advance(0.1)
+    d.notify()
+    clock.advance(0.1)
     d.notify()
     assert d.maybe_run() is False        # still inside the quiet window
     assert runs == []
@@ -43,9 +45,13 @@ def test_debouncer_rearms_after_running():
     clock = _Clock()
     runs: list[int] = []
     d = DebouncedIndexer(lambda: runs.append(1), window_s=0.5, clock=clock)
-    d.notify(); clock.advance(0.5); d.maybe_run()
+    d.notify()
+    clock.advance(0.5)
+    d.maybe_run()
     assert runs == [1]
-    d.notify(); clock.advance(0.5); d.maybe_run()
+    d.notify()
+    clock.advance(0.5)
+    d.maybe_run()
     assert runs == [1, 1]                # second burst runs again
 
 
