@@ -19,6 +19,7 @@ from ..parsers.line_chunker import chunk_text
 from ..parsers.treesitter import parse_file
 from ..storage import repo
 from ..storage.db import Database
+from .doc_chunks import extract_doc_chunks
 
 
 @dataclass
@@ -59,6 +60,10 @@ def build_index(config: Config, db: Database, root: Optional[Path] = None) -> Bu
         parse_result = _parse(cand.lang, text, config)
         symbol_ids = repo.replace_symbols(conn, file_id, parse_result.symbols)
         repo.replace_chunks(conn, file_id, parse_result.chunks, symbol_ids=symbol_ids)
+        doc_chunks = extract_doc_chunks(text, cand.rel_path, cand.lang)
+        if doc_chunks:
+            repo.append_chunks(conn, file_id, doc_chunks)
+            stats.chunks += len(doc_chunks)
         edge_rows = _resolve_edges(parse_result, symbol_ids, file_id)
         repo.replace_edges(conn, file_id, edge_rows)
         stats.chunks += len(parse_result.chunks)

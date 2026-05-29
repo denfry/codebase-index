@@ -125,6 +125,34 @@ def replace_chunks(
     return len(chunks)
 
 
+def append_chunks(
+    conn: sqlite3.Connection,
+    file_id: int,
+    chunks: Sequence[Chunk],
+) -> int:
+    """Append chunks without deleting existing ones (for doc chunks)."""
+    conn.executemany(
+        """
+        INSERT INTO chunks
+            (file_id, line_start, line_end, kind, symbol_id, content, token_est)
+        VALUES
+            (?, ?, ?, ?, NULL, ?, ?)
+        """,
+        [
+            (
+                file_id,
+                c.line_start,
+                c.line_end,
+                c.kind,
+                c.content,
+                c.token_est,
+            )
+            for c in chunks
+        ],
+    )
+    return len(chunks)
+
+
 def chunks_for_file(conn: sqlite3.Connection, file_id: int) -> list[sqlite3.Row]:
     return conn.execute(
         "SELECT * FROM chunks WHERE file_id = ? ORDER BY line_start", (file_id,)
