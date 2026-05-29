@@ -271,7 +271,8 @@ def fts_search(
                c.line_end       AS line_end,
                c.content        AS content,
                c.token_est      AS token_est,
-               bm25(fts_chunks) AS bm25
+               bm25(fts_chunks) AS bm25,
+               c.kind           AS kind
         FROM fts_chunks
         JOIN chunks c ON c.id = fts_chunks.rowid
         JOIN files f ON f.id = c.file_id
