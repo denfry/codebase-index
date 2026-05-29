@@ -49,3 +49,31 @@ class SearchResponse(BaseModel):
     results: list[Result] = []
     recommended_reads: list[ReadRange] = []
     fallback_suggestions: dict[str, list[str]] = {}
+
+
+class SymbolDef(BaseModel):
+    name: str
+    qualified: Optional[str] = None
+    kind: str
+    path: str
+    line_start: int
+    line_end: int
+    signature: Optional[str] = None
+
+
+class SymbolResponse(BaseModel):
+    query: str
+    index: IndexFreshness
+    symbols: list[SymbolDef] = []
+
+
+class RefSite(BaseModel):
+    path: str
+    line: int
+    kind: str
+
+
+class RefsResponse(BaseModel):
+    query: str
+    index: IndexFreshness
+    sites: list[RefSite] = []

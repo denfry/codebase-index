@@ -7,14 +7,18 @@
 # The skill itself (.claude/skills/codebase-index/) MAY be committed so the team shares it.
 # The cache above must not be.
 
+# --- Worktrees ---
+.worktrees/
+
 # --- Python ---
 __pycache__/
 *.py[cod]
+*.egg-info/
 .venv/
 venv/
-*.egg-info/
 build/
 dist/
+*.egg
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -23,3 +27,13 @@ htmlcov/
 
 # --- Test fixture runtime cache ---
 tests/fixtures/sample_repo/.claude/
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- OS ---
+.DS_Store
+Thumbs.db

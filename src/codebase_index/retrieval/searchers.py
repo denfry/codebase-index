@@ -1,4 +1,8 @@
-"""FTS lexical searcher and SearchResponse assembly."""
+"""Three retrievers, each emitting a uniform list[Candidate].
+
+Vector retrieval (RETRIEVAL.md §2) is M6 and intentionally absent here; the
+pipeline degrades to path+symbol+fts.
+"""
 
 from __future__ import annotations
 
@@ -8,13 +12,98 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from ..models import Confidence, IndexFreshness, ReadRange, Result, SearchResponse
+from ..models import (
+    Confidence,
+    IndexFreshness,
+    ReadRange,
+    RefSite,
+    RefsResponse,
+    Result,
+    SearchResponse,
+    SymbolDef,
+    SymbolResponse,
+)
 from ..output.redact import redact_snippet
 from ..storage import repo
+from .types import Candidate as M4Candidate
 
 _WORD_RE = re.compile(r"[A-Za-z0-9_]+")
 _CAMEL_RE = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+")
 _SNIPPET_MAX_LINES = 18
+
+# FTS5 MATCH is sensitive to punctuation; reduce a NL query to bare terms.
+_TERM_RE = re.compile(r"[A-Za-z0-9_]+")
+
+
+def _fts_match_query(query: str) -> str:
+    terms = _TERM_RE.findall(query)
+    return " OR ".join(f'"{t}"' for t in terms)
+
+
+def fts_candidates(conn: sqlite3.Connection, query: str, *, limit: int) -> list[M4Candidate]:
+    match = _fts_match_query(query)
+    if not match:
+        return []
+    out: list[M4Candidate] = []
+    for row in repo.fts_search(conn, match, limit=limit):
+        out.append(
+            M4Candidate(
+                path=row["path"],
+                line_start=row["line_start"],
+                line_end=row["line_end"],
+                source="fts",
+                score=-float(row["bm25"]),
+                content=row["content"],
+                token_est=int(row["token_est"]),
+            )
+        )
+    return out
+
+
+def symbol_candidates(
+    conn: sqlite3.Connection, query: str, *, limit: int, kind: str | None = None
+) -> list[M4Candidate]:
+    ids = _TERM_RE.findall(query)
+    if not ids:
+        return []
+    name = max(ids, key=len)
+    out: list[M4Candidate] = []
+    rows = repo.symbol_search(conn, name, limit=limit, kind=kind)
+    for rank, row in enumerate(rows):
+        out.append(
+            M4Candidate(
+                path=row["path"],
+                line_start=row["line_start"],
+                line_end=row["line_end"],
+                source="symbol",
+                score=1.0 / (1 + rank),
+                kind=row["kind"],
+                symbol=row["name"],
+                content=row["signature"],
+                token_est=max(1, len(row["signature"] or "") // 4),
+                in_degree=int(row["in_degree"]),
+                out_degree=int(row["out_degree"]),
+                is_generated=bool(row["is_generated"]),
+                exact_symbol=bool(row["is_exact"]),
+            )
+        )
+    return out
+
+
+def path_candidates(conn: sqlite3.Connection, query: str, *, limit: int) -> list[M4Candidate]:
+    out: list[M4Candidate] = []
+    for rank, row in enumerate(repo.path_search(conn, query, limit=limit)):
+        out.append(
+            M4Candidate(
+                path=row["path"],
+                line_start=1,
+                line_end=1,
+                source="path",
+                score=float(row["hits"]) / (1 + rank),
+                is_generated=bool(row["is_generated"]),
+            )
+        )
+    return out
 
 
 @dataclass
@@ -147,3 +236,36 @@ def _freshness(conn: sqlite3.Connection) -> IndexFreshness:
         built_at=built_at,
         head_commit=head,
     )
+
+
+def symbol_lookup(
+    conn: sqlite3.Connection, name: str, *, kind: Optional[str], exact: bool
+) -> SymbolResponse:
+    rows = repo.symbols_by_name(conn, name, kind=kind, exact=exact)
+    symbols = [
+        SymbolDef(
+            name=row["name"],
+            qualified=row["qualified"],
+            kind=row["kind"],
+            path=row["path"],
+            line_start=row["line_start"],
+            line_end=row["line_end"],
+            signature=row["signature"],
+        )
+        for row in rows
+    ]
+    return SymbolResponse(query=name, index=_freshness(conn), symbols=symbols)
+
+
+def refs_lookup(conn: sqlite3.Connection, name: str, *, kind: str) -> RefsResponse:
+    sites = [
+        RefSite(path=row["path"], line=row["line"], kind="call")
+        for row in repo.refs_for_name(conn, name)
+    ]
+    if kind == "all":
+        sites.extend(
+            RefSite(path=row["path"], line=row["line_start"], kind="definition")
+            for row in repo.symbols_by_name(conn, name, exact=True)
+        )
+    sites.sort(key=lambda site: (site.path, site.line, site.kind))
+    return RefsResponse(query=name, index=_freshness(conn), sites=sites)

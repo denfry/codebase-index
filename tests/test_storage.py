@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from codebase_index.parsers.base import Chunk
+from codebase_index.parsers.base import Chunk, Symbol
 from codebase_index.storage.db import Database, SCHEMA_VERSION
 from codebase_index.storage import repo
 
@@ -190,4 +190,124 @@ def test_fts_search_returns_path_and_lines(tmp_path):
     assert r["path"] == "src/auth/token.py"
     assert r["line_start"] == 5 and r["line_end"] == 9
     assert "bootstrap" in r["content"]
+    db.close()
+
+
+def test_replace_symbols_resolves_parents(tmp_path):
+    db = _open(tmp_path)
+    fid = repo.upsert_file(
+        db.conn,
+        path="m.py",
+        lang="python",
+        size_bytes=1,
+        sha256="h",
+        mtime_ns=1,
+        git_status=None,
+        parser="treesitter",
+        indexed_at="t",
+        is_generated=False,
+    )
+    ids = repo.replace_symbols(
+        db.conn,
+        fid,
+        [
+            Symbol(name="User", kind="class", line_start=1, line_end=10, qualified="User"),
+            Symbol(
+                name="__init__",
+                kind="method",
+                line_start=2,
+                line_end=4,
+                qualified="User.__init__",
+                parent_index=0,
+            ),
+        ],
+    )
+    assert len(ids) == 2
+    rows = {r["name"]: r for r in repo.symbols_by_name(db.conn, "__init__")}
+    assert rows["__init__"]["parent_id"] == ids[0]
+    assert repo.count_symbols(db.conn) == 2
+    db.close()
+
+
+def test_replace_chunks_with_symbol_ids(tmp_path):
+    db = _open(tmp_path)
+    fid = repo.upsert_file(
+        db.conn,
+        path="m.py",
+        lang="python",
+        size_bytes=1,
+        sha256="h",
+        mtime_ns=1,
+        git_status=None,
+        parser="treesitter",
+        indexed_at="t",
+        is_generated=False,
+    )
+    sids = repo.replace_symbols(
+        db.conn,
+        fid,
+        [Symbol(name="a", kind="function", line_start=1, line_end=2, qualified="a")],
+    )
+    repo.replace_chunks(
+        db.conn,
+        fid,
+        [
+            Chunk(
+                line_start=1,
+                line_end=2,
+                content="def a(): pass",
+                token_est=3,
+                kind="symbol_body",
+                symbol_index=0,
+            ),
+        ],
+        symbol_ids=sids,
+    )
+    row = repo.chunks_for_file(db.conn, fid)[0]
+    assert row["symbol_id"] == sids[0]
+    assert row["kind"] == "symbol_body"
+    db.close()
+
+
+def test_replace_edges_and_refs_for_name(tmp_path):
+    db = _open(tmp_path)
+    fid = repo.upsert_file(
+        db.conn,
+        path="m.py",
+        lang="python",
+        size_bytes=1,
+        sha256="h",
+        mtime_ns=1,
+        git_status=None,
+        parser="treesitter",
+        indexed_at="t",
+        is_generated=False,
+    )
+    sids = repo.replace_symbols(
+        db.conn,
+        fid,
+        [
+            Symbol(name="target", kind="function", line_start=1, line_end=2, qualified="target"),
+            Symbol(name="caller", kind="function", line_start=4, line_end=6, qualified="caller"),
+        ],
+    )
+    repo.replace_edges(
+        db.conn,
+        fid,
+        [
+            {
+                "edge_type": "call",
+                "src_kind": "symbol",
+                "src_id": sids[1],
+                "dst_kind": "symbol",
+                "dst_id": sids[0],
+                "dst_name": "target",
+                "line": 5,
+                "resolved": 1,
+            },
+        ],
+    )
+    assert repo.count_edges(db.conn) == 1
+    sites = repo.refs_for_name(db.conn, "target")
+    assert len(sites) == 1 and sites[0]["line"] == 5 and sites[0]["path"] == "m.py"
     db.close()
