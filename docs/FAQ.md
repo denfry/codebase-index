@@ -1,6 +1,23 @@
-# FAQ
+# FAQ: codebase-index for AI Coding Agents
 
-Frequently asked questions about `codebase-index`.
+`codebase-index` is a local-first codebase indexing tool that gives Claude Code,
+Codex CLI, and OpenCode Cursor-like code search without sending source to the cloud.
+This page answers the most common questions about installing, running, and trusting it.
+
+## How do I install codebase-index?
+
+`codebase-index` is distributed from **GitHub, not PyPI**. Install it in one command
+with `pipx` (isolated) or `pip`, pinned to a release tag for reproducibility:
+
+```bash
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
+```
+
+Then run `codebase-index init` inside your project and `codebase-index index` to build
+the first index. In Claude Code you can instead install the plugin
+(`/plugin install codebase-index@codebase-index`), which provisions an isolated venv on
+first run. See [QUICKSTART.md](QUICKSTART.md) and [INSTALLATION.md](INSTALLATION.md) for
+every install path.
 
 ## Is this a Cursor replacement?
 
@@ -48,7 +65,7 @@ Grep is great for exact string matching but has limitations:
 
 ## Why not MCP?
 
-MCP (Model Context Protocol) is a great standard for tool integration, and an MCP bridge is planned (M8 on the roadmap). However:
+MCP (Model Context Protocol) is a great standard for tool integration, and an MCP bridge is planned (M10 on the roadmap). However:
 
 - MCP adds complexity for a tool that works well as a local CLI
 - Not all AI agents support MCP yet
@@ -63,7 +80,7 @@ Yes. While optimized for Claude Code, the CLI is agent-agnostic:
 - JSON output (`--json`) is parseable by any tool
 - The skill is specific to Claude Code, but the underlying CLI is not
 
-Future plans include an MCP server (M8) for broader agent compatibility.
+Future plans include an MCP server (M10) for broader agent compatibility.
 
 ## How do I reset the index?
 
@@ -111,14 +128,17 @@ Yes. Use any of these methods:
 
 ## Is it production-ready?
 
-The core indexing and search functionality is implemented and tested. However:
+Yes — `codebase-index` is released as **v1.0.2**. Indexing, hybrid search, Tree-sitter
+symbols and references, graph impact analysis, optional local embeddings, post-tool-use
+hooks, and watch mode are all implemented, tested, and shipped:
 
-- Graph expansion (M5) is in progress
-- Optional embeddings (M6) are in progress
-- Hooks (M7) are in progress
-- MCP bridge (M8) is planned
+- Graph expansion / impact analysis — shipped
+- Optional local embeddings (`sqlite-vec`) — shipped (opt-in)
+- Post-tool-use hooks + watch mode — shipped
+- MCP bridge — planned, not yet released
 
-See [ROADMAP.md](../ROADMAP.md) for the full milestone plan.
+See [CHANGELOG.md](../CHANGELOG.md) for released versions and [ROADMAP.md](../ROADMAP.md)
+for the full milestone plan.
 
 ## How do I contribute?
 
