@@ -1,6 +1,8 @@
 # Quick Start: Install and Run codebase-index in 5 Minutes
 
-Use this guide if you are new to `codebase-index` and want the fastest path to your first useful search result.
+`codebase-index` is a local-first code search tool you install from GitHub in one
+command, then query from Claude Code, Codex CLI, or OpenCode. This guide takes you
+from install to your first ranked search result in about five minutes.
 
 ## Before You Start
 
@@ -10,8 +12,16 @@ Use this guide if you are new to `codebase-index` and want the fastest path to y
 
 ## Step 1: Install
 
+`codebase-index` is distributed from GitHub (not PyPI). Install it with `pipx`:
+
 ```bash
-pip install codebase-index
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
+```
+
+Or with plain `pip`:
+
+```bash
+pip install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
 ```
 
 Or from source:

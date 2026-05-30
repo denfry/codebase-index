@@ -13,8 +13,8 @@ Thank you for your interest in contributing to `codebase-index`. This project is
 ### Clone and Install
 
 ```bash
-git clone https://github.com/<OWNER>/claude-code-codebase-index-skill.git
-cd claude-code-codebase-index-skill
+git clone https://github.com/denfry/codebase-index.git
+cd codebase-index
 
 # Using uv (recommended)
 uv sync --all-extras

@@ -4,67 +4,68 @@
 
 ## Milestones
 
-### M0 — Repository Packaging ✅
-- Polished README, documentation, badges, issue templates, CI workflows.
-- MIT license, changelog, code of conduct, contributing guide.
-- Claude Code Skill directory structure.
-- **Exit:** Repository is ready for public listing and awesome-list submissions.
+Milestone numbering matches [docs/ROADMAP.md](docs/ROADMAP.md) (the detailed
+implementation roadmap) and the `(Mx)` tags in [CHANGELOG.md](CHANGELOG.md).
 
-### M1 — SQLite + FTS5 Index ✅
-- SQLite database with FTS5 virtual table for full-text search.
-- File discovery with layered ignore rules (`.gitignore`, `.codeindexignore`, built-in denylist).
-- Incremental indexing with file hash tracking.
+### M0 — Architecture & scaffold ✅
+- Repo tree, core docs (ARCHITECTURE, RETRIEVAL, SCHEMA, SECURITY, INSTALLATION), SKILL.md draft.
+- `pyproject.toml`, module skeletons, CLI command stubs, MIT license, changelog, contributing guide.
+- **Exit:** `codebase-index --help` lists all commands; repository is ready for public listing.
+
+### M1 — Storage + discovery + ignore rules ✅
+- SQLite storage with `meta.schema_version`; file discovery with layered ignore rules
+  (`.gitignore`, `.codeindexignore`, built-in denylist) and secret/binary/size gates.
+- Incremental indexing with file-hash tracking.
 - **Exit:** `codebase-index index` populates the database; secrets and binaries are excluded.
 
-### M2 — Tree-sitter Symbol Extraction
-- AST-based symbol extraction for Python, JavaScript, TypeScript.
-- Symbol-aligned chunking with gap windows.
-- `symbol` and `refs` commands for intra-file symbol lookup.
-- **Exit:** `codebase-index symbol "AuthService"` returns symbol definitions and references.
+### M2 — FTS5 lexical indexing ✅
+- Line-window chunks + FTS5 virtual table with sync triggers and a code-aware tokenizer.
+- **Exit:** `codebase-index search "<query>"` returns ranked lexical results with line ranges.
 
-### M3 — Hybrid Retrieval
-- Combined search: path match + symbol match + FTS5 + optional vector search.
-- Reciprocal Rank Fusion (RRF) for result merging.
-- Confidence scoring and fallback suggestions.
-- **Exit:** `codebase-index search "query"` returns ranked results from multiple retrievers.
+### M3 — Tree-sitter symbol extraction ✅
+- AST symbol extraction for Python, JavaScript, TypeScript; symbol-aligned chunking.
+- `symbol` and `refs` commands for symbol lookup, with a line-based fallback for other languages.
+- **Exit:** `codebase-index symbol "AuthService"` returns definitions and references.
 
-### M4 — Graph Expansion
-- Dependency, import, call, and inheritance edge extraction.
-- Graph-based result expansion (related files, callers, callees).
-- `impact` command for blast radius analysis.
+### M4 — Hybrid search + ranking ✅
+- Path + symbol + FTS5 (+ optional vector) retrieval with Reciprocal Rank Fusion (RRF),
+  confidence scoring, fallback suggestions, and token-budgeted retrieval packets.
+- **Exit:** hybrid results outrank single-retriever search; output stays within the token budget.
+
+### M5 — Graph edges + impact ✅
+- Import, call, and inheritance edge extraction; bounded BFS impact walk (up/down/both, depth).
 - **Exit:** `codebase-index impact "src/auth/AuthService.ts"` shows affected files and symbols.
 
-### M5 — Token-Budgeted Retrieval Packets
-- Ranked retrieval packets with file paths, line ranges, snippets, and "next files to read".
-- Token budget enforcement (configurable max output size).
-- Compact Markdown and JSON output formats.
-- **Exit:** Claude reads only the recommended line ranges, not entire files.
+### M6 — Optional local embeddings ✅
+- `sqlite-vec` vector backend (opt-in), local sentence-transformers as default, external
+  embedding APIs gated behind explicit opt-in with warnings.
+- **Exit:** semantic queries improve recall when enabled; the disabled path imports no optional dep.
 
-### M6 — Optional Local Embeddings
-- `sqlite-vec` integration for vector similarity search.
-- Local embedding models (sentence-transformers) as default.
-- External embedding APIs behind explicit opt-in with warnings.
-- **Exit:** Semantic queries improve recall when embeddings are enabled.
+### M7 — Claude Code Skill packaging ✅
+- `init` materializes the bundled skill template, resolved `config.json`, and `.gitignore` rules;
+  end-to-end freshness contract so the skill triggers `update`/`index`.
+- **Exit:** the skill returns real `stale`/`files_changed_since_build` signals for codebase questions.
 
-### M7 — Optional Hooks
-- Post-tool-use hook for automatic index updates.
-- `--with-hooks` flag and hook configuration.
-- `doctor` reports enabled hooks and their status.
-- **Exit:** Index stays fresh automatically after file edits.
+### M7.5 — One-command plugin install ✅
+- Repo doubles as a Claude Code plugin; a `SessionStart` bootstrap provisions an isolated venv
+  from the GitHub-pinned `requirements.lock` (uv-preferred, pip fallback).
+- **Exit:** `/plugin install codebase-index@codebase-index` → ask a question → compact reads,
+  no manual `pip`/`init`/`index`.
 
-### M8 — Optional MCP Bridge
-- Model Context Protocol wrapper for external tool integration.
-- MCP server exposing `search`, `symbol`, `refs`, `impact` as tools.
+### M8 — Hooks + watch mode ✅
+- Incremental `update`; `init --with-hooks` auto-merges the PostToolUse hook idempotently;
+  `watch` mode coalesces edit bursts into one debounced `update`; `doctor` reports freshness.
+- **Exit:** the index stays fresh automatically after file edits.
+
+### M9 — Tests, docs, examples, release ✅
+- Coverage gates, CLI golden-output tests, perf smoke on a medium repo.
+- Finalized docs, CHANGELOG, tagged GitHub release (distribution is GitHub-only — not on PyPI).
+- **Exit:** `pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"` works on a clean machine.
+
+### M10 — Optional MCP bridge (planned)
+- Model Context Protocol server exposing `search`, `symbol`, `refs`, `impact` as tools.
 - Compatible with Claude Desktop, Cursor, and other MCP clients.
 - **Exit:** `codebase-index` can be used as an MCP tool by any MCP-compatible client.
-
-### M9 — Public Release
-- Comprehensive test suite with coverage targets.
-- Performance benchmarks on medium-sized repositories.
-- PyPI package publication.
-- GitHub release with tagged version.
-- Awesome-list submissions (Claude Code skills, AI coding tools).
-- **Exit:** `pipx install codebase-index` works on a clean machine.
 
 ---
 
