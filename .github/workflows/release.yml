@@ -5,8 +5,7 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write   # create the GitHub release
-  id-token: write   # PyPI trusted publishing (OIDC) — no API token stored
+  contents: write   # create the GitHub release (the sole distribution channel)
 
 jobs:
   build:
@@ -44,15 +43,3 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
-
-  pypi:
-    needs: build
-    runs-on: ubuntu-latest
-    environment: pypi
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1

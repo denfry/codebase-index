@@ -2,6 +2,10 @@
 
 This page explains how to install `codebase-index` and make it available in Claude Code, Codex CLI, or OpenCode.
 
+> **Distribution:** `codebase-index` is **not on PyPI**. It is installed directly
+> from GitHub via `git+https://...@<tag>`. Pin to a release tag (e.g. `@v1.0.2`)
+> for reproducible installs; use `@main` to track the latest.
+
 ## Choose Your Path
 
 - New user: use **Option 1**.
@@ -24,7 +28,7 @@ Install the package and scaffold the skill into your project:
 
 ```bash
 cd your-project
-pip install codebase-index
+pip install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
 codebase-index init
 codebase-index index
 ```
@@ -58,13 +62,13 @@ ln -s ~/codebase-index/skill ~/.claude/skills/codebase-index
 
 ```bash
 # Using pip
-pip install codebase-index
+pip install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
 
 # Using pipx (isolated environment)
-pipx install codebase-index
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
 
 # Using uv
-uv tool install codebase-index
+uv tool install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
 
 # From source (editable mode)
 git clone https://github.com/denfry/codebase-index.git
@@ -90,7 +94,7 @@ pip install -e ".[embeddings-local,watch,dev]"
 On a machine with only Python + pipx:
 
 ```bash
-pipx install codebase-index
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
 cd /path/to/your/repo
 codebase-index init           # writes .claude/skills/codebase-index/ + .gitignore rules
 codebase-index index          # builds .claude/cache/codebase-index/index.sqlite
@@ -170,7 +174,7 @@ Use `codebase-index doctor` to verify which hooks are enabled. For heavy editing
 For heavy editing sessions, `watch` mode keeps the index fresh via a debounced filesystem observer. Requires the `[watch]` extra:
 
 ```bash
-pip install "codebase-index[watch]"
+pip install "codebase-index[watch] @ git+https://github.com/denfry/codebase-index.git@v1.0.2"
 codebase-index watch --debounce 500
 ```
 
@@ -260,7 +264,7 @@ Set `allow_external` to `false` to disable external API calls.
 ## Recommended Flow for First-Time Users
 
 ```bash
-pip install codebase-index
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
 cd your-project
 codebase-index init
 codebase-index index

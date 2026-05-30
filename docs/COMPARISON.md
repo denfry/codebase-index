@@ -6,7 +6,7 @@ How `codebase-index` compares to other code search and context tools.
 
 | Tool | Type | Scope | Search Method | Setup |
 |---|---|---|---|---|
-| codebase-index | Claude Code Skill | Local project | Hybrid (FTS5 + symbols + graph) | `pip install` |
+| codebase-index | Claude Code Skill | Local project | Hybrid (FTS5 + symbols + graph) | `pipx` (GitHub) |
 | Cursor indexing | IDE feature | Local project | Proprietary index | Built into IDE |
 | Continue | IDE extension | Local project | LLM-based + RAG | Extension install |
 | Aider repo-map | CLI tool | Local project | File map + grep | `pip install` |

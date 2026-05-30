@@ -38,7 +38,7 @@ If you are opening this repository for the first time, follow this order:
 If you only need the shortest path, run:
 
 ```bash
-pip install codebase-index
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
 cd your-project
 codebase-index init            # prompts for Claude Code / Codex CLI / OpenCode
 codebase-index index
@@ -50,7 +50,7 @@ codebase-index search "where is authentication implemented?"
 **`1.0.2` is released.** The current release includes repository discovery,
 SQLite FTS5 storage, Tree-sitter symbols and references, hybrid ranking, graph
 impact analysis, token-budgeted retrieval packets, optional local embeddings,
-hooks/watch support, multi-CLI installation, and a tested `pipx` install path.
+hooks/watch support, multi-CLI installation, and a tested GitHub-only `pipx` install path.
 
 The `1.0.2` patch adds multi-CLI `init` targeting and refreshes the README for
 AI coding agent search intent. See [CHANGELOG.md](CHANGELOG.md) and
@@ -71,7 +71,7 @@ For most users, install the Python package and run `init` inside the repository
 you want to index:
 
 ```bash
-pip install codebase-index
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
 cd your-project
 codebase-index init            # choose Claude Code, Codex CLI, OpenCode, or all
 codebase-index index
@@ -100,8 +100,9 @@ Or just ask: "install the codebase-index plugin".
 **What happens on first run:** when a session starts, a `SessionStart` hook
 (`scripts/bootstrap.sh` / `.ps1`) creates a private Python virtual environment under
 `~/.claude/plugins/data/codebase-index-*/venv` and installs the pinned
-`codebase-index` package (from `requirements.lock`) into it — using `uv` if present,
-otherwise `python -m venv` + `pip`. It reinstalls only when the lock file changes.
+`codebase-index` package (from `requirements.lock`, fetched directly from the GitHub
+release tarball — not PyPI) into it — using `uv` if present, otherwise
+`python -m venv` + `pip`. It reinstalls only when the lock file changes.
 Nothing is installed globally; uninstalling the plugin removes the data directory.
 
 **Prerequisite:** Python 3.10+ on your PATH. The first install needs network access to
@@ -182,21 +183,24 @@ curl -fsSL https://raw.githubusercontent.com/denfry/codebase-index/main/install.
 irm https://raw.githubusercontent.com/denfry/codebase-index/main/install.ps1 | iex
 ```
 
-### Option 1: Install from PyPI
+> **Note:** `codebase-index` is **not published to PyPI**. It is distributed only
+> from GitHub. All commands below install straight from the repository.
+
+### Option 1: Install with pipx (recommended)
 
 ```bash
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
 cd your-project
-pip install codebase-index
-codebase-index init
+codebase-index init --target auto
 codebase-index index
 ```
 
-### Option 2: Install with pipx
+### Option 2: Install with pip
 
 ```bash
-pipx install codebase-index
+pip install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
 cd your-project
-codebase-index init --target auto
+codebase-index init
 codebase-index index
 ```
 

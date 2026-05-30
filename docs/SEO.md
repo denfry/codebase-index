@@ -10,7 +10,8 @@ Repository SEO strategy for `codebase-index`.
 codebase-index
 ```
 
-Rationale: Matches the PyPI package and primary product keyword.
+Rationale: Matches the GitHub repository and primary product keyword. The package
+is distributed from GitHub (not PyPI), so the repo name is the canonical identifier.
 
 ### GitHub About Description
 
@@ -133,7 +134,7 @@ Submit to these lists for backlinks and discoverability:
 ### Directories
 - Claude Skill Directory (if exists)
 - MCP Server Directory (for future MCP bridge)
-- PyPI (package listing)
+- GitHub Releases (tagged distribution — the package is GitHub-only, not on PyPI)
 
 ### Communities
 - Claude Code Discord
@@ -158,7 +159,7 @@ Features:
 - Secret redaction
 - Respects .gitignore
 
-Install: pip install codebase-index
+Install: pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
 GitHub: https://github.com/denfry/codebase-index
 ```
 
@@ -173,5 +174,5 @@ codebase-index builds a local hybrid index so Claude finds the right files witho
 - No network by default
 - Token-efficient output
 
-pip install codebase-index
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
 ```
