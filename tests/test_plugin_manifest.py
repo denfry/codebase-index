@@ -33,10 +33,17 @@ def test_plugin_version_matches_pyproject():
     assert _load(".claude-plugin/plugin.json")["version"] == ver
 
 
-def test_requirements_lock_pins_package_version():
+def test_requirements_lock_pins_package_from_github_tag():
+    # codebase-index is distributed from GitHub (not PyPI): the lock pins the
+    # package to the matching release tag tarball, not a PyPI version specifier.
     version = _load(".claude-plugin/plugin.json")["version"]
-    lock_lines = (ROOT / "requirements.lock").read_text(encoding="utf-8").splitlines()
-    assert f"codebase-index=={version}" in lock_lines
+    lock_text = (ROOT / "requirements.lock").read_text(encoding="utf-8")
+    expected = (
+        "codebase-index @ "
+        f"https://github.com/denfry/codebase-index/archive/refs/tags/v{version}.tar.gz"
+    )
+    assert expected in lock_text.splitlines()
+    assert "codebase-index==" not in lock_text  # must not fall back to PyPI
 
 
 def test_requirements_lock_pins_tree_sitter_grammars():

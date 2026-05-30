@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- Distribution is now **GitHub-only**: the package is no longer published to PyPI.
+  `requirements.lock` and all install docs install `codebase-index` from the GitHub
+  release tarball pinned to a tag (`@v1.0.2`); `pipx install "git+https://..."` is the
+  recommended one-command path. The bootstrap still honors `CBX_INSTALL_SPEC` to
+  override the install source for local/dev installs.
+- Removed the PyPI trusted-publishing job from the release workflow; tagged GitHub
+  releases (with attached build artifacts) are the sole distribution channel.
+
 ## [1.0.2] - 2026-05-29
 
 ### Added
