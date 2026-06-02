@@ -46,7 +46,7 @@ embeddings-local = [
 ]
 watch = ["watchdog>=4.0"]
 mcp = ["mcp>=1.0"]
-dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.5", "mypy>=1.10", "pyyaml>=6.0"]
+dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.5", "mypy>=1.10", "pyyaml>=6.0", "mcp>=1.0"]
 build = ["build>=1.2", "twine>=5.0"]
 
 [project.scripts]
