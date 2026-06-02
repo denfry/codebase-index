@@ -6,10 +6,35 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-02
+
+### Added
+- **MCP server** (`codebase-index mcp`): exposes the full retrieval layer as six MCP tools —
+  `search_code`, `find_symbol`, `find_refs`, `impact_of`, `explain_code`, `index_stats` —
+  so any MCP-capable editor (Cursor, Claude Desktop, VS Code, Zed, Windsurf) can query the
+  index directly without subprocess CLI calls, matching Cursor's built-in codebase-indexing UX.
+- **`codebase-index-mcp`** standalone entry point for use as a bare MCP server binary.
+- **Multi-client `init`**: `--target` now accepts five MCP clients in addition to the three
+  skill targets. Each writes the correct JSON config format and merges without overwriting
+  other servers already present:
+  - `cursor` → `.cursor/mcp.json`
+  - `windsurf` → `.windsurf/mcp.json`
+  - `vscode` → `.vscode/mcp.json` (with `type: stdio`)
+  - `zed` → `.zed/settings.json` (with `context_servers`)
+  - `claude-desktop` → platform-specific `claude_desktop_config.json`
+- `detect_mcp_targets()` auto-detects installed MCP clients during `--target auto`.
+- New optional dependency group `mcp` (`pip install codebase-index[mcp]`).
+
+### Fixed
+- `recommended_reads` was empty for queries where all results had short symbol-signature
+  snippets (`token_est < 40`). Added `_MIN_USEFUL_TOKENS = 40` threshold: snippets below
+  it are still shown as previews but the result is also added to `recommended_reads` so
+  Claude always receives an explicit read plan.
+
 ### Changed
 - Distribution is now **GitHub-only**: the package is no longer published to PyPI.
   `requirements.lock` and all install docs install `codebase-index` from the GitHub
-  release tarball pinned to a tag (`@v1.0.2`); `pipx install "git+https://..."` is the
+  release tarball pinned to a tag (`@v1.1.0`); `pipx install "git+https://..."` is the
   recommended one-command path. The bootstrap still honors `CBX_INSTALL_SPEC` to
   override the install source for local/dev installs.
 - Removed the PyPI trusted-publishing job from the release workflow; tagged GitHub
