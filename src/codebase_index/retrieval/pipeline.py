@@ -76,6 +76,8 @@ def search(
     config: Optional[Config] = None,
 ) -> dict:
     plan = detect_intent(query)
+    if token_budget <= 0:
+        token_budget = plan.token_budget
     lists, weights = _run_retrievers(
         conn, query, mode=mode, limit=limit, weights=plan.weights, backend=backend
     )

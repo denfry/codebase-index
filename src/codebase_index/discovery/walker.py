@@ -53,7 +53,8 @@ def walk(root: Path, config: Config) -> Iterator[Candidate]:
             if size > config.max_file_bytes:
                 continue
             try:
-                head = abs_path.read_bytes()[:_BINARY_SNIFF_BYTES]
+                with abs_path.open("rb") as fh:
+                    head = fh.read(_BINARY_SNIFF_BYTES)
             except OSError:
                 continue
             if classify.looks_binary(head):

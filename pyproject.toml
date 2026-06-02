@@ -45,12 +45,14 @@ embeddings-local = [
     "sentence-transformers>=3.0",  # local model, still no external API
 ]
 watch = ["watchdog>=4.0"]
+mcp = ["mcp>=1.0"]
 dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.5", "mypy>=1.10", "pyyaml>=6.0"]
 build = ["build>=1.2", "twine>=5.0"]
 
 [project.scripts]
 codebase-index = "codebase_index.cli:app"
 cbx = "codebase_index.cli:app"           # short alias
+codebase-index-mcp = "codebase_index.mcp.server:run"  # standalone MCP entry point
 
 [project.urls]
 Homepage = "https://github.com/denfry/codebase-index"

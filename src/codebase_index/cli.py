@@ -63,7 +63,7 @@ def _resolve_backend_for_search(ctx: "typer.Context"):
     return resolve_backend(cfg, warn=lambda m: typer.echo(m, err=True))
 
 
-def _interactive_target_choice(detected: list[str]) -> str:
+def _interactive_target_choice(detected_cli: list[str], detected_mcp: list[str]) -> str:
     from rich.console import Console
     from rich.prompt import Prompt
     from rich.table import Table
@@ -71,52 +71,73 @@ def _interactive_target_choice(detected: list[str]) -> str:
     from . import scaffold
 
     console = Console()
-    table = Table(title="Install codebase-index for a CLI")
+    table = Table(title="Install codebase-index")
     table.add_column("#", justify="right")
     table.add_column("Target")
+    table.add_column("Type")
     table.add_column("Status")
 
-    rows = list(scaffold.CLI_TARGETS) + ["all"]
+    rows: list[str] = [*scaffold.CLI_TARGETS, *scaffold.MCP_TARGETS, "all"]
     for idx, name in enumerate(rows, start=1):
-        status = "detected" if name in detected else ""
+        kind = "skill" if name in scaffold.CLI_TARGETS else ("MCP" if name in scaffold.MCP_TARGETS else "")
+        status = "detected" if name in detected_cli or name in detected_mcp else ""
         if name == "all":
-            status = "install every target"
-        table.add_row(str(idx), name, status)
+            kind = ""
+            status = "install everything"
+        table.add_row(str(idx), name, kind, status)
     console.print(table)
 
-    default = detected[0] if len(detected) == 1 else "all" if detected else "claude"
+    all_detected = detected_cli + [t for t in detected_mcp if t not in detected_cli]
+    default = all_detected[0] if len(all_detected) == 1 else "all" if all_detected else "claude"
     choices = [*rows, *[str(i) for i in range(1, len(rows) + 1)]]
-    selected = Prompt.ask("Choose CLI target", choices=choices, default=default)
+    selected = Prompt.ask("Choose target", choices=choices, default=default)
     if selected.isdigit():
         return rows[int(selected) - 1]
     return selected
 
 
-def _resolve_init_targets(root: Path, requested: str | None) -> list[str]:
+def _resolve_init_targets(root: Path, requested: str | None) -> tuple[list[str], list[str]]:
+    """Returns (cli_targets, mcp_targets)."""
     from . import scaffold
 
-    detected = scaffold.detect_cli_targets(root)
+    detected_cli = scaffold.detect_cli_targets(root)
+    detected_mcp = scaffold.detect_mcp_targets(root)
+
     if requested is None:
         if sys.stdin.isatty():
-            requested = _interactive_target_choice(detected)
+            requested = _interactive_target_choice(detected_cli, detected_mcp)
         else:
             requested = "claude"
 
     if requested == "auto":
-        if not detected:
+        all_detected = detected_cli + [t for t in detected_mcp if t not in detected_cli]
+        if not all_detected:
             typer.echo(
-                "[codebase-index] no CLI targets detected. "
-                "Use --target claude|codex|opencode|all.",
+                "[codebase-index] no targets detected. "
+                f"Use --target with one of: {', '.join(scaffold.ALL_TARGETS)}, all.",
                 err=True,
             )
             raise typer.Exit(code=4)
-        typer.echo(f"Detected CLI targets: {', '.join(detected)}")
-        return detected
+        typer.echo(f"Detected targets: {', '.join(all_detected)}")
+        return (
+            [t for t in all_detected if t in scaffold.CLI_TARGETS],
+            [t for t in all_detected if t in scaffold.MCP_TARGETS],
+        )
+
     if requested == "all":
-        return list(scaffold.CLI_TARGETS)
+        return list(scaffold.CLI_TARGETS), list(scaffold.MCP_TARGETS)
+
     if requested in scaffold.CLI_TARGETS:
-        return [requested]
-    typer.echo("[codebase-index] invalid target. Use claude, codex, opencode, auto, or all.", err=True)
+        return [requested], []
+
+    if requested in scaffold.MCP_TARGETS:
+        return [], [requested]
+
+    typer.echo(
+        f"[codebase-index] invalid target '{requested}'. "
+        f"Valid: {', '.join(scaffold.ALL_TARGETS)}, auto, all.",
+        err=True,
+    )
     raise typer.Exit(code=2)
 
 
@@ -134,44 +155,60 @@ def main(
 @app.command()
 def init(
     ctx: typer.Context,
-    force: bool = typer.Option(False, "--force", help="Overwrite an existing skill install."),
+    force: bool = typer.Option(False, "--force", help="Overwrite an existing install."),
     with_hooks: bool = typer.Option(False, "--with-hooks", help="Also write a hooks example to review."),
     target: Optional[str] = typer.Option(
         None,
         "--target",
-        help="CLI target: claude, codex, opencode, auto, or all. Prompts when interactive.",
+        help=(
+            "Target to install: claude, codex, opencode (skill-based) | "
+            "cursor, claude-desktop, zed, vscode, windsurf (MCP config) | "
+            "auto (detect) | all. Prompts when interactive."
+        ),
     ),
 ) -> None:
-    """Scaffold CLI instructions, config.json, and .gitignore rules into the current project."""
+    """Scaffold skill/MCP config, config.json, and .gitignore rules into the current project."""
     from . import scaffold
     from .config import find_root
 
     root_opt = ctx.obj.get("root") if ctx.obj else None
     root = Path(root_opt).resolve() if root_opt else find_root()
-    targets = _resolve_init_targets(root, target)
+    cli_targets, mcp_targets = _resolve_init_targets(root, target)
 
-    installed_lines: list[str] = []
-    try:
-        for name in targets:
+    lines: list[str] = []
+
+    # Install skill targets (claude / codex / opencode)
+    for name in cli_targets:
+        try:
             scaffold.install_target(root, name, force=force)
-            installed_lines.append(f"Installed {name.title():<7} -> {root / scaffold.skill_rel_for_target(name)}")
-    except FileExistsError as exc:
-        typer.echo(
-            "[codebase-index] target already installed at "
-            f"{exc.args[0]}. Re-run with --force to overwrite."
-        )
-        raise typer.Exit(code=1)
+        except FileExistsError as exc:
+            typer.echo(
+                f"[codebase-index] '{name}' already installed at {exc.args[0]}. "
+                "Re-run with --force to overwrite."
+            )
+            raise typer.Exit(code=1)
+        lines.append(f"Installed {name:<14} (skill) -> {root / scaffold.skill_rel_for_target(name)}")
+
+    # Install MCP config targets
+    for name in mcp_targets:
+        try:
+            cfg_file, written = scaffold.install_mcp_target(root, name, force=force)
+        except RuntimeError as exc:
+            typer.echo(f"[codebase-index] {name}: {exc}", err=True)
+            continue
+        state = "written" if written else "already present"
+        lines.append(f"Installed {name:<14} (MCP)   -> {cfg_file}  [{state}]")
 
     cfg_path = scaffold.write_config(root, force=force)
     gitignore_changed = scaffold.merge_gitignore(root)
 
-    lines = [
-        *installed_lines,
+    lines += [
         f"Wrote config      -> {cfg_path}",
         f".gitignore        -> {'updated' if gitignore_changed else 'already covered'}",
     ]
+
     if with_hooks:
-        if "claude" not in targets:
+        if "claude" not in cli_targets:
             lines.append("Auto-update hook  -> skipped (hooks are Claude Code settings)")
         else:
             hook_path = scaffold.write_hooks_example(root)
@@ -180,13 +217,17 @@ def init(
             lines.append(f"Auto-update hook  -> {state}")
             lines.append(f"Hook example      -> {hook_path} (reference copy)")
 
+    has_mcp = bool(mcp_targets)
     lines += [
         "",
         "Next steps:",
         "  1. codebase-index index      # build the index",
         "  2. codebase-index stats       # verify coverage",
-        "  3. Ask a codebase question in your CLI — the installed instructions will invoke it.",
     ]
+    if has_mcp:
+        lines.append("  3. Restart your editor — the MCP server will be discovered automatically.")
+    else:
+        lines.append("  3. Ask a codebase question in your CLI — the installed instructions will invoke it.")
     typer.echo("\n".join(lines))
 
 
@@ -525,6 +566,44 @@ def doctor(
 
     if strict and has_high_severity_failure(findings):
         raise typer.Exit(code=1)
+
+
+@app.command()
+def mcp(
+    ctx: typer.Context,
+    transport: str = typer.Option("stdio", "--transport", help="Transport: stdio (default)."),
+) -> None:
+    """Start the MCP server — exposes codebase-index tools to any MCP client (e.g. Claude Code).
+
+    Add to .claude/settings.json:
+
+    \\b
+      {
+        "mcpServers": {
+          "codebase-index": {
+            "command": "codebase-index",
+            "args": ["mcp"],
+            "cwd": "/path/to/your/project"
+          }
+        }
+      }
+    """
+    try:
+        from .mcp.server import mcp as _mcp
+    except ImportError:
+        typer.echo(
+            "[codebase-index] MCP server needs the optional extra:\n"
+            "  pip install codebase-index[mcp]",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    root_opt = ctx.obj.get("root") if ctx.obj else None
+    if root_opt:
+        import os
+        os.environ.setdefault("CBX_ROOT", str(root_opt))
+
+    _mcp.run(transport=transport)
 
 
 @app.command()

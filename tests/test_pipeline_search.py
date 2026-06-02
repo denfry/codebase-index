@@ -10,6 +10,14 @@ def test_search_payload_shape(seeded_index):
     assert "recommended_reads" in payload
 
 
+def test_search_zero_token_budget_uses_intent_default(seeded_index):
+    payload = search(seeded_index.conn, "where is refresh_access_token implemented",
+                     mode="hybrid", limit=10, token_budget=0, no_fallback=False)
+
+    assert payload["intent"] == "locate_impl"
+    assert any(r["snippet"] for r in payload["results"])
+
+
 def test_low_confidence_emits_fallback(seeded_index):
     payload = search(seeded_index.conn, "nonexistent_symbol_xyz",
                      mode="hybrid", limit=10, token_budget=1500, no_fallback=False)

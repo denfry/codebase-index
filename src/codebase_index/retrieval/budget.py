@@ -3,12 +3,21 @@
 Metadata for every result is always emitted (cheap). Snippets are attached to the
 highest-ranked results until the budget is hit; the remainder become
 recommended_reads. All snippet text is secret-redacted before emission.
+
+A result is added to recommended_reads when:
+  - it has no snippet (budget exceeded or no content), OR
+  - its snippet is below _MIN_USEFUL_TOKENS (e.g. a bare function signature).
+    Claude still gets the short preview but also receives the read plan.
 """
 
 from __future__ import annotations
 
 from ..output.redact import redact_snippet
 from .types import Candidate
+
+# Snippets shorter than this threshold are treated as previews only; the result
+# is still added to recommended_reads so Claude knows where to read the full body.
+_MIN_USEFUL_TOKENS = 40
 
 
 def _meta(c: Candidate) -> dict:
@@ -34,10 +43,14 @@ def apply_budget(
         meta = _meta(c)
         meta["rank"] = rank
         snippet = None
+        snippet_is_useful = False
+
         if c.content and spent + c.token_est <= token_budget:
             snippet = redact_snippet(c.content)
             spent += c.token_est
-        else:
+            snippet_is_useful = c.token_est >= _MIN_USEFUL_TOKENS
+
+        if not snippet_is_useful:
             recommended.append(
                 {"path": c.path, "line_start": c.line_start, "line_end": c.line_end}
             )
