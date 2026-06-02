@@ -43,6 +43,61 @@ class _ParseOutcome:
     zero_symbols: bool = False
 
 
+def _add_stats(target: BuildStats, delta: BuildStats) -> None:
+    target.indexed += delta.indexed
+    target.deleted += delta.deleted
+    target.total_bytes += delta.total_bytes
+    target.chunks += delta.chunks
+    target.skipped += delta.skipped
+    target.symbols += delta.symbols
+    target.edges += delta.edges
+    target.edges_resolved += delta.edges_resolved
+    target.vectors += delta.vectors
+    target.parse_failed += delta.parse_failed
+    target.treesitter_zero_symbols += delta.treesitter_zero_symbols
+
+
+def _index_candidate(
+    conn,
+    cand,
+    config: Config,
+    now: str,
+    *,
+    sha256: Optional[str] = None,
+) -> BuildStats:
+    """Fully replace every index facet for one discovered file."""
+    stats = BuildStats(indexed=1, total_bytes=cand.size_bytes)
+    file_id = repo.upsert_file(
+        conn,
+        path=cand.rel_path,
+        lang=cand.lang,
+        size_bytes=cand.size_bytes,
+        sha256=sha256 or _sha256_file(cand.path),
+        mtime_ns=cand.path.stat().st_mtime_ns,
+        git_status=None,
+        parser=cand.parser,
+        indexed_at=now,
+        is_generated=cand.is_generated,
+    )
+    text = _read_text(cand.path)
+    outcome = _parse(cand.lang, cand.parser, text, config)
+    parse_result = outcome.result
+    stats.parse_failed += int(outcome.parse_failed)
+    stats.treesitter_zero_symbols += int(outcome.zero_symbols)
+    symbol_ids = repo.replace_symbols(conn, file_id, parse_result.symbols)
+    repo.replace_chunks(conn, file_id, parse_result.chunks, symbol_ids=symbol_ids)
+    doc_chunks = extract_doc_chunks(text, cand.rel_path, cand.lang)
+    if doc_chunks:
+        repo.append_chunks(conn, file_id, doc_chunks)
+        stats.chunks += len(doc_chunks)
+    edge_rows = _resolve_edges(parse_result, symbol_ids, file_id)
+    repo.replace_edges(conn, file_id, edge_rows)
+    stats.chunks += len(parse_result.chunks)
+    stats.symbols += len(parse_result.symbols)
+    stats.edges += len(edge_rows)
+    return stats
+
+
 def build_index(config: Config, db: Database, root: Optional[Path] = None) -> BuildStats:
     root = Path(root or config.root).resolve()
     conn = db.conn
@@ -52,37 +107,8 @@ def build_index(config: Config, db: Database, root: Optional[Path] = None) -> Bu
     seen: set[str] = set()
 
     for cand in walk(root, config):
-        file_id = repo.upsert_file(
-            conn,
-            path=cand.rel_path,
-            lang=cand.lang,
-            size_bytes=cand.size_bytes,
-            sha256=_sha256_file(cand.path),
-            mtime_ns=cand.path.stat().st_mtime_ns,
-            git_status=None,
-            parser=cand.parser,
-            indexed_at=now,
-            is_generated=cand.is_generated,
-        )
-        text = _read_text(cand.path)
-        outcome = _parse(cand.lang, cand.parser, text, config)
-        parse_result = outcome.result
-        stats.parse_failed += int(outcome.parse_failed)
-        stats.treesitter_zero_symbols += int(outcome.zero_symbols)
-        symbol_ids = repo.replace_symbols(conn, file_id, parse_result.symbols)
-        repo.replace_chunks(conn, file_id, parse_result.chunks, symbol_ids=symbol_ids)
-        doc_chunks = extract_doc_chunks(text, cand.rel_path, cand.lang)
-        if doc_chunks:
-            repo.append_chunks(conn, file_id, doc_chunks)
-            stats.chunks += len(doc_chunks)
-        edge_rows = _resolve_edges(parse_result, symbol_ids, file_id)
-        repo.replace_edges(conn, file_id, edge_rows)
-        stats.chunks += len(parse_result.chunks)
-        stats.symbols += len(parse_result.symbols)
-        stats.edges += len(edge_rows)
+        _add_stats(stats, _index_candidate(conn, cand, config, now))
         seen.add(cand.rel_path)
-        stats.indexed += 1
-        stats.total_bytes += cand.size_bytes
 
     stats.deleted = repo.delete_files(conn, repo.all_paths(conn) - seen)
     repo.set_meta(conn, "built_at", now)
@@ -259,27 +285,7 @@ def update_index(
             stats.skipped += 1
             continue
 
-        file_id = repo.upsert_file(
-            conn,
-            path=cand.rel_path,
-            lang=cand.lang,
-            size_bytes=cand.size_bytes,
-            sha256=sha,
-            mtime_ns=st.st_mtime_ns,
-            git_status=None,
-            parser=cand.parser,
-            indexed_at=now,
-            is_generated=cand.is_generated,
-        )
-        file_chunks = chunk_text(
-            _read_text(cand.path),
-            window_lines=config.chunk.window_lines,
-            overlap_lines=config.chunk.overlap_lines,
-        )
-        repo.replace_chunks(conn, file_id, file_chunks)
-        stats.chunks += len(file_chunks)
-        stats.indexed += 1
-        stats.total_bytes += cand.size_bytes
+        _add_stats(stats, _index_candidate(conn, cand, config, now, sha256=sha))
 
     if scope is None:
         gone = repo.all_paths(conn) - seen
@@ -287,6 +293,12 @@ def update_index(
         gone = {p for p in scope if p not in seen and p in indexed_fp}
     repo.delete_files(conn, gone)
     stats.deleted = len(gone)
+
+    if stats.indexed or stats.deleted:
+        graph = build_graph(conn)
+        stats.edges_resolved = graph["resolved"]
+        if config.embeddings.enabled:
+            stats.vectors = _embed_chunks(config, db, conn)
 
     repo.set_meta(conn, "built_at", repo.get_meta(conn, "built_at") or now)
     repo.set_meta(conn, "updated_at", now)

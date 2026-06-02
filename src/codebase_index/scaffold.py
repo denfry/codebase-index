@@ -7,15 +7,23 @@ the wheel via importlib.resources, so it works in editable and zip installs alik
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import stat
+import sys
 from importlib import resources
 from importlib.resources.abc import Traversable
 from pathlib import Path
+from typing import Optional
 
 from .config import Config
 
 CLI_TARGETS = ("claude", "codex", "opencode")
+
+# MCP clients that receive a JSON config entry (no skill files needed).
+MCP_TARGETS = ("cursor", "claude-desktop", "zed", "vscode", "windsurf")
+
+ALL_TARGETS = CLI_TARGETS + MCP_TARGETS
 
 CLAUDE_SKILL_REL = Path(".claude") / "skills" / "codebase-index"
 CODEX_SKILL_REL = Path(".codex") / "skills" / "codebase-index"
@@ -73,6 +81,35 @@ def detect_cli_targets(root: Path) -> list[str]:
         for target, command, project_marker, home_marker in checks
         if project_marker.exists() or shutil.which(command) or home_marker.exists()
     ]
+
+
+def detect_mcp_targets(root: Path) -> list[str]:
+    """Detect MCP-capable clients present on this machine or in this project."""
+    home = Path.home()
+    found: list[str] = []
+
+    checks = [
+        ("cursor",        [root / ".cursor",      home / ".cursor"]),
+        ("windsurf",      [root / ".windsurf",     home / ".windsurf"]),
+        ("vscode",        [root / ".vscode"]),
+        ("zed",           [root / ".zed",          home / ".config" / "zed"]),
+        ("claude-desktop",[_claude_desktop_config_path()]),
+    ]
+    exe_checks = {
+        "cursor":    ["cursor"],
+        "windsurf":  ["windsurf"],
+        "vscode":    ["code", "code-insiders"],
+        "zed":       ["zed"],
+    }
+    for target, markers in checks:
+        if any(m is not None and m.exists() for m in markers):
+            found.append(target)
+            continue
+        for exe in exe_checks.get(target, []):
+            if shutil.which(exe):
+                found.append(target)
+                break
+    return found
 
 
 def materialize_skill(root: Path, *, force: bool, target: str = "claude") -> list[Path]:
@@ -224,6 +261,116 @@ def merge_hook_settings(root: Path) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
     return True
+
+
+# ── MCP client config helpers ──────────────────────────────────────────────────────────────────
+
+_MCP_SERVER_NAME = "codebase-index"
+_MCP_ENTRY_STDIO = {"command": "codebase-index", "args": ["mcp"]}
+
+
+def _claude_desktop_config_path() -> Optional[Path]:
+    """Platform-specific path to Claude Desktop's config file."""
+    if sys.platform == "win32":
+        appdata = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+        return appdata / "Claude" / "claude_desktop_config.json"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
+    return Path.home() / ".config" / "Claude" / "claude_desktop_config.json"
+
+
+def _load_json_file(path: Path) -> dict:
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+    return {}
+
+
+def _write_json_file(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def _merge_mcp_servers(path: Path, entry: dict, *, force: bool) -> bool:
+    """Merge {"mcpServers": {"codebase-index": entry}} into a JSON config file.
+
+    Returns True if the file was written (new or updated), False if already present.
+    """
+    data = _load_json_file(path)
+    servers: dict = data.setdefault("mcpServers", {})
+    if _MCP_SERVER_NAME in servers and not force:
+        return False
+    servers[_MCP_SERVER_NAME] = entry
+    _write_json_file(path, data)
+    return True
+
+
+def _merge_vscode_mcp(path: Path, *, force: bool) -> bool:
+    """VS Code uses {"servers": {"name": {"type": "stdio", ...}}} in .vscode/mcp.json."""
+    data = _load_json_file(path)
+    servers: dict = data.setdefault("servers", {})
+    if _MCP_SERVER_NAME in servers and not force:
+        return False
+    servers[_MCP_SERVER_NAME] = {"type": "stdio", **_MCP_ENTRY_STDIO}
+    _write_json_file(path, data)
+    return True
+
+
+def _merge_zed_settings(path: Path, *, force: bool) -> bool:
+    """Zed uses context_servers with a nested command object in settings.json."""
+    data = _load_json_file(path)
+    ctx: dict = data.setdefault("context_servers", {})
+    if _MCP_SERVER_NAME in ctx and not force:
+        return False
+    ctx[_MCP_SERVER_NAME] = {
+        "command": {
+            "path": "codebase-index",
+            "args": ["mcp"],
+        }
+    }
+    _write_json_file(path, data)
+    return True
+
+
+def install_mcp_target(root: Path, target: str, *, force: bool = False) -> tuple[Path, bool]:
+    """Write or merge the MCP server entry for `target`.
+
+    Returns (config_path, written) where written=False means it was already present.
+    Raises ValueError for unknown targets.
+    """
+    home = Path.home()
+
+    if target == "cursor":
+        path = root / ".cursor" / "mcp.json"
+        written = _merge_mcp_servers(path, _MCP_ENTRY_STDIO, force=force)
+        return path, written
+
+    if target == "windsurf":
+        path = root / ".windsurf" / "mcp.json"
+        written = _merge_mcp_servers(path, _MCP_ENTRY_STDIO, force=force)
+        return path, written
+
+    if target == "vscode":
+        path = root / ".vscode" / "mcp.json"
+        written = _merge_vscode_mcp(path, force=force)
+        return path, written
+
+    if target == "zed":
+        # prefer project-local; Zed picks it up automatically
+        path = root / ".zed" / "settings.json"
+        written = _merge_zed_settings(path, force=force)
+        return path, written
+
+    if target == "claude-desktop":
+        path = _claude_desktop_config_path()
+        if path is None:
+            raise RuntimeError("Cannot determine Claude Desktop config path on this platform.")
+        written = _merge_mcp_servers(path, _MCP_ENTRY_STDIO, force=force)
+        return path, written
+
+    raise ValueError(f"unknown MCP target: {target!r}. Valid: {MCP_TARGETS}")
 
 
 def enabled_hooks(root: Path) -> list[str]:

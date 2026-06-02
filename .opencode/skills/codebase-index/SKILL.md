@@ -36,12 +36,20 @@ Pick the subcommand by intent:
 
 | User intent | Command |
 |---|---|
-| general / "how does it work" / unsure | `codebase-index search "$QUERY" --json` |
+| "how does X work" / "explain X" / "walk me through" | `codebase-index explain "$QUERY" --json` |
+| overview / architecture | `codebase-index explain "architecture overview" --token-budget 3000 --json` |
+| general / unsure | `codebase-index search "$QUERY" --json` |
 | keyword / "where is" | `codebase-index search "$QUERY" --json` |
 | a specific symbol name | `codebase-index symbol "<name>" --json` |
 | "who calls / references" | `codebase-index refs "<name>" --json` |
 | "what breaks if I change" | `codebase-index impact "<file-or-symbol>" --json` |
-| overview / architecture | `codebase-index search "$QUERY" --json` |
+
+`explain` has a higher default token budget (2200) and HOW_IT_WORKS intent weights — use it whenever the question is about understanding behavior or flow.
+
+For `search`, pick a `--mode` when the intent is clear:
+- `--mode symbol` — pure symbol lookups (faster, no FTS noise)
+- `--mode fts` — text/keyword queries where symbol names don't matter
+- `--mode hybrid` — default; best for mixed queries
 
 Use `--json` for programmatic parsing; omit for human-readable output.
 
@@ -50,7 +58,8 @@ Use `--json` for programmatic parsing; omit for human-readable output.
 1. **Query the index** using the appropriate subcommand for `$QUERY`.
 2. **Check index freshness** in the response:
    - `index.exists: false` → run `codebase-index index` first, then re-query.
-   - `index.stale: true` with few changes → run `codebase-index update`, then re-query.
+   - `index.stale: true`, `files_changed_since_build < 20` → run `codebase-index update`, then re-query.
+   - `index.stale: true`, `files_changed_since_build ≥ 20` → run `codebase-index index` (full rebuild).
    - Otherwise proceed with results.
 3. **Read ONLY the `recommended_reads`** — use the Read tool with `offset`/`limit` to read the exact line ranges returned. Do not open whole files.
 4. **Answer** with file:line citations (e.g., `src/auth/token.py:88-134`).
@@ -66,7 +75,7 @@ The index returns a **ranked retrieval packet** with:
 - `symbols` — symbols found in this range
 - `score` — relevance score
 - `reason` — why this result ranked (e.g., "exact symbol match, 4 callers")
-- `snippet` — compact code excerpt (may already answer the question)
+- `snippet` — compact code excerpt (may already answer the question); `null` means budget was spent — read via `recommended_reads` instead
 
 Top-level fields:
 
@@ -79,12 +88,21 @@ Top-level fields:
 - Trust the index. Read the **fewest** files needed — start with rank 1-3 only.
 - Read **line ranges**, not whole files. Use `line_start`/`line_end` with Read's `offset`/`limit`.
 - The `snippet` may already answer the question — re-read only if you need more context.
-- Prefer `search`/`symbol`/`refs`/`impact` over manual Grep/Glob — those are expensive fallbacks, not step 1.
+- Prefer `search`/`symbol`/`refs`/`impact`/`explain` over manual Grep/Glob — those are expensive fallbacks, not step 1.
 - Don't re-run the query with trivially reworded text; refine with a different subcommand instead.
+- For broad questions (`confidence: low`, architecture, data-flow), raise the budget: `--token-budget 3000`.
+- Test files are demoted in ranking by default. Include "test" in the query to surface them.
 
 ## Fallback behavior
 
 Fall back to built-in search **only** when: results are empty, `confidence` is `low`, or the user asks for something the index clearly doesn't cover.
+
+0. If confidence is consistently low across queries, run diagnostics first:
+   ```bash
+   codebase-index stats --json    # check coverage and symbol counts per language
+   codebase-index doctor          # surface config or security issues
+   ```
+   Low symbol counts for a language may mean the index needs a full rebuild: `codebase-index index`.
 
 1. Use `fallback_suggestions.ripgrep` patterns from the response via Grep.
 2. If still nothing, Glob for likely paths, then Grep within them.
@@ -95,6 +113,12 @@ Never start with a full-repo scan when the index exists and is fresh.
 ## Examples
 
 ```bash
+# "how does the auth flow work?"
+codebase-index explain "auth flow" --json
+
+# "explain the overall architecture"
+codebase-index explain "architecture overview" --token-budget 3000 --json
+
 # "where is auth token refresh implemented?"
 codebase-index search "auth token refresh" --json
 
@@ -106,6 +130,9 @@ codebase-index refs "send_email" --json
 
 # "find the AuthService class"
 codebase-index symbol "AuthService" --json
+
+# precise symbol search (faster, no FTS noise)
+codebase-index search "AuthService" --mode symbol --json
 ```
 
 Then Read only the returned line ranges and answer with citations.

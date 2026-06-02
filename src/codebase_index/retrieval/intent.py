@@ -33,7 +33,24 @@ _PLANS: dict[Intent, IntentPlan] = {
 
 
 def detect_intent(query: str) -> IntentPlan:
-    for pattern, intent in _RULES:
-        if pattern.search(query):
-            return _PLANS[intent]
-    return _PLANS[Intent.KEYWORD]
+    matched = [_PLANS[intent] for pattern, intent in _RULES if pattern.search(query)]
+    if not matched:
+        return _PLANS[Intent.KEYWORD]
+    if len(matched) == 1:
+        return matched[0]
+
+    # Merge multiple matched intents: max weight per retriever, max token_budget,
+    # primary intent/graph_strategy from first match.
+    merged_weights: dict[str, float] = {}
+    for plan in matched:
+        for key, val in plan.weights.items():
+            merged_weights[key] = max(merged_weights.get(key, 0.0), val)
+
+    primary = matched[0]
+    return IntentPlan(
+        intent=primary.intent,
+        weights=merged_weights,
+        token_budget=max(p.token_budget for p in matched),
+        graph_strategy=primary.graph_strategy,
+        summaries_first=any(p.summaries_first for p in matched),
+    )
