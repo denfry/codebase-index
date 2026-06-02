@@ -20,7 +20,10 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from ..config import Config
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -39,18 +42,18 @@ mcp = FastMCP(
 )
 
 
-def _resolve_db() -> tuple[Path, object]:
+def _resolve_db() -> tuple[Path, Config]:
     """Return (db_path, config). Respects CBX_DB_PATH and CBX_ROOT env vars."""
     from ..config import load
 
     override = os.environ.get("CBX_DB_PATH")
     if override:
         db_path = Path(override)
-        cfg = load(str(db_path.parent))
+        cfg: Config = load(Path(db_path.parent))
         return db_path, cfg
 
     root_env = os.environ.get("CBX_ROOT")
-    cfg = load(root_env)
+    cfg = load(Path(root_env) if root_env else None)
     db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
     return db_path, cfg
 
