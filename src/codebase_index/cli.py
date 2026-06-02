@@ -603,7 +603,7 @@ def mcp(
         import os
         os.environ.setdefault("CBX_ROOT", str(root_opt))
 
-    _mcp.run(transport=transport)
+    _mcp.run(transport=transport)  # type: ignore[arg-type]
 
 
 @app.command()

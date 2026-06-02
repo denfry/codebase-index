@@ -13,9 +13,39 @@
   "query": "token",
   "recommended_reads": [
     {
+      "line_end": 6,
+      "line_start": 4,
+      "path": "src/auth/token.py"
+    },
+    {
+      "line_end": 5,
+      "line_start": 4,
+      "path": "src/auth/token.py"
+    },
+    {
+      "line_end": 11,
+      "line_start": 9,
+      "path": "src/auth/token.py"
+    },
+    {
+      "line_end": 2,
+      "line_start": 1,
+      "path": "src/auth/token.py"
+    },
+    {
+      "line_end": 10,
+      "line_start": 9,
+      "path": "src/auth/token.py"
+    },
+    {
       "line_end": 1,
       "line_start": 1,
       "path": "src/auth/token.py"
+    },
+    {
+      "line_end": 5,
+      "line_start": 1,
+      "path": "src/api/service.py"
     }
   ],
   "results": [

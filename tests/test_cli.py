@@ -17,7 +17,8 @@ def test_help_lists_all_commands():
         assert cmd in result.output
 
 
-def test_search_accepts_query_and_flags():
-    result = runner.invoke(app, ["--json", "search", "auth token", "--limit", "5"])
+def test_search_accepts_query_and_flags(tmp_path):
+    (tmp_path / ".git").mkdir()
+    result = runner.invoke(app, ["--root", str(tmp_path), "--json", "search", "auth token", "--limit", "5"])
     assert result.exit_code == 1
     assert "No index found" in result.output

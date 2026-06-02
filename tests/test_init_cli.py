@@ -79,7 +79,8 @@ def test_init_codex_writes_agents_package_and_resources(tmp_path):
     skill = root / ".codex" / "skills" / "codebase-index"
     assert (skill / "SKILL.md").is_file()
     assert (skill / "scripts" / "cbx").is_file()
-    assert "Installed Codex" in res.output
+    assert "codex" in res.output
+    assert "(skill)" in res.output
 
 
 def test_init_auto_installs_detected_project_cli_dirs(tmp_path, monkeypatch):
@@ -89,10 +90,11 @@ def test_init_auto_installs_detected_project_cli_dirs(tmp_path, monkeypatch):
     (root / ".codex").mkdir()
     (root / ".opencode").mkdir()
     monkeypatch.setattr(scaffold, "detect_cli_targets", lambda _root: ["codex", "opencode"])
+    monkeypatch.setattr(scaffold, "detect_mcp_targets", lambda _root: [])
 
     res = runner.invoke(app, ["--root", str(root), "init", "--target", "auto"])
     assert res.exit_code == 0, res.output
 
     assert (root / "AGENTS.md").is_file()
     assert (root / ".opencode" / "commands" / "codebase-index.md").is_file()
-    assert "Detected CLI targets: codex, opencode" in res.output
+    assert "Detected targets: codex, opencode" in res.output

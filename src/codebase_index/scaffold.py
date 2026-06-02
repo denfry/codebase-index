@@ -88,12 +88,12 @@ def detect_mcp_targets(root: Path) -> list[str]:
     home = Path.home()
     found: list[str] = []
 
-    checks = [
+    checks: list[tuple[str, list[Optional[Path]]]] = [
         ("cursor",        [root / ".cursor",      home / ".cursor"]),
         ("windsurf",      [root / ".windsurf",     home / ".windsurf"]),
         ("vscode",        [root / ".vscode"]),
         ("zed",           [root / ".zed",          home / ".config" / "zed"]),
-        ("claude-desktop",[_claude_desktop_config_path()]),
+        ("claude-desktop", [_claude_desktop_config_path()]),
     ]
     exe_checks = {
         "cursor":    ["cursor"],
@@ -120,12 +120,12 @@ def materialize_skill(root: Path, *, force: bool, target: str = "claude") -> lis
 
     written: list[Path] = []
     for rel, node in _iter_template(_template_root()):
-        target = dest / Path(rel)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(node.read_bytes())
+        dst = dest / Path(rel)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(node.read_bytes())
         if rel == "scripts/cbx":
-            target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-        written.append(target)
+            dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        written.append(dst)
     return written
 
 
@@ -340,8 +340,6 @@ def install_mcp_target(root: Path, target: str, *, force: bool = False) -> tuple
     Returns (config_path, written) where written=False means it was already present.
     Raises ValueError for unknown targets.
     """
-    home = Path.home()
-
     if target == "cursor":
         path = root / ".cursor" / "mcp.json"
         written = _merge_mcp_servers(path, _MCP_ENTRY_STDIO, force=force)
@@ -364,11 +362,11 @@ def install_mcp_target(root: Path, target: str, *, force: bool = False) -> tuple
         return path, written
 
     if target == "claude-desktop":
-        path = _claude_desktop_config_path()
-        if path is None:
+        maybe_path = _claude_desktop_config_path()
+        if maybe_path is None:
             raise RuntimeError("Cannot determine Claude Desktop config path on this platform.")
-        written = _merge_mcp_servers(path, _MCP_ENTRY_STDIO, force=force)
-        return path, written
+        written = _merge_mcp_servers(maybe_path, _MCP_ENTRY_STDIO, force=force)
+        return maybe_path, written
 
     raise ValueError(f"unknown MCP target: {target!r}. Valid: {MCP_TARGETS}")
 
