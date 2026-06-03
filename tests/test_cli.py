@@ -12,7 +12,7 @@ def test_help_lists_all_commands():
     assert result.exit_code == 0
     for cmd in [
         "init", "index", "update", "search", "symbol", "refs",
-        "impact", "explain", "stats", "doctor", "clean", "watch",
+        "impact", "explain", "stats", "doctor", "clean", "watch", "mcp",
     ]:
         assert cmd in result.output
 

@@ -48,4 +48,6 @@ def test_symbol_missing_index(tmp_path):
     res = runner.invoke(app, ["--root", str(empty), "--json", "symbol", "anything"])
     assert res.exit_code == 0
     data = json.loads(res.output)
-    assert data["index"]["exists"] is False and data["symbols"] == []
+    assert data["index"]["exists"] is True
+    assert data["symbols"] == []
+    assert (empty / ".claude" / "cache" / "codebase-index" / "index.sqlite").exists()
