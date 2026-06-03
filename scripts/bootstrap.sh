@@ -23,7 +23,7 @@ fi
 
 PY="$(command -v python3 || command -v python || true)"
 if [ -z "$PY" ]; then
-  echo "codebase-index: Python 3.10+ was not found on PATH. Install Python, then restart Claude Code." >&2
+  echo "codebase-index: Python 3.11+ was not found on PATH. Install Python, then restart Claude Code." >&2
   exit 0
 fi
 

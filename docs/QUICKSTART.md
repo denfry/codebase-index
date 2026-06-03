@@ -4,7 +4,7 @@ Use this guide if you are new to `codebase-index` and want the fastest path to y
 
 ## Before You Start
 
-- Python 3.10+
+- Python 3.11+
 - A local project directory (`your-project`)
 - Terminal access (macOS, Linux, or Windows PowerShell)
 

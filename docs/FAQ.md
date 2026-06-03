@@ -1,6 +1,23 @@
 # FAQ
 
-Frequently asked questions about `codebase-index`.
+`codebase-index` is a local-first codebase indexing tool that gives Claude Code,
+Codex CLI, and OpenCode Cursor-like code search without sending source to the cloud.
+This page answers the most common questions about installing, running, and trusting it.
+
+## How do I install codebase-index?
+
+`codebase-index` is distributed from **GitHub, not PyPI**. Install it in one command
+with `pipx` (isolated) or `pip`, pinned to a release tag for reproducibility:
+
+```bash
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
+```
+
+Then run `codebase-index init` inside your project and `codebase-index index` to build
+the first index. In Claude Code you can instead install the plugin
+(`/plugin install codebase-index@codebase-index`), which provisions an isolated venv on
+first run. See [QUICKSTART.md](QUICKSTART.md) and [INSTALLATION.md](INSTALLATION.md) for
+every install path.
 
 ## Is this a Cursor replacement?
 
@@ -135,6 +152,7 @@ Yes. Use any of these methods:
 
 ## Is it production-ready?
 
+Yes — `codebase-index` is released as **v1.1.0**. Indexing, hybrid search, Tree-sitter
 The core indexing and search functionality is implemented and tested. The
 current `1.1.0` package includes:
 
