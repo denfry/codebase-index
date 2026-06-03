@@ -6,7 +6,7 @@ from install to your first ranked search result in about five minutes.
 
 ## Before You Start
 
-- Python 3.10+
+- Python 3.11+
 - A local project directory (`your-project`)
 - Terminal access (macOS, Linux, or Windows PowerShell)
 
@@ -15,13 +15,13 @@ from install to your first ranked search result in about five minutes.
 `codebase-index` is distributed from GitHub (not PyPI). Install it with `pipx`:
 
 ```bash
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
 ```
 
 Or with plain `pip`:
 
 ```bash
-pip install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
+pip install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
 ```
 
 Or from source:

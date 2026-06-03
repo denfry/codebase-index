@@ -67,14 +67,14 @@ This numbering is canonical — the product-level [ROADMAP.md](../ROADMAP.md) an
 ## M9 — Tests, docs, examples, release ✅
 - Coverage across modules; CLI golden-output tests; perf check on a medium repo.
 - `examples/queries.md`, finalized docs, CHANGELOG, tagged GitHub release (GitHub-only distribution — no PyPI).
-- **Exit:** `pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"` + `init` + ask a question works on a clean machine.
+- **Exit:** `pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"` + `init` + ask a question works on a clean machine.
 
 *Shipped: golden-file tests lock CLI `--json` output; a `--runslow` perf smoke test guards
 index/search latency on a synthetic medium repo; coverage is gated (`--cov-fail-under`) in a
-CI matrix (Ubuntu/macOS/Windows × py3.10–3.13). `CHANGELOG.md` tracks releases; a tag-triggered
+CI matrix (Ubuntu/macOS/Windows x py3.11-3.13). `CHANGELOG.md` tracks releases; a tag-triggered
 release pipeline builds, runs `twine check` + a clean-venv install smoke, and publishes a GitHub
 release with the built artifacts (GitHub-only distribution — no PyPI publish). `pipx install
-"git+https://github.com/denfry/codebase-index.git@v1.0.2"` → `init` → `index` → ask a question is
+"git+https://github.com/denfry/codebase-index.git@v1.1.0"` -> `init` -> `index` -> ask a question is
 verified end-to-end by `scripts/release_smoke.py`.*
 
 ## M10 — Optional MCP bridge (planned)

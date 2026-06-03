@@ -100,7 +100,7 @@ Create `assets/social-preview.png`:
 
 ## Launch Checklist
 
-- [x] Create v1.0.2 release with release notes
+- [x] Create v1.1.0 release with release notes
 - [ ] Add all GitHub topics (see list above)
 - [ ] Set repository description in About section
 - [ ] Upload social preview image
@@ -144,7 +144,7 @@ Submit to these lists for backlinks and discoverability:
 ## Release Announcement Template
 
 ```
-codebase-index v1.0.2
+codebase-index v1.1.0
 
 A local-first codebase index for AI coding agents.
 
@@ -159,7 +159,7 @@ Features:
 - Secret redaction
 - Respects .gitignore
 
-Install: pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
+Install: pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
 GitHub: https://github.com/denfry/codebase-index
 ```
 
@@ -174,5 +174,5 @@ codebase-index builds a local hybrid index so Claude finds the right files witho
 - No network by default
 - Token-efficient output
 
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
 ```

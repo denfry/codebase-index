@@ -152,7 +152,7 @@ def test_missing_python_reports_clearly(tmp_path):
     env["PATH"] = os.pathsep.join([str(empty), *safe_dirs])  # no python on PATH
     res = _run(root, env)
     assert res.returncode == 0  # SessionStart must not hard-fail the session
-    assert "Python 3.10+" in res.stderr
+    assert "Python 3.11+" in res.stderr
     assert not (data / "venv" / "bin" / "codebase-index").exists()
 
 
