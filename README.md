@@ -5,7 +5,7 @@ Codex CLI, OpenCode, and other AI coding agents find relevant files, symbols, an
 references without scanning an entire repository.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/denfry/codebase-index/actions/workflows/ci.yml/badge.svg)](https://github.com/denfry/codebase-index/actions)
 [![Claude Code Skill](https://img.shields.io/badge/Claude%20Code%20Skill-yes-green.svg)](skill/SKILL.md)
 [![Codex CLI](https://img.shields.io/badge/Codex%20CLI-supported-green.svg)](#which-ai-clis-does-codebase-index-support)
@@ -53,10 +53,11 @@ codebase-index search "where is authentication implemented?"
 **`1.1.0` is released.** The current release includes repository discovery,
 SQLite FTS5 storage, Tree-sitter symbols and references, hybrid ranking, graph
 impact analysis, token-budgeted retrieval packets, optional local embeddings,
-hooks/watch support, multi-CLI installation, and a tested `pipx` install path.
+hooks/watch support, multi-CLI installation, MCP server support, and a tested
+GitHub-only `pipx` install path.
 
-The `1.1.0` patch adds multi-CLI `init` targeting and refreshes the README for
-AI coding agent search intent. See [CHANGELOG.md](CHANGELOG.md) and
+The `1.1.0` release adds MCP server support, keeps GitHub-only distribution, and
+requires Python 3.11 or newer. See [CHANGELOG.md](CHANGELOG.md) and
 [docs/ROADMAP.md](docs/ROADMAP.md).
 
 MCP is now available as a stdio server via `codebase-index mcp --root <repo>`.
@@ -111,7 +112,7 @@ Or just ask: "install the codebase-index plugin".
 otherwise `python -m venv` + `pip`. It reinstalls only when the lock file changes.
 Nothing is installed globally; uninstalling the plugin removes the data directory.
 
-**Prerequisite:** Python 3.10+ on your PATH. The first install needs network access to
+**Prerequisite:** Python 3.11+ on your PATH. The first install needs network access to
 fetch the package; later sessions are offline. The skill builds its index on
 your first codebase question, so there is no manual `index` step.
 
@@ -202,6 +203,38 @@ pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v
 codebase-index init
 codebase-index index
 ```
+
+### Python version compatibility
+
+`codebase-index` requires Python 3.11 or newer.
+
+If `codebase-index init --target opencode` fails with:
+
+```text
+ModuleNotFoundError: No module named 'importlib.resources.abc'; 'importlib.resources' is not a package
+```
+
+the `pipx` environment was likely created with an older Python version. Reinstall `codebase-index` using Python 3.11+ explicitly:
+
+```powershell
+pipx uninstall codebase-index
+py -0p
+pipx install --python "<path-to-python-3.11-or-newer>\python.exe" "git+https://github.com/denfry/codebase-index.git@v1.1.0"
+```
+
+For example:
+
+```powershell
+pipx install --python "C:\Users\you\AppData\Local\Programs\Python\Python312\python.exe" "git+https://github.com/denfry/codebase-index.git@v1.1.0"
+```
+
+Then run initialization again:
+
+```powershell
+codebase-index init --target opencode
+codebase-index index
+```
+
 
 ### Option 2: Install with pipx from GitHub
 
