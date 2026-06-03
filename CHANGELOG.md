@@ -96,7 +96,8 @@ All notable changes to this project are documented here. The format is based on
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/1.0.2...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/denfry/codebase-index/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/denfry/codebase-index/compare/1.0.1...1.0.2
 [1.0.1]: https://github.com/denfry/codebase-index/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/denfry/codebase-index/compare/v0.1.0...1.0.0

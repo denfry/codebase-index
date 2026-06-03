@@ -10,7 +10,7 @@ This page answers the most common questions about installing, running, and trust
 with `pipx` (isolated) or `pip`, pinned to a release tag for reproducibility:
 
 ```bash
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
 ```
 
 Then run `codebase-index init` inside your project and `codebase-index index` to build
@@ -128,7 +128,7 @@ Yes. Use any of these methods:
 
 ## Is it production-ready?
 
-Yes — `codebase-index` is released as **v1.0.2**. Indexing, hybrid search, Tree-sitter
+Yes — `codebase-index` is released as **v1.1.0**. Indexing, hybrid search, Tree-sitter
 symbols and references, graph impact analysis, optional local embeddings, post-tool-use
 hooks, and watch mode are all implemented, tested, and shipped:
 

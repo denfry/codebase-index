@@ -60,7 +60,7 @@ implementation roadmap) and the `(Mx)` tags in [CHANGELOG.md](CHANGELOG.md).
 ### M9 — Tests, docs, examples, release ✅
 - Coverage gates, CLI golden-output tests, perf smoke on a medium repo.
 - Finalized docs, CHANGELOG, tagged GitHub release (distribution is GitHub-only — not on PyPI).
-- **Exit:** `pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"` works on a clean machine.
+- **Exit:** `pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"` works on a clean machine.
 
 ### M10 — Optional MCP bridge (planned)
 - Model Context Protocol server exposing `search`, `symbol`, `refs`, `impact` as tools.

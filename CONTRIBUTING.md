@@ -6,7 +6,7 @@ Thank you for your interest in contributing to `codebase-index`. This project is
 
 ### Prerequisites
 
-- Python 3.10 or later
+- Python 3.11 or later
 - `pipx` or `uv` for package management (optional but recommended)
 - Git
 
@@ -79,7 +79,7 @@ Use the pattern `<type>/<short-description>`:
 - All new features must include tests.
 - All bug fixes must include a regression test.
 - Aim for >80% line coverage on new code.
-- Tests must pass on Python 3.10+.
+- Tests must pass on Python 3.11+.
 - Use the fixture repository under `tests/fixtures/sample_repo/` for integration tests.
 
 ## Documentation Requirements

@@ -38,7 +38,7 @@ If you are opening this repository for the first time, follow this order:
 If you only need the shortest path, run:
 
 ```bash
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
 cd your-project
 codebase-index init            # prompts for Claude Code / Codex CLI / OpenCode
 codebase-index index
@@ -47,13 +47,14 @@ codebase-index search "where is authentication implemented?"
 
 ## Project Status
 
-**`1.0.2` is released.** The current release includes repository discovery,
+**`1.1.0` is released.** The current release includes repository discovery,
 SQLite FTS5 storage, Tree-sitter symbols and references, hybrid ranking, graph
 impact analysis, token-budgeted retrieval packets, optional local embeddings,
-hooks/watch support, multi-CLI installation, and a tested GitHub-only `pipx` install path.
+hooks/watch support, multi-CLI installation, MCP server support, and a tested
+GitHub-only `pipx` install path.
 
-The `1.0.2` patch adds multi-CLI `init` targeting and refreshes the README for
-AI coding agent search intent. See [CHANGELOG.md](CHANGELOG.md) and
+The `1.1.0` release adds MCP server support, keeps GitHub-only distribution, and
+requires Python 3.11 or newer. See [CHANGELOG.md](CHANGELOG.md) and
 [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ```
@@ -71,7 +72,7 @@ For most users, install the Python package and run `init` inside the repository
 you want to index:
 
 ```bash
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
 cd your-project
 codebase-index init            # choose Claude Code, Codex CLI, OpenCode, or all
 codebase-index index
@@ -189,7 +190,7 @@ irm https://raw.githubusercontent.com/denfry/codebase-index/main/install.ps1 | i
 ### Option 1: Install with pipx (recommended)
 
 ```bash
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
 cd your-project
 codebase-index init --target auto
 codebase-index index
@@ -230,7 +231,7 @@ codebase-index index
 ### Option 2: Install with pip
 
 ```bash
-pip install "git+https://github.com/denfry/codebase-index.git@v1.0.2"
+pip install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
 cd your-project
 codebase-index init
 codebase-index index
