@@ -10,6 +10,7 @@ references without scanning an entire repository.
 [![Claude Code Skill](https://img.shields.io/badge/Claude%20Code%20Skill-yes-green.svg)](skill/SKILL.md)
 [![Codex CLI](https://img.shields.io/badge/Codex%20CLI-supported-green.svg)](#which-ai-clis-does-codebase-index-support)
 [![OpenCode](https://img.shields.io/badge/OpenCode-supported-green.svg)](#which-ai-clis-does-codebase-index-support)
+[![MCP](https://img.shields.io/badge/MCP-stdio%20server-green.svg)](docs/MCP.md)
 [![Local First](https://img.shields.io/badge/local--first-yes-green.svg)](#safety-and-privacy)
 [![No Telemetry](https://img.shields.io/badge/no%20telemetry-yes-green.svg)](#safety-and-privacy)
 [![No Network By Default](https://img.shields.io/badge/no%20network%20by%20default-yes-green.svg)](#safety-and-privacy)
@@ -32,13 +33,15 @@ If you are opening this repository for the first time, follow this order:
 
 1. [Quick Start (5 minutes)](docs/QUICKSTART.md)
 2. [Installation Guide](docs/INSTALLATION.md)
-3. [How the skill works](skill/SKILL.md)
-4. [FAQ](docs/FAQ.md)
+3. [Benchmarks](docs/BENCHMARKS.md)
+4. [How the skill works](skill/SKILL.md)
+5. [MCP server](docs/MCP.md)
+6. [FAQ](docs/FAQ.md)
 
 If you only need the shortest path, run:
 
 ```bash
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.1.0"
 cd your-project
 codebase-index init            # prompts for Claude Code / Codex CLI / OpenCode
 codebase-index index
@@ -57,6 +60,10 @@ The `1.1.0` release adds MCP server support, keeps GitHub-only distribution, and
 requires Python 3.11 or newer. See [CHANGELOG.md](CHANGELOG.md) and
 [docs/ROADMAP.md](docs/ROADMAP.md).
 
+MCP is now available as a stdio server via `codebase-index mcp --root <repo>`.
+It exposes `healthcheck`, `search_code`, `find_symbol`, `find_refs`,
+`impact_of`, `explain_code`, and `index_stats`; see [docs/MCP.md](docs/MCP.md).
+
 ```
 You:   "Where is user authentication implemented?"
 Agent: searches local index (symbols + FTS5 + graph)
@@ -68,11 +75,11 @@ Agent: searches local index (symbols + FTS5 + graph)
 
 ## How Do I Install codebase-index?
 
-For most users, install the Python package and run `init` inside the repository
-you want to index:
+For most users, install the package from the tagged GitHub release and run
+`init` inside the repository you want to index:
 
 ```bash
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.1.0"
 cd your-project
 codebase-index init            # choose Claude Code, Codex CLI, OpenCode, or all
 codebase-index index
@@ -101,14 +108,18 @@ Or just ask: "install the codebase-index plugin".
 **What happens on first run:** when a session starts, a `SessionStart` hook
 (`scripts/bootstrap.sh` / `.ps1`) creates a private Python virtual environment under
 `~/.claude/plugins/data/codebase-index-*/venv` and installs the pinned
-`codebase-index` package (from `requirements.lock`, fetched directly from the GitHub
-release tarball — not PyPI) into it — using `uv` if present, otherwise
-`python -m venv` + `pip`. It reinstalls only when the lock file changes.
+`codebase-index` package (from `requirements.lock`) into it — using `uv` if present,
+otherwise `python -m venv` + `pip`. It reinstalls only when the lock file changes.
 Nothing is installed globally; uninstalling the plugin removes the data directory.
 
 **Prerequisite:** Python 3.11+ on your PATH. The first install needs network access to
 fetch the package; later sessions are offline. The skill builds its index on
 your first codebase question, so there is no manual `index` step.
+
+**Distribution note:** the plugin bootstrap installs the pinned requirement from
+`requirements.lock`. In `1.1.0`, that lock points at the tagged GitHub release
+instead of PyPI. You can override it with `CBX_INSTALL_SPEC` when testing a local
+checkout or a different Git ref.
 
 ## What Problem Does codebase-index Solve?
 
@@ -130,7 +141,7 @@ service.
 
 `codebase-index` builds a local hybrid index that combines:
 
-- **Symbol search** — Tree-sitter AST parsing extracts classes, functions, methods, and variables.
+- **Symbol search** — Tree-sitter AST parsing extracts classes, functions, methods, and variables across the supported code-language set.
 - **Full-text search** — SQLite FTS5 for fast lexical search across code chunks.
 - **Path search** — File path matching for location-aware queries.
 - **Optional semantic search** — Vector embeddings for similarity-based retrieval (opt-in, local by default).
@@ -184,15 +195,12 @@ curl -fsSL https://raw.githubusercontent.com/denfry/codebase-index/main/install.
 irm https://raw.githubusercontent.com/denfry/codebase-index/main/install.ps1 | iex
 ```
 
-> **Note:** `codebase-index` is **not published to PyPI**. It is distributed only
-> from GitHub. All commands below install straight from the repository.
-
-### Option 1: Install with pipx (recommended)
+### Option 1: Install from a tagged GitHub release
 
 ```bash
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
 cd your-project
-codebase-index init --target auto
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.1.0"
+codebase-index init
 codebase-index index
 ```
 
@@ -228,12 +236,12 @@ codebase-index index
 ```
 
 
-### Option 2: Install with pip
+### Option 2: Install with pipx from GitHub
 
 ```bash
-pip install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
 cd your-project
-codebase-index init
+codebase-index init --target auto
 codebase-index index
 ```
 
@@ -243,6 +251,18 @@ codebase-index index
 git clone https://github.com/denfry/codebase-index.git
 cd codebase-index
 pip install -e ".[dev]"
+```
+
+### Distribution roadmap
+
+PyPI, `uvx`, Homebrew, signed release checksums, and SBOMs are important for a
+tool that reads entire repositories, but they are not all verified as shipped in
+`1.1.0`. Target install story:
+
+```bash
+uvx codebase-index init
+pipx install codebase-index
+brew install denfry/tap/codebase-index
 ```
 
 ### Verify the install
@@ -311,7 +331,7 @@ Answer with precise file:line citations
 - [x] **Respects ignore files** — `.gitignore`, `.claudeignore`, `.codeindexignore`
 - [x] **SQLite storage** — Fast, reliable, single-file database
 - [x] **FTS5 lexical search** — Full-text search with code-aware tokenization
-- [x] **Tree-sitter AST parsing** — Symbol extraction for Python, JavaScript, TypeScript
+- [x] **Tree-sitter AST parsing** — Tier-A symbol extraction for Python, JavaScript, TypeScript, Java, Go, Rust, C, C++, C#, Ruby, PHP, and Kotlin; Tier-B generic extraction for code languages with a loadable grammar such as Lua
 - [x] **Symbol extraction** — Classes, functions, methods, variables with line ranges
 - [x] **Incremental indexing** — Only changed files are re-indexed
 - [x] **Token-budgeted output** — Configurable max output size
@@ -319,7 +339,7 @@ Answer with precise file:line citations
 - [x] **Optional embeddings** — Local or remote vector search (opt-in)
 - [x] **Optional hooks/watch** — Auto-update index after file edits
 - [x] **Multi-CLI setup** — Claude Code, Codex CLI, and OpenCode instructions
-- [ ] **Optional MCP wrapper** — Model Context Protocol bridge (planned)
+- [x] **MCP server** — stdio MCP tools for search, symbols, refs, impact, explain, health, and stats
 
 ## Safety and Privacy
 
@@ -339,16 +359,17 @@ See [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) for the full security model
 
 | Feature | Manual grep/read | Cursor indexing | Aider repo-map | codebase-index |
 |---|---|---|---|---|
-| Symbol awareness | No | Yes | No | Yes |
-| Result ranking | No | Yes | No | Yes |
+| Symbol awareness | No | Yes | Yes, summarized repo map | Yes, queryable symbols |
+| Result ranking | No | Yes | Yes, graph-ranked map | Yes, hybrid-ranked results |
 | Token-efficient | No | Yes | Partial | Yes |
 | Local-first | Yes | Yes | Yes | Yes |
 | No network | Yes | Yes | Yes | Yes |
 | Works with Claude Code | Manual | No | No | Native skill |
 | Works with Codex CLI | Manual | No | No | AGENTS.md package |
 | Works with OpenCode | Manual | No | No | Command + agent files |
+| MCP interface | Manual | No | No | stdio MCP server |
 | Open source | N/A | No | Yes | Yes (MIT) |
-| Dependency graph | No | Partial | No | Yes |
+| Dependency graph | No | Partial | File-level graph ranking | Import/call/reference graph |
 | Secret redaction | No | No | No | Yes |
 
 **Honest positioning:**
@@ -361,18 +382,36 @@ See [docs/COMPARISON.md](docs/COMPARISON.md) for a detailed comparison.
 
 ## Benchmark Results
 
-Measured on `sample_repo` (Python + TypeScript + Markdown fixture, 5 simple queries):
+There are three benchmark surfaces today:
 
-| Metric | Value |
+1. **Public benchmark suite** in `tests/benchmark_public.py`: reproducible
+   multi-language fixture with Recall@1/3/5, MRR, nDCG, answer-correctness proxy,
+   token economy, language breakdown, freshness latency, graph tasks, and scale counters.
+2. **Smoke benchmark** on `sample_repo`: validates the CLI is fast and stable on
+   a tiny fixture, but it is not evidence of production retrieval quality.
+3. **Honest benchmark** on a real Java repository: `tests/benchmark_honest.py`
+   compares codebase-index against a disciplined `rg` + read-window baseline on
+   10 realistic questions. Results are documented in
+   [tests/benchmark_honest_RESULTS.md](tests/benchmark_honest_RESULTS.md).
+
+Run the public suite:
+
+```bash
+python tests/benchmark_public.py --workdir .tmp-public-benchmark
+```
+
+Current honest benchmark headline:
+
+| Metric | Result |
 |---|---|
-| Cold indexed search | ~1ms |
-| Warm indexed search | ~1ms |
-| Index build time | ~86ms |
-| Database size | 4.0 KB |
-| Output compression | 11.8x smaller output vs grep |
-| Top-3 recall | 100% |
+| Repo | 303 Java files, ~55k LOC |
+| Retrieval quality | recall@3: 70% index vs 40% `rg` baseline |
+| Token economy | ~13x fewer answer tokens than `rg` + 80-line windows |
+| Verified language impact | Java symbols fixed from 0 to 3,543 symbols |
 
-> **Note:** Warm indexed search: ~1ms on test fixture. Real repos: expect 5-50ms depending on size and query complexity.
+The public suite now has the metric framework. It still needs larger public or
+documented external repos for 10k/100k/1M LOC scale claims and deeper framework
+graph tasks. See [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ## Repository Layout
 
@@ -501,11 +540,10 @@ Yes. The index is incremental — only changed files are re-indexed. SQLite with
 
 Grep returns all matches with no ranking, no symbol awareness, and no context about related files. `codebase-index` combines lexical search with symbol extraction and graph expansion to return **ranked, contextual results** with specific line ranges to read.
 
-### Why not MCP?
+### Does it support MCP?
 
-MCP is a useful standard and an optional bridge is planned. The current package
-focuses on a simple CLI plus native instruction packages because they work in
-existing terminal agent workflows without running a separate server.
+Yes. Run `codebase-index mcp --root <repo>` to expose the local index over stdio
+MCP. See [docs/MCP.md](docs/MCP.md) for tools and client config templates.
 
 ### Can I use it with other agents?
 

@@ -24,11 +24,11 @@ This page explains how to install `codebase-index` and make it available in Clau
 
 ### Option 1: Install via `init` command (recommended)
 
-Install the package and scaffold the skill into your project:
+Install the tagged GitHub release and scaffold the skill into your project:
 
 ```bash
 cd your-project
-pip install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.1.0"
 codebase-index init
 codebase-index index
 ```
@@ -61,13 +61,13 @@ ln -s ~/codebase-index/skill ~/.claude/skills/codebase-index
 ### Option 3: Install as a Python package
 
 ```bash
-# Using pip
-pip install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
+# Using pip from the tagged GitHub release
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.1.0"
 
-# Using pipx (isolated environment)
+# Using pipx from GitHub (isolated environment)
 pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
 
-# Using uv
+# Using uv from GitHub
 uv tool install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
 
 # From source (editable mode)
@@ -87,6 +87,20 @@ pip install -e ".[watch]"
 
 # With all optional features
 pip install -e ".[embeddings-local,watch,dev]"
+```
+
+### PyPI / uvx / Homebrew status
+
+As of `1.1.0`, this documentation treats GitHub tag installs as the verified
+path. PyPI, `uvx codebase-index init`, Homebrew tap installation, signed
+checksums, and SBOMs are distribution targets for a more complete release story.
+
+Target future commands:
+
+```bash
+uvx codebase-index init
+pipx install codebase-index
+brew install denfry/tap/codebase-index
 ```
 
 ### Verify a clean install
@@ -264,7 +278,7 @@ Set `allow_external` to `false` to disable external API calls.
 ## Recommended Flow for First-Time Users
 
 ```bash
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.1.0"
 cd your-project
 codebase-index init
 codebase-index index

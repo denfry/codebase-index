@@ -1,4 +1,4 @@
-# FAQ: codebase-index for AI Coding Agents
+# FAQ
 
 `codebase-index` is a local-first codebase indexing tool that gives Claude Code,
 Codex CLI, and OpenCode Cursor-like code search without sending source to the cloud.
@@ -21,7 +21,7 @@ every install path.
 
 ## Is this a Cursor replacement?
 
-No. `codebase-index` is not a replacement for Cursor or any IDE. It is a **local retrieval layer** for Claude Code that provides Cursor-like codebase awareness. You still use Claude Code (or any AI coding agent) as your primary interface; this skill makes it smarter about finding the right files.
+No. `codebase-index` is not a replacement for Cursor or any IDE. It is a **local retrieval layer** for Claude Code, Codex CLI, OpenCode, and other terminal agents. You still use your AI coding agent as the primary interface; this tool makes it better at finding the right files.
 
 ## Does it send my code anywhere?
 
@@ -63,24 +63,34 @@ Grep is great for exact string matching but has limitations:
 
 `codebase-index` combines lexical search with symbol extraction, path matching, and graph expansion to return **ranked, contextual results** with specific line ranges to read.
 
-## Why not MCP?
+## Does it support MCP?
 
-MCP (Model Context Protocol) is a great standard for tool integration, and an MCP bridge is planned (M10 on the roadmap). However:
+Yes. Run:
 
-- MCP adds complexity for a tool that works well as a local CLI
-- Not all AI agents support MCP yet
-- The Claude Code Skill interface is simpler and more direct for this use case
-- The MCP bridge will be an **optional** addition, not a replacement
+```bash
+codebase-index mcp --root /path/to/repo
+```
+
+The stdio MCP server exposes:
+
+- `healthcheck`
+- `search_code`
+- `find_symbol`
+- `find_refs`
+- `impact_of`
+- `explain_code`
+- `index_stats`
+
+See [MCP.md](MCP.md) for schema and client config templates.
 
 ## Can I use it with other agents?
 
-Yes. While optimized for Claude Code, the CLI is agent-agnostic:
+Yes. The CLI is agent-agnostic:
 
 - Any agent that can run shell commands can use `codebase-index`
 - JSON output (`--json`) is parseable by any tool
-- The skill is specific to Claude Code, but the underlying CLI is not
-
-Future plans include an MCP server (M10) for broader agent compatibility.
+- `init` can write setup files for Claude Code, Codex CLI, and OpenCode
+- MCP clients can use `codebase-index mcp --root <repo>`
 
 ## How do I reset the index?
 
@@ -97,15 +107,29 @@ codebase-index index
 
 ## What languages are supported?
 
-Currently supported for symbol extraction:
+Tier-A symbol extraction currently covers:
 
-- Python (full support)
-- JavaScript (full support)
-- TypeScript (full support)
+- Python
+- JavaScript / JSX
+- TypeScript / TSX
+- Java
+- Go
+- Rust
+- C
+- C++
+- C#
+- Ruby
+- PHP
+- Kotlin
 
-All languages are supported for FTS5 lexical search regardless of language support.
+Lua exercises the Tier-B generic Tree-sitter path. Markdown, JSON, YAML, TOML,
+SQL, and other text/config files still get FTS5 lexical chunks, but not
+schema-aware code-intelligence extraction yet.
 
-Symbol extraction for additional languages (Go, Java, Rust, C/C++, Ruby, PHP) is planned.
+Important gaps for AI codebase search include Swift, Dart, Scala, Elixir,
+Clojure, Objective-C, Vue/Svelte component parsing, SQL schema-aware parsing,
+Terraform, Dockerfile, Gradle/Maven/npm config files, migrations, routes, CI,
+and infrastructure files.
 
 ## Where is the index stored?
 
@@ -129,16 +153,21 @@ Yes. Use any of these methods:
 ## Is it production-ready?
 
 Yes — `codebase-index` is released as **v1.1.0**. Indexing, hybrid search, Tree-sitter
-symbols and references, graph impact analysis, optional local embeddings, post-tool-use
-hooks, and watch mode are all implemented, tested, and shipped:
+The core indexing and search functionality is implemented and tested. The
+current `1.1.0` package includes:
 
-- Graph expansion / impact analysis — shipped
-- Optional local embeddings (`sqlite-vec`) — shipped (opt-in)
-- Post-tool-use hooks + watch mode — shipped
-- MCP bridge — planned, not yet released
+- Hybrid FTS/path/symbol/vector retrieval
+- Import/call/reference graph expansion and `impact`
+- Optional local embeddings, with external embeddings gated behind explicit opt-in
+- Hooks and watch mode for freshness
+- Multi-CLI setup for Claude Code, Codex CLI, and OpenCode
 
-See [CHANGELOG.md](../CHANGELOG.md) for released versions and [ROADMAP.md](../ROADMAP.md)
-for the full milestone plan.
+Known gaps: the public benchmark suite is still small, the MCP server needs
+verified client-specific docs and progressive/paged results, and the graph is
+closer to an import/call/reference graph than a full framework-aware code
+intelligence graph.
+
+See [ROADMAP.md](../ROADMAP.md) for the full milestone plan.
 
 ## How do I contribute?
 

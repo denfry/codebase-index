@@ -10,8 +10,7 @@ Repository SEO strategy for `codebase-index`.
 codebase-index
 ```
 
-Rationale: Matches the GitHub repository and primary product keyword. The package
-is distributed from GitHub (not PyPI), so the repo name is the canonical identifier.
+Rationale: Matches the intended package name and primary product keyword.
 
 ### GitHub About Description
 
@@ -81,6 +80,9 @@ Include shields.io badges in the README hero section:
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![CI](https://github.com/denfry/codebase-index/actions/workflows/ci.yml/badge.svg)
 ![Claude Code Skill](https://img.shields.io/badge/Claude%20Code%20Skill-yes-green.svg)
+![Codex CLI](https://img.shields.io/badge/Codex%20CLI-supported-green.svg)
+![OpenCode](https://img.shields.io/badge/OpenCode-supported-green.svg)
+![MCP](https://img.shields.io/badge/MCP-stdio%20server-green.svg)
 ![Local First](https://img.shields.io/badge/local--first-yes-green.svg)
 ![No Telemetry](https://img.shields.io/badge/no%20telemetry-yes-green.svg)
 ![No Network](https://img.shields.io/badge/no%20network%20by%20default-yes-green.svg)
@@ -133,8 +135,8 @@ Submit to these lists for backlinks and discoverability:
 
 ### Directories
 - Claude Skill Directory (if exists)
-- MCP Server Directory (for future MCP bridge)
-- GitHub Releases (tagged distribution — the package is GitHub-only, not on PyPI)
+- MCP Server Directory after client config docs are verified
+- PyPI package listing after distribution hardening is complete
 
 ### Communities
 - Claude Code Discord
@@ -155,11 +157,12 @@ Features:
 - Local-first, no network by default
 - SQLite + FTS5 full-text search
 - Tree-sitter symbol extraction
+- Claude Code, Codex CLI, and OpenCode setup
 - Token-efficient retrieval packets
 - Secret redaction
 - Respects .gitignore
 
-Install: pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
+Install: pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.1.0"
 GitHub: https://github.com/denfry/codebase-index
 ```
 
@@ -174,5 +177,5 @@ codebase-index builds a local hybrid index so Claude finds the right files witho
 - No network by default
 - Token-efficient output
 
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.1.0"
 ```

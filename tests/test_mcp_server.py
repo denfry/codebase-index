@@ -29,7 +29,15 @@ def _call(tool_fn, **kwargs):
 
 def test_mcp_server_has_expected_tools():
     tools = {t.name for t in mcp_server.mcp._tool_manager.list_tools()}
-    assert tools == {"search_code", "find_symbol", "find_refs", "impact_of", "explain_code", "index_stats"}
+    assert tools == {
+        "healthcheck",
+        "search_code",
+        "find_symbol",
+        "find_refs",
+        "impact_of",
+        "explain_code",
+        "index_stats",
+    }
 
 
 def test_mcp_server_name():
@@ -50,6 +58,12 @@ def test_search_code_no_index():
     result = _with_missing_db(lambda: _call(mcp_server.search_code, query="foo"))
     assert "error" in result
     assert "index" in result["error"].lower()
+
+
+def test_healthcheck_no_index():
+    result = _with_missing_db(lambda: _call(mcp_server.healthcheck))
+    assert result["package_version"]
+    assert result["index"]["exists"] is False
 
 
 def test_find_symbol_no_index():

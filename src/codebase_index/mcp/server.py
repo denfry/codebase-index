@@ -22,6 +22,8 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+from .. import __version__
+
 if TYPE_CHECKING:
     from ..config import Config
 
@@ -60,6 +62,28 @@ def _resolve_db() -> tuple[Path, Config]:
 
 def _no_index_error() -> str:
     return json.dumps({"error": "No index found. Run `codebase-index index` in your project first."})
+
+
+@mcp.tool()
+def healthcheck() -> str:
+    """Report package, root, and index health for MCP clients."""
+    db_path, cfg = _resolve_db()
+    payload: dict[str, object] = {
+        "package_version": __version__,
+        "root": str(cfg.root),
+        "index": {"exists": db_path.exists(), "path": str(db_path)},
+    }
+    if db_path.exists():
+        from ..indexer.freshness import compute_freshness
+        from ..storage.db import Database
+
+        with Database(db_path) as db:
+            payload["index"] = {
+                "exists": True,
+                "path": str(db_path),
+                **compute_freshness(db.conn, Path(cfg.root), cfg).model_dump(),
+            }
+    return json.dumps(payload)
 
 
 @mcp.tool()
