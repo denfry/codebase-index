@@ -2,12 +2,16 @@
 
 ## 1. Overview
 
-`codebase-index` is a **local-first** code intelligence layer for Claude Code. It has two faces:
+`codebase-index` is a **local-first** code intelligence layer for AI coding agents. In `1.1.0`
+it has two shipped faces:
 
 1. **A Claude Code Skill** (`.claude/skills/codebase-index/SKILL.md`) that Claude auto-invokes for
    codebase questions. The skill is thin: it tells Claude *when* to search, *how* to call the CLI,
    and *how to interpret* the compact results.
 2. **A Python CLI** (`codebase-index` / `cbx`) that does the real work: indexing and retrieval.
+
+`init` can also write Codex CLI and OpenCode instruction packages. MCP is exposed through the
+stdio server command `codebase-index mcp --root <repo>`; see [MCP.md](MCP.md).
 
 The design goal is **token efficiency**: Claude should read the *minimum* set of file/line ranges
 needed to answer, guided by a pre-built index, rather than scanning the repository.
@@ -311,9 +315,42 @@ If `exists=false` → skill runs `index`. If `stale=true` and cheap → skill ru
 - Parse work is parallelizable per file (process pool) but writes are serialized.
 - Vector search is optional and isolated behind the `embeddings` extra; base install stays light.
 
-## 8. Future extension: MCP server (NOT required)
+## 8. MCP server
 
-The same `retrieval` + `storage` layers can be wrapped in an MCP server exposing tools like
-`search_code`, `find_symbol`, `impact_of`. This is **explicitly out of scope for v1** — the skill
-+ CLI path is the supported workflow. An MCP wrapper would reuse `retrieval/` unchanged and add
-`src/codebase_index/mcp/server.py`. Documented here only so the architecture stays MCP-ready.
+The same `retrieval` + `storage` layers are wrapped in a stdio MCP server exposing tools like
+`search_code`, `find_symbol`, `find_refs`, `impact_of`, `explain_code`, `index_stats`, and
+`healthcheck`.
+
+Current implementation:
+
+- `src/codebase_index/mcp/server.py` is a thin adapter over `retrieval/`, `storage/`, and
+  `indexer/freshness.py`.
+- `codebase-index mcp --root <repo>` runs the stdio server.
+- JSON payloads include `schema_version`.
+- [MCP.md](MCP.md) provides config templates for Claude Desktop, Claude Code, Cursor, VS Code,
+  Zed, and Windsurf.
+- `healthcheck` lets MCP clients distinguish "server running", "index missing",
+  "index stale", and "unsafe config".
+- Follow-up: progressive or paged results for large queries so agents can stop after enough
+  context.
+
+## 9. Code intelligence graph roadmap
+
+The current graph is an import/call/reference/inheritance graph. It is useful for `refs`,
+bounded graph expansion, and `impact`, but it is not yet a full framework-aware code intelligence
+graph.
+
+High-value schema extensions:
+
+- HTTP route -> handler -> service -> repository -> model
+- test -> fixture -> implementation
+- interface/trait -> implementation
+- config key -> consumer
+- migration -> model -> query
+- event producer -> event consumer
+- DI container / framework wiring
+- frontend component -> hook/store/api client
+- error string/log message -> throw site -> handler
+
+These should be modeled as typed edges with source spans, confidence, and resolver provenance so
+agents can trust precise edges while treating heuristic framework edges as suggestions.

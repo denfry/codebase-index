@@ -9,36 +9,39 @@ All notable changes to this project are documented here. The format is based on
 ## [1.1.0] - 2026-06-02
 
 ### Added
-- **MCP server** (`codebase-index mcp`): exposes the full retrieval layer as six MCP tools —
-  `search_code`, `find_symbol`, `find_refs`, `impact_of`, `explain_code`, `index_stats` —
-  so any MCP-capable editor (Cursor, Claude Desktop, VS Code, Zed, Windsurf) can query the
-  index directly without subprocess CLI calls, matching Cursor's built-in codebase-indexing UX.
+- **MCP server** (`codebase-index mcp`): exposes the retrieval layer as MCP tools —
+  `search_code`, `find_symbol`, `find_refs`, `impact_of`, `explain_code`, and `index_stats` —
+  so MCP-capable editors (Cursor, Claude Desktop, VS Code, Zed, Windsurf) can query the index
+  directly.
 - **`codebase-index-mcp`** standalone entry point for use as a bare MCP server binary.
 - **Multi-client `init`**: `--target` now accepts five MCP clients in addition to the three
   skill targets. Each writes the correct JSON config format and merges without overwriting
   other servers already present:
-  - `cursor` → `.cursor/mcp.json`
-  - `windsurf` → `.windsurf/mcp.json`
-  - `vscode` → `.vscode/mcp.json` (with `type: stdio`)
-  - `zed` → `.zed/settings.json` (with `context_servers`)
-  - `claude-desktop` → platform-specific `claude_desktop_config.json`
+  - `cursor` -> `.cursor/mcp.json`
+  - `windsurf` -> `.windsurf/mcp.json`
+  - `vscode` -> `.vscode/mcp.json` (with `type: stdio`)
+  - `zed` -> `.zed/settings.json` (with `context_servers`)
+  - `claude-desktop` -> platform-specific `claude_desktop_config.json`
 - `detect_mcp_targets()` auto-detects installed MCP clients during `--target auto`.
 - New optional dependency group `mcp` (`pip install codebase-index[mcp]`).
+- `tests/benchmark_public.py`, a reproducible multi-language public benchmark suite with
+  Recall@1/3/5, MRR, nDCG, answer-correctness proxy, token economy, language breakdown,
+  freshness latency, graph tasks, and scale counters.
+- `docs/MCP.md` and `docs/BENCHMARKS.md` for first-class MCP setup and benchmark usage.
 
 ### Fixed
 - `recommended_reads` was empty for queries where all results had short symbol-signature
-  snippets (`token_est < 40`). Added `_MIN_USEFUL_TOKENS = 40` threshold: snippets below
-  it are still shown as previews but the result is also added to `recommended_reads` so
-  Claude always receives an explicit read plan.
+  snippets (`token_est < 40`). Added a minimum useful-token threshold so snippets below it
+  are still shown as previews and the result is also added to `recommended_reads`.
 
 ### Changed
-- Distribution is now **GitHub-only**: the package is no longer published to PyPI.
-  `requirements.lock` and all install docs install `codebase-index` from the GitHub
-  release tarball pinned to a tag (`@v1.1.0`); `pipx install "git+https://..."` is the
-  recommended one-command path. The bootstrap still honors `CBX_INSTALL_SPEC` to
-  override the install source for local/dev installs.
-- Removed the PyPI trusted-publishing job from the release workflow; tagged GitHub
-  releases (with attached build artifacts) are the sole distribution channel.
+- Aligned README, FAQ, architecture, language support, comparison, installation, and roadmap docs
+  with the current `1.1.0` implementation.
+- Replaced toy benchmark positioning with the honest benchmark summary and public benchmark suite.
+- Corrected Aider repo-map comparison language to acknowledge graph-ranked, token-budgeted maps.
+- Distribution is GitHub-only for now: docs and `requirements.lock` install from the GitHub
+  release tarball pinned to `v1.1.0`; PyPI/uvx/Homebrew remain distribution-hardening roadmap
+  items.
 
 ## [1.0.2] - 2026-05-29
 
@@ -98,7 +101,7 @@ All notable changes to this project are documented here. The format is based on
 
 [Unreleased]: https://github.com/denfry/codebase-index/compare/v1.1.0...HEAD
 [1.1.0]: https://github.com/denfry/codebase-index/compare/v1.0.2...v1.1.0
-[1.0.2]: https://github.com/denfry/codebase-index/compare/1.0.1...1.0.2
-[1.0.1]: https://github.com/denfry/codebase-index/compare/1.0.0...1.0.1
-[1.0.0]: https://github.com/denfry/codebase-index/compare/v0.1.0...1.0.0
+[1.0.2]: https://github.com/denfry/codebase-index/compare/v1.0.1...v1.0.2
+[1.0.1]: https://github.com/denfry/codebase-index/compare/1.0.0...v1.0.1
+[1.0.0]: https://github.com/denfry/codebase-index/releases/tag/1.0.0
 [0.1.0]: https://github.com/denfry/codebase-index/releases/tag/v0.1.0

@@ -151,7 +151,7 @@ sh install.sh --branch v1.1.0
 ```json
 {
   "skill_name": "codebase-index",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "installed_at": "2026-05-29T12:00:00Z",
   "target": "claude",
   "os": "linux",

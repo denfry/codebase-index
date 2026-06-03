@@ -29,6 +29,13 @@ def test_init_scaffolds_skill_config_and_gitignore(tmp_path):
 
     gitignore = (root / ".gitignore").read_text(encoding="utf-8")
     assert ".claude/cache/codebase-index/" in gitignore
+    settings = json.loads((root / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    cmds = [
+        hk["command"]
+        for entry in settings["hooks"]["PostToolUse"]
+        for hk in entry["hooks"]
+    ]
+    assert any("codebase-index update" in c for c in cmds)
     assert "codebase-index index" in res.output
 
 
@@ -47,22 +54,15 @@ def test_init_force_overwrites(tmp_path):
     assert res.exit_code == 0, res.output
 
 
-def test_init_with_hooks_merges_settings(tmp_path):
+def test_init_can_skip_hooks(tmp_path):
     root = _project(tmp_path)
-    res = runner.invoke(app, ["--root", str(root), "init", "--target", "claude", "--with-hooks"])
+    res = runner.invoke(app, ["--root", str(root), "init", "--target", "claude", "--no-hooks"])
     assert res.exit_code == 0, res.output
 
     hook_example = root / ".claude" / "skills" / "codebase-index" / "examples" / "hooks" / "settings.json"
     assert hook_example.is_file()
-
-    settings = json.loads((root / ".claude" / "settings.json").read_text(encoding="utf-8"))
-    cmds = [
-        hk["command"]
-        for entry in settings["hooks"]["PostToolUse"]
-        for hk in entry["hooks"]
-    ]
-    assert any("codebase-index update" in c for c in cmds)
-    assert "hook" in res.output.lower()
+    assert not (root / ".claude" / "settings.json").exists()
+    assert "Auto-update hook" not in res.output
 
 
 def test_init_codex_writes_agents_package_and_resources(tmp_path):

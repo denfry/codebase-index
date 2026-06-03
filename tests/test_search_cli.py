@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json as _json
+import shutil
 
 from typer.testing import CliRunner
 
@@ -32,6 +33,21 @@ def test_search_json_runs(tmp_path, monkeypatch):
     payload = _json.loads(result.stdout)
     assert payload["mode"] == "hybrid"
     assert "results" in payload
+
+
+def test_search_auto_indexes_when_missing(sample_repo, tmp_path):
+    root = tmp_path / "copy"
+    shutil.copytree(sample_repo, root)
+    db_path = root / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+    if db_path.exists():
+        db_path.unlink()
+
+    result = runner.invoke(app, ["--root", str(root), "--json", "search", "token"])
+    assert result.exit_code == 0, result.output
+    payload = _json.loads(result.output)
+    assert payload["index"]["exists"] is True
+    assert payload["index"]["stale"] is False
+    assert db_path.exists()
 
 
 def test_explain_forces_intent_shape(tmp_path, monkeypatch):
