@@ -369,6 +369,7 @@ def symbol(
     name: str = typer.Argument(...),
     kind: Optional[str] = typer.Option(None, "--kind", help="Filter by symbol kind."),
     exact: bool = typer.Option(False, "--exact"),
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Locate a symbol definition by name."""
     from .config import load
@@ -378,7 +379,7 @@ def symbol(
     from .retrieval.searchers import symbol_lookup
     from .storage.db import Database
 
-    is_json = bool(ctx.obj and ctx.obj.get("json"))
+    is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
     cfg = load(ctx.obj.get("root") if ctx.obj else None)
     db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
 
@@ -399,6 +400,7 @@ def refs(
     ctx: typer.Context,
     symbol_name: str = typer.Argument(...),
     kind: str = typer.Option("all", "--kind", help="callers|all"),
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Find references / callers of a symbol."""
     from .config import load
@@ -408,7 +410,7 @@ def refs(
     from .retrieval.searchers import refs_lookup
     from .storage.db import Database
 
-    is_json = bool(ctx.obj and ctx.obj.get("json"))
+    is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
     cfg = load(ctx.obj.get("root") if ctx.obj else None)
     db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
 
@@ -430,6 +432,7 @@ def impact(
     target: str = typer.Argument(..., help="File path or symbol name."),
     depth: int = typer.Option(2, "--depth"),
     direction: str = typer.Option("up", "--direction", help="up|down|both"),
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Blast radius: what is affected if `target` changes (graph walk)."""
     from .config import load
@@ -439,7 +442,7 @@ def impact(
     from .output import markdown as md_out
     from .storage.db import Database
 
-    is_json = bool(ctx.obj and ctx.obj.get("json"))
+    is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
     cfg = load(ctx.obj.get("root") if ctx.obj else None)
     db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
 

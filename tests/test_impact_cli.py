@@ -41,4 +41,4 @@ def test_impact_missing_index(tmp_path):
     res = runner.invoke(app, ["--root", str(empty), "--json", "impact", "anything"])
     assert res.exit_code == 0
     data = json.loads(res.output)
-    assert data["index"]["exists"] is True and data["files"] == []
+    assert data["index"]["exists"] is False and data["files"] == []
