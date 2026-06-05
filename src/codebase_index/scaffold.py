@@ -126,6 +126,17 @@ def materialize_skill(root: Path, *, force: bool, target: str = "claude") -> lis
         if rel == "scripts/cbx":
             dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         written.append(dst)
+
+    # Write version stamp so auto-update can detect when the skill is outdated.
+    try:
+        from importlib.metadata import version as _pkg_version
+        pkg_ver = _pkg_version("codebase-index")
+    except Exception:
+        pkg_ver = "unknown"
+    stamp = dest / ".skill_version"
+    stamp.write_text(pkg_ver + "\n", encoding="utf-8")
+    written.append(stamp)
+
     return written
 
 

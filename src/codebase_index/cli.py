@@ -177,6 +177,20 @@ def _resolve_init_targets(root: Path, requested: str | None) -> tuple[list[str],
     raise typer.Exit(code=2)
 
 
+def _try_auto_update_skills(root_opt: Optional[Path]) -> None:
+    """Silently update all installed skills when the package version changed."""
+    try:
+        from .config import find_root
+        from . import scaffold
+        from .skill_update import auto_update_if_needed
+
+        root = Path(root_opt).resolve() if root_opt else find_root()
+        for target in scaffold.CLI_TARGETS:
+            auto_update_if_needed(root, target)
+    except Exception:
+        pass  # never let an auto-update failure crash the real command
+
+
 @app.callback()
 def main(
     ctx: typer.Context,
@@ -185,6 +199,7 @@ def main(
     quiet: bool = typer.Option(False, "--quiet", help="Suppress progress output."),
 ) -> None:
     ctx.obj = {"root": root, "json": json_out, "quiet": quiet}
+    _try_auto_update_skills(root)
 
 
 # --- lifecycle ----------------------------------------------------------------------------------
@@ -687,6 +702,93 @@ def watch(
     except RuntimeError as exc:
         typer.echo(str(exc))
         raise typer.Exit(code=1)
+
+
+@app.command("skill-update")
+def skill_update(
+    ctx: typer.Context,
+    target: Optional[str] = typer.Option(
+        None,
+        "--target",
+        help="Skill target to update: claude, codex, opencode (default: all installed).",
+    ),
+    no_backup: bool = typer.Option(False, "--no-backup", help="Skip backup before updating."),
+    force: bool = typer.Option(False, "--force", help="Update even if already on the latest version."),
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+) -> None:
+    """Update installed skill(s) to match the current package version."""
+    import json as _json
+
+    from .config import find_root
+    from . import scaffold
+    from .skill_update import needs_update, update_skill
+
+    is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
+    root_opt = ctx.obj.get("root") if ctx.obj else None
+    root = Path(root_opt).resolve() if root_opt else find_root()
+
+    targets = [target] if target else list(scaffold.CLI_TARGETS)
+    results = []
+
+    for t in targets:
+        skill_dir = root / scaffold.skill_rel_for_target(t)
+        if not skill_dir.exists():
+            results.append({"target": t, "updated": False, "reason": "not installed"})
+            continue
+
+        if not force and not needs_update(skill_dir):
+            results.append({"target": t, "updated": False, "reason": "already up to date"})
+            if not is_json:
+                typer.echo(f"[skill-update] {t}: already up to date")
+            continue
+
+        res = update_skill(root, t, backup=not no_backup)
+        results.append(res)
+        if not is_json:
+            backed = " (backup saved)" if res["backed_up"] else ""
+            typer.echo(
+                f"[skill-update] {t}: {res['old_version'] or 'unknown'} -> {res['new_version']}{backed}"
+            )
+
+    if is_json:
+        typer.echo(_json.dumps(results))
+
+
+@app.command("skill-rollback")
+def skill_rollback(
+    ctx: typer.Context,
+    target: Optional[str] = typer.Option(
+        None,
+        "--target",
+        help="Skill target to roll back: claude, codex, opencode (default: all with a backup).",
+    ),
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+) -> None:
+    """Restore the last backed-up version of the installed skill(s)."""
+    import json as _json
+
+    from .config import find_root
+    from . import scaffold
+    from .skill_update import rollback_skill
+
+    is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
+    root_opt = ctx.obj.get("root") if ctx.obj else None
+    root = Path(root_opt).resolve() if root_opt else find_root()
+
+    targets = [target] if target else list(scaffold.CLI_TARGETS)
+    results = []
+
+    for t in targets:
+        res = rollback_skill(root, t)
+        results.append(res)
+        if not is_json:
+            if res["rolled_back"]:
+                typer.echo(f"[skill-rollback] {t}: restored from backup")
+            else:
+                typer.echo(f"[skill-rollback] {t}: {res.get('reason', 'failed')}")
+
+    if is_json:
+        typer.echo(_json.dumps(results))
 
 
 if __name__ == "__main__":
