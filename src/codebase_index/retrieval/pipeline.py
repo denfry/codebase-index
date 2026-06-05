@@ -22,14 +22,38 @@ from .types import Confidence
 
 _TERM_RE = re.compile(r"[A-Za-z0-9_]+")
 _RRF_K = 60
+_KIND_ALIASES = {
+    "method": "method",
+    "methods": "method",
+    "function": "function",
+    "functions": "function",
+    "class": "class",
+    "classes": "class",
+    "interface": "interface",
+    "interfaces": "interface",
+    "enum": "enum",
+    "enums": "enum",
+    "type": "type",
+    "types": "type",
+}
+
+
+def _requested_symbol_kind(query: str) -> str | None:
+    kinds = {
+        _KIND_ALIASES[t.lower()]
+        for t in _TERM_RE.findall(query)
+        if t.lower() in _KIND_ALIASES
+    }
+    return next(iter(kinds)) if len(kinds) == 1 else None
 
 
 def _run_retrievers(conn, query, *, mode, limit, weights, backend=None):
     lists = {}
+    symbol_kind = _requested_symbol_kind(query)
     if mode in ("hybrid", "fts"):
         lists["fts"] = searchers.fts_candidates(conn, query, limit=limit)
     if mode in ("hybrid", "symbol"):
-        lists["symbol"] = searchers.symbol_candidates(conn, query, limit=limit)
+        lists["symbol"] = searchers.symbol_candidates(conn, query, limit=limit, kind=symbol_kind)
     if mode == "hybrid":
         lists["path"] = searchers.path_candidates(conn, query, limit=limit)
     if mode in ("hybrid", "vector") and backend is not None and getattr(backend, "enabled", False):

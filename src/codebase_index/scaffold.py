@@ -156,8 +156,9 @@ Use the local codebase index before scanning repository files.
 Skill resources: `{rel.as_posix()}`
 
 Run `codebase-index search "<query>" --json` for general questions, or use
-`symbol`, `refs`, and `impact` for symbol lookup, references, and change impact.
-If the index is missing, run `codebase-index index` first.
+`symbol`, `refs`, `impact`, and `graph` for symbol lookup, references, change
+impact, and HTML graph export. Search/read commands auto-build the index when
+it is missing; run `codebase-index update` when responses report stale data.
 """
     return _upsert_managed_block(root / "AGENTS.md", content)
 

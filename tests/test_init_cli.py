@@ -16,7 +16,7 @@ def _project(tmp_path):
 
 def test_init_scaffolds_skill_config_and_gitignore(tmp_path):
     root = _project(tmp_path)
-    res = runner.invoke(app, ["--root", str(root), "init", "--target", "claude"])
+    res = runner.invoke(app, ["--root", str(root), "init", "--target", "claude", "--with-hooks"])
     assert res.exit_code == 0, res.output
 
     skill = root / ".claude" / "skills" / "codebase-index"

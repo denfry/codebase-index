@@ -3,7 +3,7 @@
 This page explains how to install `codebase-index` and make it available in Claude Code, Codex CLI, or OpenCode.
 
 > **Distribution:** `codebase-index` is **not on PyPI**. It is installed directly
-> from GitHub via `git+https://...@<tag>`. Pin to a release tag (e.g. `@v1.1.0`)
+> from GitHub via `git+https://...@<tag>`. Pin to a release tag (e.g. `@v1.2.0`)
 > for reproducible installs; use `@main` to track the latest.
 
 ## Choose Your Path
@@ -28,7 +28,7 @@ Install the tagged GitHub release and scaffold the skill into your project:
 
 ```bash
 cd your-project
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.1.0"
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.2.0"
 codebase-index init
 codebase-index index
 ```
@@ -62,13 +62,13 @@ ln -s ~/codebase-index/skill ~/.claude/skills/codebase-index
 
 ```bash
 # Using pip from the tagged GitHub release
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.1.0"
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.2.0"
 
 # Using pipx from GitHub (isolated environment)
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.2.0"
 
 # Using uv from GitHub
-uv tool install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
+uv tool install "git+https://github.com/denfry/codebase-index.git@v1.2.0"
 
 # From source (editable mode)
 git clone https://github.com/denfry/codebase-index.git
@@ -91,7 +91,7 @@ pip install -e ".[embeddings-local,watch,dev]"
 
 ### PyPI / uvx / Homebrew status
 
-As of `1.1.0`, this documentation treats GitHub tag installs as the verified
+As of `1.2.0`, this documentation treats GitHub tag installs as the verified
 path. PyPI, `uvx codebase-index init`, Homebrew tap installation, signed
 checksums, and SBOMs are distribution targets for a more complete release story.
 
@@ -108,7 +108,7 @@ brew install denfry/tap/codebase-index
 On a machine with only Python + pipx:
 
 ```bash
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.1.0"
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.2.0"
 cd /path/to/your/repo
 codebase-index init           # writes .claude/skills/codebase-index/ + .gitignore rules
 codebase-index index          # builds .claude/cache/codebase-index/index.sqlite
@@ -131,7 +131,7 @@ Expected output:
 === codebase-index Doctor ===
 
 [OK] Python 3.12 (requires 3.11+)
-[OK] codebase-index package installed (v1.1.0)
+[OK] codebase-index package installed (v1.2.0)
 [OK] tree-sitter is available
 [INFO] Cache directory not yet created: ...
 [INFO] Skill not installed in .claude/skills/
@@ -188,7 +188,7 @@ Use `codebase-index doctor` to verify which hooks are enabled. For heavy editing
 For heavy editing sessions, `watch` mode keeps the index fresh via a debounced filesystem observer. Requires the `[watch]` extra:
 
 ```bash
-pip install "codebase-index[watch] @ git+https://github.com/denfry/codebase-index.git@v1.1.0"
+pip install "codebase-index[watch] @ git+https://github.com/denfry/codebase-index.git@v1.2.0"
 codebase-index watch --debounce 500
 ```
 
@@ -278,7 +278,7 @@ Set `allow_external` to `false` to disable external API calls.
 ## Recommended Flow for First-Time Users
 
 ```bash
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.1.0"
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.2.0"
 cd your-project
 codebase-index init
 codebase-index index

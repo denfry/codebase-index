@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-06-05
+
+### Added
+- **Interactive graph export** via `codebase-index graph [target]`, producing a local HTML graph of
+  indexed files, symbols, and resolved edges, with optional `--open` browser launch.
+- Project skill installers now advertise and whitelist the `graph` command for Claude, Codex, and
+  OpenCode skill resources.
+
+### Changed
+- `search`, `symbol`, `refs`, `impact`, and `explain` now auto-build the local index when it is
+  missing instead of failing with a manual "run index first" step.
+- Natural-language kind words such as `method`, `function`, `class`, `interface`, `enum`, and
+  `type` now constrain the symbol retriever inside `search`.
+- Skill wrappers prefer the importable local `python -m codebase_index` module before falling back
+  to a potentially stale `codebase-index` executable on `PATH`.
+
+### Fixed
+- `stats --json` and `doctor --json` now work as subcommand flags, matching the documented skill
+  examples and the existing global `--json` behavior.
+- `init --no-hooks` is accepted as the explicit counterpart to `--with-hooks`, preserving the
+  default no-hook install while keeping the CLI option pair discoverable.
+
 ## [1.1.0] - 2026-06-02
 
 ### Added
@@ -99,7 +121,8 @@ All notable changes to this project are documented here. The format is based on
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/denfry/codebase-index/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/denfry/codebase-index/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/denfry/codebase-index/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/denfry/codebase-index/compare/1.0.0...v1.0.1

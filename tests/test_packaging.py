@@ -25,6 +25,6 @@ def test_packaged_skill_matches_dev_copy():
 
 def test_packaged_cbx_whitelists_safe_subcommands_only():
     cbx = (_template() / "scripts" / "cbx").read_text(encoding="utf-8")
-    assert 'ALLOWED="search explain symbol refs impact stats update index"' in cbx
+    assert 'ALLOWED="search explain symbol refs impact graph stats update index"' in cbx
     for forbidden in ("clean", "init", "watch"):
         assert f" {forbidden} " not in f' {cbx.split("ALLOWED=")[1].splitlines()[0]} '

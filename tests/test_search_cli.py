@@ -124,3 +124,24 @@ def test_search_reports_stale_after_edit(sample_repo, tmp_path, monkeypatch):
     stale = _json.loads(res2.output)
     assert stale["index"]["stale"] is True
     assert stale["index"]["files_changed_since_build"] >= 1
+
+
+def test_search_kind_words_filter_symbol_kind(sample_repo):
+    assert runner.invoke(app, ["--root", str(sample_repo), "index"]).exit_code == 0
+
+    result = runner.invoke(
+        app,
+        [
+            "--root",
+            str(sample_repo),
+            "--json",
+            "search",
+            "refresh access token function",
+            "--limit",
+            "3",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = _json.loads(result.output)
+    assert payload["results"][0]["symbols"] == ["refresh_access_token"]

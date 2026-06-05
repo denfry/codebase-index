@@ -1,6 +1,7 @@
 ---
 name: codebase-index
 description: Use this skill before answering questions about a repository's architecture, implementation locations, symbols, references, dependencies, refactoring impact, data flow, bugs, or where something is implemented. It searches a local hybrid codebase index so Claude reads only the most relevant files instead of scanning the entire project.
+allowed-tools: Bash(python *), Bash(python3 *), Bash(codebase-index *), Bash(cbx *), Read, Grep, Glob
 ---
 
 # Codebase Index
@@ -43,6 +44,7 @@ Pick the subcommand by intent:
 | a specific symbol name | `codebase-index symbol "<name>" --json` |
 | "who calls / references" | `codebase-index refs "<name>" --json` |
 | "what breaks if I change" | `codebase-index impact "<file-or-symbol>" --json` |
+| visual graph / "open graph" | `codebase-index graph "<file-or-symbol>" --open` |
 
 `explain` has a higher default token budget (2200) and HOW_IT_WORKS intent weights — use it whenever the question is about understanding behavior or flow.
 
@@ -51,7 +53,12 @@ For `search`, pick a `--mode` when the intent is clear:
 - `--mode fts` — text/keyword queries where symbol names don't matter
 - `--mode hybrid` — default; best for mixed queries
 
+Natural-language kind words such as `method`, `function`, `class`, `interface`,
+`enum`, and `type` constrain the symbol retriever inside `search`.
+
 Use `--json` for programmatic parsing; omit for human-readable output.
+Search/read commands auto-build the index when it is missing; still check
+freshness and run `update`/`index` when responses report stale data.
 
 ## Step-by-step workflow
 
@@ -133,6 +140,9 @@ codebase-index symbol "AuthService" --json
 
 # precise symbol search (faster, no FTS noise)
 codebase-index search "AuthService" --mode symbol --json
+
+# generate and open an HTML graph around a file or symbol
+codebase-index graph "User" --direction both --depth 2 --open
 ```
 
 Then Read only the returned line ranges and answer with citations.
