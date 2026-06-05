@@ -74,6 +74,37 @@ Use the pattern `<type>/<short-description>`:
 - `docs/readme-comparison`
 - `test/treesitter-go`
 
+## Fork and Pull Request Workflow
+
+1. Fork the repository and clone your fork as `origin`.
+2. Add the canonical repository as `upstream`:
+
+   ```bash
+   git remote add upstream https://github.com/denfry/codebase-index.git
+   git fetch upstream
+   ```
+
+3. Create a focused branch from the latest `upstream/main`:
+
+   ```bash
+   git fetch upstream
+   git switch -c <type>/<short-description> upstream/main
+   ```
+
+4. Keep unrelated changes in separate branches and pull requests. Do not commit
+   generated files, build artifacts, local configuration, credentials, or
+   editor-specific files.
+5. Rebase onto the latest `upstream/main`, run the required checks, and push the
+   branch to your fork before opening the pull request.
+6. Open the pull request against `denfry/codebase-index:main`. Explain the
+   problem, solution, verification performed, and any compatibility or migration
+   impact.
+
+Do not commit directly to `main`, merge `main` into a feature branch, or change
+the project version unless a maintainer explicitly requests it. Add user-visible
+changes to `CHANGELOG.md` under `[Unreleased]`; maintainers choose the release
+version according to the project's versioning policy.
+
 ## Test Requirements
 
 - All new features must include tests.
@@ -97,6 +128,7 @@ Before submitting a PR, ensure:
 - [ ] Formatting is correct: `ruff format src/ tests/`
 - [ ] Type checking passes: `mypy src/codebase_index` (if applicable)
 - [ ] CHANGELOG.md is updated under `[Unreleased]`
+- [ ] The project version is unchanged unless a maintainer requested a bump
 - [ ] Documentation is updated (README, docs/, examples/)
 - [ ] Commit messages follow Conventional Commits
 - [ ] No secrets or credentials are committed
