@@ -2,6 +2,10 @@
 
 This page explains how to install `codebase-index` and make it available in Claude Code, Codex CLI, or OpenCode.
 
+> **Distribution:** `codebase-index` is **not on PyPI**. It is installed directly
+> from GitHub via `git+https://...@<tag>`. Pin to a release tag (e.g. `@v1.1.0`)
+> for reproducible installs; use `@main` to track the latest.
+
 ## Choose Your Path
 
 - New user: use **Option 1**.
@@ -11,7 +15,7 @@ This page explains how to install `codebase-index` and make it available in Clau
 
 ## Requirements
 
-- **Python**: 3.10 or later
+- **Python**: 3.11 or later
 - **OS**: macOS, Linux, Windows
 - **Disk**: ~50 MB for the package + SQLite index (varies by project size)
 - **Memory**: ~200 MB during indexing (varies by project size)
@@ -126,7 +130,7 @@ Expected output:
 ```
 === codebase-index Doctor ===
 
-[OK] Python 3.12 (requires 3.10+)
+[OK] Python 3.12 (requires 3.11+)
 [OK] codebase-index package installed (v1.1.0)
 [OK] tree-sitter is available
 [INFO] Cache directory not yet created: ...
@@ -184,7 +188,7 @@ Use `codebase-index doctor` to verify which hooks are enabled. For heavy editing
 For heavy editing sessions, `watch` mode keeps the index fresh via a debounced filesystem observer. Requires the `[watch]` extra:
 
 ```bash
-pip install "codebase-index[watch]"
+pip install "codebase-index[watch] @ git+https://github.com/denfry/codebase-index.git@v1.1.0"
 codebase-index watch --debounce 500
 ```
 

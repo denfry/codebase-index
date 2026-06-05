@@ -20,7 +20,7 @@ if ((Test-Path $cli) -and (Test-Path $lockDst) -and
 $py = Get-Command python -ErrorAction SilentlyContinue
 if (-not $py) { $py = Get-Command python3 -ErrorAction SilentlyContinue }
 if (-not $py) {
-    Write-Error "codebase-index: Python 3.10+ was not found on PATH. Install Python, then restart Claude Code."
+    Write-Error "codebase-index: Python 3.11+ was not found on PATH. Install Python, then restart Claude Code."
     exit 0
 }
 
