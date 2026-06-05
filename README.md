@@ -27,7 +27,7 @@ an AI coding agent can read instead of opening broad file sets.
 Use it when you want Cursor-like codebase awareness in terminal-based AI tools
 while keeping source code, snippets, and search metadata on your machine.
 
-## Start Here (First Time on GitHub)
+## Start Here
 
 If you are opening this repository for the first time, follow this order:
 
@@ -358,30 +358,6 @@ Answer with precise file:line citations
 
 See [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) for the full security model and threat analysis.
 
-## How Does codebase-index Compare?
-
-| Feature | Manual grep/read | Cursor indexing | Aider repo-map | codebase-index |
-|---|---|---|---|---|
-| Symbol awareness | No | Yes | Yes, summarized repo map | Yes, queryable symbols |
-| Result ranking | No | Yes | Yes, graph-ranked map | Yes, hybrid-ranked results |
-| Token-efficient | No | Yes | Partial | Yes |
-| Local-first | Yes | Yes | Yes | Yes |
-| No network | Yes | Yes | Yes | Yes |
-| Works with Claude Code | Manual | No | No | Native skill |
-| Works with Codex CLI | Manual | No | No | AGENTS.md package |
-| Works with OpenCode | Manual | No | No | Command + agent files |
-| MCP interface | Manual | No | No | stdio MCP server |
-| Open source | N/A | No | Yes | Yes (MIT) |
-| Dependency graph | No | Partial | File-level graph ranking | Import/call/reference graph |
-| Secret redaction | No | No | No | Yes |
-
-**Honest positioning:**
-
-- This is **not** a full IDE or a replacement for Cursor.
-- This is **not** a cloud service — it's local-first.
-- This **is** a local retrieval layer that makes AI coding agents better at finding the right files.
-
-See [docs/COMPARISON.md](docs/COMPARISON.md) for a detailed comparison.
 
 ## Benchmark Results
 
