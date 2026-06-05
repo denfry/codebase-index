@@ -13,9 +13,11 @@ Conventions:
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
+import webbrowser
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 # Force UTF-8 output on Windows to avoid cp1251 encoding errors
 if sys.platform == "win32":
@@ -47,6 +49,40 @@ def _resolve_db_path(ctx: "typer.Context") -> Path:
     root_opt = ctx.obj.get("root") if ctx.obj else None
     cfg = load(root_opt)
     return Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+
+
+def _ensure_index(ctx: "typer.Context") -> tuple[Path, Any]:
+    from .config import load
+    from .indexer.pipeline import build_index
+    from .storage.db import Database
+
+    root_opt = ctx.obj.get("root") if ctx.obj else None
+    cfg = load(root_opt)
+    db_path = _resolve_db_path(ctx)
+    if db_path.exists():
+        return db_path, cfg
+
+    if not (ctx.obj and (ctx.obj.get("quiet") or ctx.obj.get("json"))):
+        typer.echo("[codebase-index] no index found; building one now.", err=True)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with Database(db_path) as db:
+        build_index(cfg, db, root=Path(cfg.root))
+    return db_path, cfg
+
+
+def _open_in_browser(path: Path) -> None:
+    uri = path.resolve().as_uri()
+    try:
+        webbrowser.open(uri)
+        return
+    except Exception:
+        pass
+    if sys.platform == "win32":
+        subprocess.Popen(["cmd", "/c", "start", "", uri], shell=False)
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", uri])
+    else:
+        subprocess.Popen(["xdg-open", uri])
 
 
 def _resolve_backend_for_search(ctx: "typer.Context"):
@@ -156,7 +192,11 @@ def main(
 def init(
     ctx: typer.Context,
     force: bool = typer.Option(False, "--force", help="Overwrite an existing install."),
-    with_hooks: bool = typer.Option(False, "--with-hooks", help="Also write a hooks example to review."),
+    with_hooks: bool = typer.Option(
+        False,
+        "--with-hooks/--no-hooks",
+        help="Also write and merge the Claude Code auto-update hook.",
+    ),
     target: Optional[str] = typer.Option(
         None,
         "--target",
@@ -326,7 +366,6 @@ def search(
     json_out: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Hybrid ranked search; returns compact results + recommended_reads."""
-    from .config import load
     from .output import json as json_renderer
     from .output import markdown as md_renderer
     from .retrieval.pipeline import search as run_search
@@ -342,13 +381,7 @@ def search(
             )
             raise typer.Exit(code=2)
 
-    db_path = _resolve_db_path(ctx)
-    if not db_path.exists():
-        typer.echo("No index found. Run `codebase-index index`.")
-        raise typer.Exit(code=1)
-
-    root_opt = ctx.obj.get("root") if ctx.obj else None
-    cfg = load(root_opt)
+    db_path, cfg = _ensure_index(ctx)
 
     with Database(db_path) as db:
         if backend is not None and getattr(backend, "enabled", False):
@@ -372,23 +405,13 @@ def symbol(
     json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Locate a symbol definition by name."""
-    from .config import load
-    from .models import IndexFreshness, SymbolResponse
     from .output import json as json_out
     from .output import markdown as md_out
     from .retrieval.searchers import symbol_lookup
     from .storage.db import Database
 
     is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
-    cfg = load(ctx.obj.get("root") if ctx.obj else None)
-    db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
-
-    if not db_path.exists():
-        resp = SymbolResponse(
-            query=name, index=IndexFreshness(exists=False, stale=False), symbols=[]
-        )
-        typer.echo(json_out.render(resp) if is_json else md_out.render_symbols(resp))
-        raise typer.Exit(code=0)
+    db_path, _cfg = _ensure_index(ctx)
 
     with Database(db_path) as db:
         resp = symbol_lookup(db.conn, name, kind=kind, exact=exact)
@@ -403,23 +426,13 @@ def refs(
     json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Find references / callers of a symbol."""
-    from .config import load
-    from .models import IndexFreshness, RefsResponse
     from .output import json as json_out
     from .output import markdown as md_out
     from .retrieval.searchers import refs_lookup
     from .storage.db import Database
 
     is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
-    cfg = load(ctx.obj.get("root") if ctx.obj else None)
-    db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
-
-    if not db_path.exists():
-        resp = RefsResponse(
-            query=symbol_name, index=IndexFreshness(exists=False, stale=False), sites=[]
-        )
-        typer.echo(json_out.render(resp) if is_json else md_out.render_refs(resp))
-        raise typer.Exit(code=0)
+    db_path, _cfg = _ensure_index(ctx)
 
     with Database(db_path) as db:
         resp = refs_lookup(db.conn, symbol_name, kind=kind)
@@ -435,24 +448,13 @@ def impact(
     json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Blast radius: what is affected if `target` changes (graph walk)."""
-    from .config import load
     from .graph.expand import impact_lookup
-    from .models import ImpactResponse, IndexFreshness
     from .output import json as json_out
     from .output import markdown as md_out
     from .storage.db import Database
 
     is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
-    cfg = load(ctx.obj.get("root") if ctx.obj else None)
-    db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
-
-    if not db_path.exists():
-        empty = ImpactResponse(
-            target=target, direction=direction, depth=depth,
-            index=IndexFreshness(exists=False, stale=False), nodes=[], files=[],
-        )
-        typer.echo(json_out.render(empty) if is_json else md_out.render_impact(empty))
-        raise typer.Exit(code=0)
+    db_path, _cfg = _ensure_index(ctx)
 
     with Database(db_path) as db:
         resp = impact_lookup(db.conn, target, depth=depth, direction=direction)
@@ -472,10 +474,7 @@ def explain(
     from .retrieval.pipeline import search as run_search
     from .storage.db import Database
 
-    db_path = _resolve_db_path(ctx)
-    if not db_path.exists():
-        typer.echo("No index found. Run `codebase-index index`.")
-        raise typer.Exit(code=1)
+    db_path, _cfg = _ensure_index(ctx)
 
     q = query if any(w in query.lower() for w in ("how", "architecture", "overview")) else f"how does {query} work"
     with Database(db_path) as db:
@@ -486,9 +485,58 @@ def explain(
     typer.echo(json_renderer.render(payload) if want_json else md_renderer.render(payload))
 
 
+@app.command("graph")
+def graph_view(
+    ctx: typer.Context,
+    target: Optional[str] = typer.Argument(None, help="Optional file path or symbol to center."),
+    depth: int = typer.Option(2, "--depth"),
+    direction: str = typer.Option("both", "--direction", help="up|down|both"),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="HTML file path."),
+    open_browser: bool = typer.Option(False, "--open", help="Open the HTML graph in a browser."),
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+) -> None:
+    """Export an interactive HTML graph of indexed files, symbols, and edges."""
+    import json as _json
+
+    from .graph.export import export_graph_html
+    from .storage.db import Database
+
+    is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
+    db_path, cfg = _ensure_index(ctx)
+    out = output or Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "graph.html"
+
+    with Database(db_path) as db:
+        stats = export_graph_html(
+            db.conn,
+            out,
+            target=target,
+            depth=depth,
+            direction=direction,
+        )
+
+    if open_browser:
+        _open_in_browser(out)
+
+    payload = {
+        "path": str(out),
+        "target": target,
+        "depth": depth,
+        "direction": direction,
+        **stats,
+    }
+    if is_json:
+        typer.echo(_json.dumps(payload))
+    else:
+        typer.echo(f"Graph written to {out}")
+        typer.echo(f"nodes={stats['nodes']} edges={stats['edges']}")
+
+
 # --- diagnostics / maintenance ------------------------------------------------------------------
 @app.command()
-def stats(ctx: typer.Context) -> None:
+def stats(
+    ctx: typer.Context,
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+) -> None:
     """Index size, coverage %, and freshness."""
     import json as _json
 
@@ -500,8 +548,10 @@ def stats(ctx: typer.Context) -> None:
     cfg = load(root_opt)
     db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
 
+    is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
+
     if not db_path.exists():
-        if ctx.obj and ctx.obj.get("json"):
+        if is_json:
             typer.echo(_json.dumps({"files": 0, "built_at": None, "exists": False}))
         else:
             typer.echo("No index found. Run `codebase-index index`.")
@@ -517,7 +567,7 @@ def stats(ctx: typer.Context) -> None:
             for r in repo.treesitter_coverage(db.conn)
         ]
 
-    if ctx.obj and ctx.obj.get("json"):
+    if is_json:
         typer.echo(
             _json.dumps(
                 {
@@ -541,6 +591,7 @@ def stats(ctx: typer.Context) -> None:
 def doctor(
     ctx: typer.Context,
     strict: bool = typer.Option(False, "--strict", help="Exit non-zero on high-severity findings."),
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Diagnose configuration and security issues (see docs/SECURITY.md)."""
     import json as _json
@@ -551,7 +602,8 @@ def doctor(
     cfg = load(ctx.obj.get("root") if ctx.obj else None)
     findings = run_doctor(Path(cfg.root), cfg)
 
-    if ctx.obj and ctx.obj.get("json"):
+    is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
+    if is_json:
         typer.echo(
             _json.dumps(
                 {

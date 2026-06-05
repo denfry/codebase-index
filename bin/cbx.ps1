@@ -5,7 +5,7 @@ param(
     [Parameter(ValueFromRemainingArguments = $true)] [string[]]$Rest
 )
 $ErrorActionPreference = "Stop"
-$allowed = @("search", "explain", "symbol", "refs", "impact", "stats", "update", "index")
+$allowed = @("search", "explain", "symbol", "refs", "impact", "graph", "stats", "update", "index")
 if ($allowed -notcontains $Subcommand) {
     Write-Error "cbx: refusing subcommand '$Subcommand'. Allowed: $($allowed -join ', ')"
     exit 2

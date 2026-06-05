@@ -3,7 +3,7 @@
 `codebase-index` ships a stdio MCP server powered by the optional `mcp` extra:
 
 ```bash
-pip install "codebase-index[mcp] @ git+https://github.com/denfry/codebase-index.git@v1.1.0"
+pip install "codebase-index[mcp] @ git+https://github.com/denfry/codebase-index.git@v1.2.0"
 codebase-index mcp --root /path/to/repo
 ```
 

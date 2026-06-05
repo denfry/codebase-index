@@ -4,7 +4,7 @@
 # - Whitelists subcommands so the skill can never invoke destructive ones (clean/init/watch).
 set -euo pipefail
 
-ALLOWED="search explain symbol refs impact stats update index"
+ALLOWED="search explain symbol refs impact graph stats update index"
 
 sub="${1:-}"
 case " $ALLOWED " in
@@ -15,8 +15,11 @@ case " $ALLOWED " in
     ;;
 esac
 
-if command -v codebase-index >/dev/null 2>&1; then
+if python -c "import codebase_index" >/dev/null 2>&1; then
+  exec python -m codebase_index "$@"
+elif command -v codebase-index >/dev/null 2>&1; then
   exec codebase-index "$@"
 else
-  exec python -m codebase_index "$@"
+  echo "cbx: codebase_index is not importable and codebase-index is not on PATH" >&2
+  exit 127
 fi
