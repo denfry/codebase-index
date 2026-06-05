@@ -4,9 +4,10 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+| 1.2.x   | :white_check_mark: |
+| < 1.2   | :x:                |
 
-Only the latest minor version within the 0.x series receives security updates.
+Only the latest minor version receives security updates.
 
 ## Reporting a Vulnerability
 

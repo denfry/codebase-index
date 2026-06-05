@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-06-05
+
+### Added
+- **Skill auto-update**: skills installed via `init` now silently self-update whenever the package
+  version changes. On every CLI invocation the main callback compares the installed `.skill_version`
+  stamp against the running package and re-materializes the template, saving a backup first.
+- **`skill-update` command**: `codebase-index skill-update [--target] [--force] [--no-backup] [--json]`
+  for manual skill updates with optional dry-run and JSON output.
+- **`skill-rollback` command**: `codebase-index skill-rollback [--target] [--json]` restores the
+  last backed-up version of installed skill(s).
+- `scaffold.materialize_skill()` now writes a `.skill_version` stamp alongside copied template files
+  so freshness is detectable without an extra network call.
+
 ## [1.2.0] - 2026-06-05
 
 ### Added
@@ -121,7 +134,8 @@ All notable changes to this project are documented here. The format is based on
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/denfry/codebase-index/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/denfry/codebase-index/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/denfry/codebase-index/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/denfry/codebase-index/compare/v1.0.1...v1.0.2
