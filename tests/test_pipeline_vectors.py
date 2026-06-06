@@ -52,5 +52,7 @@ def test_reindex_vectors_idempotent(sample_repo, tmp_path, fake_backend, monkeyp
     db = Database(tmp_path / "index.sqlite").open()
     s1 = build_index(cfg, db, root=sample_repo)
     s2 = build_index(cfg, db, root=sample_repo)
-    assert s1.vectors == s2.vectors
+    # Incremental: second build embeds 0 new chunks, total in DB unchanged
+    assert s2.vectors == 0
+    assert repo.count_vectors(db.conn) == s1.vectors
     db.close()

@@ -23,7 +23,7 @@ def upsert_file(
     is_generated: bool,
 ) -> int:
     """Insert or update a file row keyed by repo-relative path."""
-    conn.execute(
+    row = conn.execute(
         """
         INSERT INTO files
             (path, lang, size_bytes, sha256, mtime_ns, git_status, parser, indexed_at, is_generated)
@@ -38,6 +38,7 @@ def upsert_file(
             parser = excluded.parser,
             indexed_at = excluded.indexed_at,
             is_generated = excluded.is_generated
+        RETURNING id
         """,
         {
             "path": path,
@@ -50,8 +51,7 @@ def upsert_file(
             "indexed_at": indexed_at,
             "is_generated": 1 if is_generated else 0,
         },
-    )
-    row = conn.execute("SELECT id FROM files WHERE path = ?", (path,)).fetchone()
+    ).fetchone()
     return int(row[0])
 
 
@@ -480,6 +480,31 @@ def clear_vectors(conn: sqlite3.Connection) -> None:
 
 def count_vectors(conn: sqlite3.Connection) -> int:
     return int(conn.execute("SELECT COUNT(*) FROM vec_chunks").fetchone()[0])
+
+
+def embedded_chunk_ids(conn: sqlite3.Connection) -> set[int]:
+    """Return chunk IDs that already have a vector embedding."""
+    try:
+        rows = conn.execute("SELECT chunk_id FROM vec_chunks").fetchall()
+        return {int(r[0]) for r in rows}
+    except Exception:
+        return set()
+
+
+def prune_orphan_vectors(conn: sqlite3.Connection) -> int:
+    """Delete vec_chunks entries whose chunk no longer exists. Returns count deleted."""
+    try:
+        current_ids = {r[0] for r in conn.execute("SELECT id FROM chunks").fetchall()}
+        orphan_ids = [
+            r[0]
+            for r in conn.execute("SELECT chunk_id FROM vec_chunks").fetchall()
+            if r[0] not in current_ids
+        ]
+        for oid in orphan_ids:
+            conn.execute("DELETE FROM vec_chunks WHERE chunk_id = ?", (oid,))
+        return len(orphan_ids)
+    except Exception:
+        return 0
 
 
 def path_mtimes(conn: sqlite3.Connection) -> dict[str, int]:

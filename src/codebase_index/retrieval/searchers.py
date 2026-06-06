@@ -33,17 +33,9 @@ _WORD_RE = re.compile(r"[A-Za-z0-9_]+")
 _CAMEL_RE = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+")
 _SNIPPET_MAX_LINES = 18
 
-# FTS5 MATCH is sensitive to punctuation; reduce a NL query to bare terms.
-_TERM_RE = re.compile(r"[A-Za-z0-9_]+")
-
-
-def _fts_match_query(query: str) -> str:
-    terms = _TERM_RE.findall(query)
-    return " OR ".join(f'"{t}"' for t in terms)
-
 
 def fts_candidates(conn: sqlite3.Connection, query: str, *, limit: int) -> list[M4Candidate]:
-    match = _fts_match_query(query)
+    match = build_match_query(query)
     if not match:
         return []
     out: list[M4Candidate] = []
@@ -75,7 +67,7 @@ _SYMBOL_STOPWORDS = {
 def _salient_terms(query: str) -> list[str]:
     """Lower-cased query terms worth matching against symbol names (dedup, order-preserving)."""
     out: list[str] = []
-    for t in _TERM_RE.findall(query):
+    for t in _WORD_RE.findall(query):
         tl = t.lower()
         if len(tl) < 3 or tl in _SYMBOL_STOPWORDS:
             continue
@@ -196,7 +188,9 @@ def build_match_query(query: str) -> str:
             continue
         ored = " OR ".join(f'"{v}"' for v in sorted(variants, key=str.lower))
         groups.append(f"({ored})" if len(variants) > 1 else ored)
-    return " ".join(groups)
+    # FTS5 rejects implicit AND (space) when a group contains parenthesised OR
+    # expressions; explicit AND is required between all groups.
+    return " AND ".join(groups)
 
 
 def fts_search(conn: sqlite3.Connection, query: str, *, limit: int) -> list[Candidate]:
@@ -280,8 +274,15 @@ def _confidence(candidates: list[Candidate]) -> Confidence:
         return "low"
     if len(candidates) == 1:
         return "medium"
-    gap = abs(candidates[1].bm25 - candidates[0].bm25)
-    return "high" if gap >= 1.0 else "medium"
+    top, second = candidates[0], candidates[1]
+    gap = abs(second.bm25 - top.bm25)
+    n = len(candidates)
+    # Clear BM25 separation, or moderate gap with several corroborating results
+    if gap >= 2.0 or (gap >= 1.0 and n >= 3):
+        return "high"
+    if gap >= 0.3 or n >= 3:
+        return "medium"
+    return "low"
 
 
 def _fallbacks(query: str) -> dict[str, list[str]]:
