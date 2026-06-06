@@ -116,6 +116,53 @@ def test_resolve_db_uses_cbx_db_path(tmp_path):
     assert db_path == custom
 
 
+# ── pagination ───────────────────────────────────────────────────────────────
+
+def test_search_code_accepts_offset_parameter():
+    """search_code accepts offset without raising TypeError."""
+    result = _with_missing_db(lambda: _call(mcp_server.search_code, query="foo", offset=5))
+    assert "error" in result  # no-index error, but offset was accepted
+
+
+def test_explain_code_accepts_offset_parameter():
+    """explain_code accepts offset without raising TypeError."""
+    result = _with_missing_db(lambda: _call(mcp_server.explain_code, query="how does auth work", offset=5))
+    assert "error" in result
+
+
+def test_search_code_pagination_with_real_index(tmp_path):
+    """Pagination returns disjoint result pages from a real index."""
+    pytest.importorskip("codebase_index.mcp.server")
+    from tests.benchmark_public import build_public_fixture
+    from codebase_index.config import Config
+    from codebase_index.indexer.pipeline import build_index
+    from codebase_index.storage.db import Database as DB
+
+    fixture = build_public_fixture(tmp_path / "repo", filler_files=50)
+    db_path = fixture / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+    cfg = Config()
+    cfg.root = str(fixture)
+    cfg.embeddings.enabled = False
+    with DB(db_path) as db:
+        build_index(cfg, db, root=fixture)
+
+    env = {"CBX_DB_PATH": str(db_path)}
+    with patch.dict(os.environ, env, clear=False):
+        page0 = _call(mcp_server.search_code, query="auth token", limit=3, offset=0)
+        page1 = _call(mcp_server.search_code, query="auth token", limit=3, offset=3)
+
+    assert "results" in page0
+    # Pages don't overlap by (path, line_start, line_end) triple.
+    if page0["results"] and page1["results"]:
+        page0_keys = {(r["path"], r["line_start"], r["line_end"]) for r in page0["results"]}
+        page1_keys = {(r["path"], r["line_start"], r["line_end"]) for r in page1["results"]}
+        assert page0_keys.isdisjoint(page1_keys), "page0 and page1 share identical result chunks"
+
+    if page1.get("pagination"):
+        assert page1["pagination"]["offset"] == 3
+        assert page1["pagination"]["limit"] == 3
+
+
 # ── run entry point ───────────────────────────────────────────────────────────
 
 def test_run_function_exists():

@@ -43,12 +43,47 @@ def resolve_edges(conn: sqlite3.Connection) -> int:
 
 
 def _module_to_file_id(conn: sqlite3.Connection, module: str) -> Optional[int]:
-    """Resolve a dotted/slashed module path to a unique file id, or None."""
+    """Resolve a module/import path to a unique file id, or None.
+
+    Handles Python, TypeScript/JavaScript, Java/Kotlin/Scala, Rust (:: separator),
+    Go (last path segment), C#, Ruby, and PHP import conventions.
+    """
     base = module.replace(".", "/").strip("/")
+    rust_base = module.replace("::", "/").strip("/")
     if not base:
         return None
-    for suffix in (f"{base}.py", f"{base}.ts", f"{base}.js",
-                   f"{base}/__init__.py", f"{base}/index.ts", f"{base}/index.js"):
+    # Last segment used for Go package-level resolution
+    go_pkg = base.rsplit("/", 1)[-1] if "/" in base else base
+
+    for suffix in (
+        # Python
+        f"{base}.py",
+        f"{base}/__init__.py",
+        # TypeScript / JavaScript
+        f"{base}.ts",
+        f"{base}.tsx",
+        f"{base}.js",
+        f"{base}/index.ts",
+        f"{base}/index.tsx",
+        f"{base}/index.js",
+        # Java / Kotlin / Scala (dot-to-slash already done above)
+        f"{base}.java",
+        f"{base}.kt",
+        f"{base}.scala",
+        # Go: resolve last path segment to a .go file of the same name
+        f"{go_pkg}.go",
+        # Rust: :: separator mapped to /; also try under src/
+        f"{rust_base}.rs",
+        f"{rust_base}/mod.rs",
+        f"src/{rust_base}.rs",
+        f"src/{rust_base}/mod.rs",
+        # C#
+        f"{base}.cs",
+        # Ruby
+        f"{base}.rb",
+        # PHP
+        f"{base}.php",
+    ):
         rows = repo.files_with_suffix(conn, suffix)
         if len(rows) == 1:
             return int(rows[0]["id"])

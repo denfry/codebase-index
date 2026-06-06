@@ -36,3 +36,57 @@ def test_single_mode_runs_only_one_retriever(seeded_index):
                      limit=10, token_budget=1500, no_fallback=False)
     assert payload["mode"] == "fts"
     assert payload["results"]
+
+
+# ── pagination ────────────────────────────────────────────────────────────────
+
+def test_offset_zero_matches_default(seeded_index):
+    """offset=0 produces identical results to no offset."""
+    default = search(seeded_index.conn, "auth token", mode="hybrid",
+                     limit=5, token_budget=1500, no_fallback=True)
+    paged = search(seeded_index.conn, "auth token", mode="hybrid",
+                   limit=5, token_budget=1500, no_fallback=True, offset=0)
+    assert default["results"] == paged["results"]
+    assert "pagination" not in default
+    assert "pagination" not in paged
+
+
+def test_offset_returns_different_results(seeded_index):
+    """offset > 0 skips leading results."""
+    page0 = search(seeded_index.conn, "auth token", mode="hybrid",
+                   limit=2, token_budget=1500, no_fallback=True, offset=0)
+    page1 = search(seeded_index.conn, "auth token", mode="hybrid",
+                   limit=2, token_budget=1500, no_fallback=True, offset=2)
+    paths0 = [r["path"] for r in page0["results"]]
+    paths1 = [r["path"] for r in page1["results"]]
+    # Pages must not start with the same top result (offset shifts the window).
+    assert paths0[:1] != paths1[:1]
+
+
+def test_pagination_metadata_present_on_offset(seeded_index):
+    """Pagination block appears when offset > 0 or has_more is True."""
+    payload = search(seeded_index.conn, "auth token", mode="hybrid",
+                     limit=2, token_budget=1500, no_fallback=True, offset=2)
+    assert "pagination" in payload
+    assert payload["pagination"]["offset"] == 2
+    assert payload["pagination"]["limit"] == 2
+
+
+def test_pagination_next_offset(seeded_index):
+    """next_offset is set when has_more is True, None otherwise."""
+    payload = search(seeded_index.conn, "auth", mode="hybrid",
+                     limit=1, token_budget=1500, no_fallback=True, offset=0)
+    pag = payload.get("pagination")
+    if pag and pag["has_more"]:
+        assert pag["next_offset"] == 1
+    elif pag:
+        assert pag["next_offset"] is None
+
+
+def test_recommended_reads_within_page(seeded_index):
+    """recommended_reads only references results in the current page."""
+    payload = search(seeded_index.conn, "auth token", mode="hybrid",
+                     limit=3, token_budget=1500, no_fallback=True, offset=0)
+    result_keys = {(r["path"], r["line_start"], r["line_end"]) for r in payload["results"]}
+    for rec in payload["recommended_reads"]:
+        assert (rec["path"], rec["line_start"], rec["line_end"]) in result_keys

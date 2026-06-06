@@ -7,6 +7,8 @@ as the representative so downstream rerank/snippet logic has the richest fields.
 
 from __future__ import annotations
 
+from dataclasses import replace as _replace
+
 from .types import Candidate
 
 _SOURCE_RICHNESS = {"symbol": 3, "fts": 2, "vector": 2, "path": 1}
@@ -36,13 +38,6 @@ def fuse(
             agree.setdefault(key, set()).add(source)
             rep[key] = _richer(rep[key], cand) if key in rep else cand
 
-    fused: list[Candidate] = []
-    for key, score in accum.items():
-        c = rep[key]
-        c.score = score
-        fused.append(c)
-
+    fused = [_replace(rep[key], score=score) for key, score in accum.items()]
     fused.sort(key=lambda c: c.score, reverse=True)
-    for c in fused:
-        c.agreeing_sources = len(agree[c.key()])
-    return fused
+    return [_replace(c, agreeing_sources=len(agree[c.key()])) for c in fused]

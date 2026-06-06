@@ -67,11 +67,24 @@ def _confidence(ranked) -> Confidence:
     if not ranked:
         return Confidence.LOW
     top = ranked[0]
-    gap = top.score - (ranked[1].score if len(ranked) > 1 else 0.0)
+    if len(ranked) == 1:
+        return Confidence.MEDIUM if top.score > 0 else Confidence.LOW
+    gap = top.score - ranked[1].score
     agree = getattr(top, "agreeing_sources", 1)
-    if getattr(top, "exact_symbol", False) or (agree >= 2 and gap > 0.01):
+    exact = getattr(top, "exact_symbol", False)
+    n = len(ranked)
+    # Exact symbol match always high confidence
+    if exact:
         return Confidence.HIGH
-    if top.score > 0 and (agree >= 2 or gap > 0.005):
+    # Strong multi-source agreement with a clear score gap
+    if agree >= 3 and gap > 0.005:
+        return Confidence.HIGH
+    if agree >= 2 and gap > 0.01:
+        return Confidence.HIGH
+    # Single source but very dominant winner
+    if agree == 1 and gap > 0.05 and top.score > 0.1:
+        return Confidence.HIGH
+    if top.score > 0 and (agree >= 2 or gap > 0.005 or n >= 5):
         return Confidence.MEDIUM
     return Confidence.LOW
 
@@ -98,17 +111,30 @@ def search(
     backend=None,
     root: Optional[Path] = None,
     config: Optional[Config] = None,
+    offset: int = 0,
 ) -> dict:
     plan = detect_intent(query)
     if token_budget <= 0:
         token_budget = plan.token_budget
+    fetch_limit = limit + offset
     lists, weights = _run_retrievers(
-        conn, query, mode=mode, limit=limit, weights=plan.weights, backend=backend
+        conn, query, mode=mode, limit=fetch_limit, weights=plan.weights, backend=backend
     )
     fused = fuse(lists, weights=weights, k=_RRF_K)
-    ranked = rerank(fused, query=query, intent=plan.intent)[:limit]
+    ranked = rerank(fused, query=query, intent=plan.intent)[:fetch_limit]
     confidence = _confidence(ranked)
-    results, recommended = apply_budget(ranked, token_budget=token_budget)
+    # Scale budget proportionally so later pages receive snippet coverage.
+    scaled_budget = token_budget * fetch_limit // max(limit, 1) if offset > 0 else token_budget
+    all_results, all_recommended = apply_budget(ranked, token_budget=scaled_budget)
+
+    # Paginate: slice results and filter recommended_reads to the current page.
+    paginated = all_results[offset:offset + limit]
+    paginated_keys = {(r["path"], r["line_start"], r["line_end"]) for r in paginated}
+    recommended = [
+        r for r in all_recommended
+        if (r["path"], r["line_start"], r["line_end"]) in paginated_keys
+    ]
+    has_more = len(all_results) > offset + limit
 
     fallback = {}
     if not no_fallback and confidence == Confidence.LOW:
@@ -128,13 +154,21 @@ def search(
             head_commit=repo.get_meta(conn, "head_commit"),
         )
 
-    return {
+    payload: dict = {
         "query": query,
         "intent": plan.intent.value,
         "mode": mode,
         "index": freshness.model_dump(),
         "confidence": confidence.value,
-        "results": results,
+        "results": paginated,
         "recommended_reads": recommended,
         "fallback_suggestions": fallback,
     }
+    if offset > 0 or has_more:
+        payload["pagination"] = {
+            "offset": offset,
+            "limit": limit,
+            "has_more": has_more,
+            "next_offset": offset + limit if has_more else None,
+        }
+    return payload

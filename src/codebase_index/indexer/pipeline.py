@@ -1,9 +1,11 @@
-"""Drive a build: discovery -> hash -> upsert files -> prune deleted -> meta."""
+"""Drive a build: discovery -> parse (parallel) -> write -> prune deleted -> meta."""
 
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +21,12 @@ from ..parsers.treesitter import UnsupportedLanguage, parse_file
 from ..storage import repo
 from ..storage.db import Database
 from .doc_chunks import extract_doc_chunks
+
+# Minimum file count before spawning a process pool (avoids spawn overhead on tiny repos)
+_MIN_PARALLEL_FILES = 30
+
+# Set by _pool_init in each worker process; avoids per-task Config serialization
+_PARSE_CONFIG: Optional[Config] = None
 
 
 @dataclass
@@ -43,6 +51,13 @@ class _ParseOutcome:
     zero_symbols: bool = False
 
 
+@dataclass
+class _ParseResult:
+    sha256: str
+    outcome: _ParseOutcome
+    doc_chunks: list
+
+
 def _add_stats(target: BuildStats, delta: BuildStats) -> None:
     target.indexed += delta.indexed
     target.deleted += delta.deleted
@@ -57,39 +72,88 @@ def _add_stats(target: BuildStats, delta: BuildStats) -> None:
     target.treesitter_zero_symbols += delta.treesitter_zero_symbols
 
 
-def _index_candidate(
-    conn,
-    cand,
-    config: Config,
-    now: str,
-    *,
-    sha256: Optional[str] = None,
-) -> BuildStats:
-    """Fully replace every index facet for one discovered file."""
+# ---------------------------------------------------------------------------
+# Parse phase — CPU-bound, can run in parallel
+# ---------------------------------------------------------------------------
+
+def _pool_init(config: Config) -> None:
+    """Initialiser for each worker process: store config in a module global."""
+    global _PARSE_CONFIG
+    _PARSE_CONFIG = config
+
+
+def _parse_one(cand) -> _ParseResult:
+    """Parse a single file. Top-level for ProcessPoolExecutor pickling; uses _PARSE_CONFIG."""
+    config = _PARSE_CONFIG
+    try:
+        sha256 = _sha256_file(cand.path)
+    except OSError:
+        sha256 = ""
+    text = _read_text(cand.path)
+    outcome = _parse(cand.lang, cand.parser, text, config)
+    doc_chunks = extract_doc_chunks(text, cand.rel_path, cand.lang)
+    return _ParseResult(sha256=sha256, outcome=outcome, doc_chunks=doc_chunks)
+
+
+def _parse_one_inline(
+    cand, config: Config, *, sha256: Optional[str] = None
+) -> _ParseResult:
+    """Sequential parse — used when pool is unavailable or repo is too small."""
+    if sha256 is None:
+        try:
+            sha256 = _sha256_file(cand.path)
+        except OSError:
+            sha256 = ""
+    text = _read_text(cand.path)
+    outcome = _parse(cand.lang, cand.parser, text, config)
+    doc_chunks = extract_doc_chunks(text, cand.rel_path, cand.lang)
+    return _ParseResult(sha256=sha256, outcome=outcome, doc_chunks=doc_chunks)
+
+
+def _parse_all(candidates: list, config: Config) -> list[_ParseResult]:
+    """Parse all candidates, using a process pool for large repos."""
+    if len(candidates) < _MIN_PARALLEL_FILES:
+        return [_parse_one_inline(c, config) for c in candidates]
+    workers = min(len(candidates), os.cpu_count() or 1)
+    try:
+        with ProcessPoolExecutor(
+            max_workers=workers,
+            initializer=_pool_init,
+            initargs=(config,),
+        ) as pool:
+            return list(pool.map(_parse_one, candidates))
+    except Exception:
+        return [_parse_one_inline(c, config) for c in candidates]
+
+
+# ---------------------------------------------------------------------------
+# Write phase — DB writes, must be serial
+# ---------------------------------------------------------------------------
+
+def _write_candidate(conn, cand, pr: _ParseResult, now: str) -> BuildStats:
+    """Write a pre-parsed candidate to the database."""
     stats = BuildStats(indexed=1, total_bytes=cand.size_bytes)
     file_id = repo.upsert_file(
         conn,
         path=cand.rel_path,
         lang=cand.lang,
         size_bytes=cand.size_bytes,
-        sha256=sha256 or _sha256_file(cand.path),
+        sha256=pr.sha256,
         mtime_ns=cand.path.stat().st_mtime_ns,
         git_status=None,
         parser=cand.parser,
         indexed_at=now,
         is_generated=cand.is_generated,
     )
-    text = _read_text(cand.path)
-    outcome = _parse(cand.lang, cand.parser, text, config)
+    outcome = pr.outcome
     parse_result = outcome.result
     stats.parse_failed += int(outcome.parse_failed)
     stats.treesitter_zero_symbols += int(outcome.zero_symbols)
     symbol_ids = repo.replace_symbols(conn, file_id, parse_result.symbols)
     repo.replace_chunks(conn, file_id, parse_result.chunks, symbol_ids=symbol_ids)
-    doc_chunks = extract_doc_chunks(text, cand.rel_path, cand.lang)
-    if doc_chunks:
-        repo.append_chunks(conn, file_id, doc_chunks)
-        stats.chunks += len(doc_chunks)
+    if pr.doc_chunks:
+        repo.append_chunks(conn, file_id, pr.doc_chunks)
+        stats.chunks += len(pr.doc_chunks)
     edge_rows = _resolve_edges(parse_result, symbol_ids, file_id)
     repo.replace_edges(conn, file_id, edge_rows)
     stats.chunks += len(parse_result.chunks)
@@ -103,11 +167,13 @@ def build_index(config: Config, db: Database, root: Optional[Path] = None) -> Bu
     conn = db.conn
     now = _utc_now_iso()
 
+    candidates = list(walk(root, config))
+    parse_results = _parse_all(candidates, config)
+
     stats = BuildStats()
     seen: set[str] = set()
-
-    for cand in walk(root, config):
-        _add_stats(stats, _index_candidate(conn, cand, config, now))
+    for cand, pr in zip(candidates, parse_results):
+        _add_stats(stats, _write_candidate(conn, cand, pr, now))
         seen.add(cand.rel_path)
 
     stats.deleted = repo.delete_files(conn, repo.all_paths(conn) - seen)
@@ -127,7 +193,7 @@ def build_index(config: Config, db: Database, root: Optional[Path] = None) -> Bu
 
 
 def _embed_chunks(cfg, db, conn) -> int:
-    """Embed every chunk and (re)store its vector. Returns the vector count.
+    """Embed only new/changed chunks (incremental). Returns count of newly embedded chunks.
 
     Fully gated: with embeddings disabled this is never called, so no optional
     dependency is imported and vec_chunks is never created.
@@ -135,14 +201,15 @@ def _embed_chunks(cfg, db, conn) -> int:
     backend = resolve_backend(cfg, warn=lambda m: print(m))
     if not getattr(backend, "enabled", False):
         return 0
-    rows = repo.chunks_for_embedding(conn)
+    db.enable_vectors()
+    repo.ensure_vec_tables(conn, dim=backend.dim)
+    repo.prune_orphan_vectors(conn)
+    existing = repo.embedded_chunk_ids(conn)
+    rows = [r for r in repo.chunks_for_embedding(conn) if int(r["id"]) not in existing]
     if not rows:
         return 0
-    db.enable_vectors()
     texts = [r["content"] for r in rows]
     vectors = backend.embed(texts)
-    repo.ensure_vec_tables(conn, dim=backend.dim)
-    repo.clear_vectors(conn)
     for row, vec in zip(rows, vectors):
         repo.upsert_chunk_vector(conn, int(row["id"]), vec)
     built_at = datetime.now(timezone.utc).isoformat()
@@ -285,7 +352,8 @@ def update_index(
             stats.skipped += 1
             continue
 
-        _add_stats(stats, _index_candidate(conn, cand, config, now, sha256=sha))
+        pr = _parse_one_inline(cand, config, sha256=sha)
+        _add_stats(stats, _write_candidate(conn, cand, pr, now))
 
     if scope is None:
         gone = repo.all_paths(conn) - seen

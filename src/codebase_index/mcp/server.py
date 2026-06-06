@@ -92,17 +92,23 @@ def search_code(
     mode: str = "hybrid",
     limit: int = 10,
     token_budget: int = 1500,
+    offset: int = 0,
 ) -> str:
     """Hybrid search over the codebase index.
 
     Returns ranked results with file paths, line ranges, symbol names, and
     recommended_reads — the exact ranges to open next.
 
+    When the response includes a ``pagination`` key, pass ``next_offset`` as
+    ``offset`` in the next call to retrieve the following page of results.
+
     Args:
         query: Natural-language or keyword search query.
         mode: Search mode — "hybrid" (default), "fts" (full-text), or "symbol".
-        limit: Maximum number of results to return.
+        limit: Maximum number of results to return per page.
         token_budget: Token budget for the response payload.
+        offset: Result offset for pagination. Pass ``next_offset`` from a
+                previous response to fetch the next page.
     """
     db_path, cfg = _resolve_db()
     if not db_path.exists():
@@ -121,6 +127,7 @@ def search_code(
             no_fallback=False,
             root=Path(cfg.root),
             config=cfg,
+            offset=offset,
         )
     return json.dumps(payload)
 
@@ -208,14 +215,18 @@ def impact_of(
 def explain_code(
     query: str,
     token_budget: int = 2200,
+    offset: int = 0,
 ) -> str:
     """Intent-aware retrieval for architecture / how-does-X-work questions.
 
     Uses a higher token budget and how-it-works intent weights compared to search_code.
+    Supports the same pagination protocol as search_code.
 
     Args:
         query: Question about the codebase (e.g. "how does the retrieval pipeline work").
         token_budget: Token budget for the response payload.
+        offset: Result offset for pagination. Pass ``next_offset`` from a
+                previous response to fetch the next page.
     """
     db_path, cfg = _resolve_db()
     if not db_path.exists():
@@ -235,6 +246,7 @@ def explain_code(
             no_fallback=False,
             root=Path(cfg.root),
             config=cfg,
+            offset=offset,
         )
     return json.dumps(payload)
 
