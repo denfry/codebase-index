@@ -375,6 +375,9 @@ def search(
     ctx: typer.Context,
     query: str = typer.Argument(..., help="Search query."),
     limit: int = typer.Option(10, "--limit"),
+    offset: int = typer.Option(
+        0, "--offset", help="Skip the first N results (use pagination.next_offset to page)."
+    ),
     token_budget: int = typer.Option(1500, "--token-budget"),
     mode: str = typer.Option("hybrid", "--mode", help="hybrid|fts|symbol|vector"),
     no_fallback: bool = typer.Option(False, "--no-fallback"),
@@ -385,6 +388,10 @@ def search(
     from .output import markdown as md_renderer
     from .retrieval.pipeline import search as run_search
     from .storage.db import Database
+
+    if offset < 0:
+        typer.echo("[codebase-index] --offset must be >= 0.")
+        raise typer.Exit(code=2)
 
     backend = None
     if mode in ("vector", "hybrid"):
@@ -402,7 +409,7 @@ def search(
         if backend is not None and getattr(backend, "enabled", False):
             db.enable_vectors()
         payload = run_search(
-            db.conn, query, mode=mode, limit=limit,
+            db.conn, query, mode=mode, limit=limit, offset=offset,
             token_budget=token_budget, no_fallback=no_fallback, backend=backend,
             root=Path(cfg.root), config=cfg,
         )
