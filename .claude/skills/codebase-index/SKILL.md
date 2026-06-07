@@ -102,10 +102,10 @@ Top-level fields:
   useful to sanity-check a weak result (e.g. a "how does X work" question that
   resolved to a bare symbol lookup may need `explain` instead).
 - `pagination` — present only when more results exist than fit the page. It
-  reports `has_more` and `next_offset`. The CLI returns the highest-ranked page;
-  if `has_more` is true and you still lack context, raise `--token-budget` or
-  refine the query with a more specific subcommand rather than expecting a second
-  page (CLI search is single-page).
+  reports `has_more` and `next_offset`. To page, re-run `search` with
+  `--offset <next_offset>` (e.g. `search "query" --limit 10 --offset 10`). Prefer
+  refining with a more specific subcommand or raising `--token-budget` first —
+  page only when the top results genuinely miss the answer.
 
 ## Token efficiency rules
 

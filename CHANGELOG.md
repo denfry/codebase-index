@@ -23,6 +23,11 @@ All notable changes to this project are documented here. The format is based on
   run arbitrary Python.
 
 ### Fixed
+- `search` now exposes `--offset`, so the pagination contract is reachable from the CLI/skill.
+  The retrieval pipeline and MCP already supported paging, but the CLI command never surfaced the
+  flag — every call silently returned page one and the advertised `pagination.next_offset` was a
+  dead end. Markdown output now also notes when more results are available. `--offset` rejects
+  negative values.
 - `explain` now honors the index freshness contract: it passes `root`/`config` into the retrieval
   pipeline, so `index.stale` / `files_changed_since_build` reflect reality instead of a hardcoded
   "fresh" block. Previously the skill's freshness check silently never triggered for

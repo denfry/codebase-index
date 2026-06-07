@@ -45,6 +45,14 @@ def _render_dict(payload: dict) -> str:
         for cmd in fb:
             lines.append(f"- `{cmd}`")
 
+    pg = payload.get("pagination")
+    if pg:
+        shown = f"results {pg['offset'] + 1}–{pg['offset'] + len(payload['results'])}"
+        if pg.get("has_more"):
+            lines.append(f"\n_Showing {shown}; more available — `--offset {pg['next_offset']}`._")
+        else:
+            lines.append(f"\n_Showing {shown} (end of results)._")
+
     return "\n".join(lines)
 
 
