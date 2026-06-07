@@ -12,6 +12,15 @@ All notable changes to this project are documented here. The format is based on
   embedding pass now hashes chunk content and only calls the (potentially slow or paid) backend for
   text never embedded under the active model — unchanged content reuses its cached vector for free.
 
+### Added
+- **Graph coverage signal**: `refs` and `impact` now report a `coverage` block
+  (`partial`, `languages`, `reason`). Import/inheritance edges are only extracted
+  for the hand-tuned (Tier-A) languages, so a symbol or file in a Tier-B language
+  (generic tree-sitter walk, e.g. Lua) can produce an empty/short result that is
+  inconclusive rather than authoritative. `coverage.partial` flags this so agents
+  fall back to Grep instead of reading "no references" as proof. Markdown output
+  prints a matching warning; the skill documents the field.
+
 ### Changed
 - The embedding pass reports cache **misses** (vectors actually computed) as its "embedded" count.
 - `prune_orphan_vectors` now deletes stale `vec_chunks` rows in a single batched `executemany`.

@@ -102,10 +102,16 @@ Top-level fields:
   useful to sanity-check a weak result (e.g. a "how does X work" question that
   resolved to a bare symbol lookup may need `explain` instead).
 - `pagination` — present only when more results exist than fit the page. It
-  reports `has_more` and `next_offset`. The CLI returns the highest-ranked page;
-  if `has_more` is true and you still lack context, raise `--token-budget` or
-  refine the query with a more specific subcommand rather than expecting a second
-  page (CLI search is single-page).
+  reports `has_more` and `next_offset`. To page, re-run `search` with
+  `--offset <next_offset>` (e.g. `search "query" --limit 10 --offset 10`). Prefer
+  refining with a more specific subcommand or raising `--token-budget` first —
+  page only when the top results genuinely miss the answer.
+- `coverage` (on `refs`/`impact` only) — graph-completeness signal. Dependency
+  edges (imports/inheritance) are extracted only for fully supported languages.
+  When `coverage.partial` is `true` (the symbol/file is in a Tier-B language such
+  as Lua), an **empty or short `refs`/`impact` result is inconclusive** — it may
+  just be unanalyzed, not absent. Confirm with a Grep before concluding "nothing
+  references this". `coverage.languages` lists the affected languages.
 
 ## Token efficiency rules
 

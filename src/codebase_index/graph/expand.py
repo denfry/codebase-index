@@ -16,7 +16,7 @@ import sqlite3
 from collections import deque
 from typing import Optional
 
-from ..models import ImpactNode, ImpactResponse, IndexFreshness
+from ..models import GraphCoverage, ImpactNode, ImpactResponse, IndexFreshness
 from ..storage import repo
 
 
@@ -106,6 +106,19 @@ def walk_impact(
     return out
 
 
+def _target_paths(conn: sqlite3.Connection, target: str) -> list[str]:
+    """The file path(s) the target resolves to, for coverage classification."""
+    if repo.file_by_path(conn, target) is not None:
+        return [target]
+    sym_rows = repo.symbols_by_name(conn, target, exact=True)
+    if sym_rows:
+        return [r["path"] for r in sym_rows]
+    suffix = repo.files_with_suffix(conn, target)
+    if len(suffix) == 1:
+        return [suffix[0]["path"]]
+    return []
+
+
 def impact_lookup(
     conn: sqlite3.Connection, target: str, *, depth: int, direction: str
 ) -> ImpactResponse:
@@ -118,4 +131,5 @@ def impact_lookup(
     return ImpactResponse(
         target=target, direction=direction, depth=depth,
         index=_freshness(conn), nodes=nodes, files=files,
+        coverage=GraphCoverage.for_paths(_target_paths(conn, target)),
     )
