@@ -16,6 +16,7 @@ from ..config import Config
 from ..indexer.freshness import compute_freshness
 from ..models import (
     Confidence,
+    GraphCoverage,
     IndexFreshness,
     ReadRange,
     RefSite,
@@ -326,6 +327,7 @@ def symbol_lookup(
 
 
 def refs_lookup(conn: sqlite3.Connection, name: str, *, kind: str) -> RefsResponse:
+    defs = repo.symbols_by_name(conn, name, exact=True)
     sites = [
         RefSite(path=row["path"], line=row["line"], kind="call")
         for row in repo.refs_for_name(conn, name)
@@ -333,10 +335,18 @@ def refs_lookup(conn: sqlite3.Connection, name: str, *, kind: str) -> RefsRespon
     if kind == "all":
         sites.extend(
             RefSite(path=row["path"], line=row["line_start"], kind="definition")
-            for row in repo.symbols_by_name(conn, name, exact=True)
+            for row in defs
         )
     sites.sort(key=lambda site: (site.path, site.line, site.kind))
-    return RefsResponse(query=name, index=_freshness(conn), sites=sites)
+    # Coverage is judged by the symbol's defining language(s); fall back to the
+    # call-site files when the symbol has no indexed definition.
+    coverage_paths = [row["path"] for row in defs] or [s.path for s in sites]
+    return RefsResponse(
+        query=name,
+        index=_freshness(conn),
+        sites=sites,
+        coverage=GraphCoverage.for_paths(coverage_paths),
+    )
 
 
 def vector_candidates(

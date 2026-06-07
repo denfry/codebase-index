@@ -1,4 +1,9 @@
 {
+  "coverage": {
+    "languages": [],
+    "partial": false,
+    "reason": null
+  },
   "index": {
     "built_at": "<TS>",
     "exists": true,

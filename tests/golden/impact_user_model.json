@@ -1,4 +1,9 @@
 {
+  "coverage": {
+    "languages": [],
+    "partial": false,
+    "reason": null
+  },
   "depth": 2,
   "direction": "up",
   "files": [
