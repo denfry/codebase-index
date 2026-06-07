@@ -107,6 +107,25 @@ def run_doctor(root: Path, config: Config) -> list[Finding]:
             )
         )
 
+        # 5. Dependency-graph coverage: Tier-B languages (grammar but no hand-tuned spec)
+        #    yield symbols but no import/inheritance edges, so refs/impact undercount.
+        from .parsers.languages import has_full_graph
+
+        tier_b = sorted({r["lang"] for r in coverage if not has_full_graph(r["lang"])})
+        findings.append(
+            Finding(
+                id="graph_coverage",
+                ok=True,
+                severity="info",
+                detail=(
+                    "all indexed languages have full dependency-graph support"
+                    if not tier_b
+                    else f"partial dependency graph for Tier-B language(s): {', '.join(tier_b)} "
+                    "— refs/impact may undercount (confirm with Grep)"
+                ),
+            )
+        )
+
     return findings
 
 

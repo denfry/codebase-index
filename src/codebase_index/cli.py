@@ -569,6 +569,7 @@ def stats(
     import json as _json
 
     from .config import load
+    from .parsers.languages import has_full_graph
     from .storage import repo
     from .storage.db import Database
 
@@ -591,7 +592,14 @@ def stats(
         built_at = repo.get_meta(db.conn, "built_at")
         head = repo.get_meta(db.conn, "head_commit")
         coverage = [
-            {"lang": r["lang"], "files": r["files"], "symbols": r["symbols"]}
+            {
+                "lang": r["lang"],
+                "files": r["files"],
+                "symbols": r["symbols"],
+                # Tier-A languages get import/inheritance edges; Tier-B is symbols-only,
+                # so refs/impact are partial for them.
+                "graph": "full" if has_full_graph(r["lang"]) else "partial",
+            }
             for r in repo.treesitter_coverage(db.conn)
         ]
 
@@ -612,7 +620,8 @@ def stats(
         typer.echo(f"files={files}  symbols={symbols}  built_at={built_at}  head={head}")
         for r in coverage:
             flag = "  ⚠ 0 symbols" if (r["symbols"] or 0) == 0 and r["files"] >= 3 else ""
-            typer.echo(f"  {r['lang']}: {r['files']} files, {r['symbols']} symbols{flag}")
+            tier = "  · partial graph (Tier-B)" if r["graph"] == "partial" else ""
+            typer.echo(f"  {r['lang']}: {r['files']} files, {r['symbols']} symbols{flag}{tier}")
 
 
 @app.command()
