@@ -7,11 +7,13 @@
   "treesitter_coverage": [
     {
       "files": 3,
+      "graph": "full",
       "lang": "python",
       "symbols": 6
     },
     {
       "files": 2,
+      "graph": "full",
       "lang": "typescript",
       "symbols": 1
     }

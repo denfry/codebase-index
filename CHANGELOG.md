@@ -13,6 +13,10 @@ All notable changes to this project are documented here. The format is based on
   text never embedded under the active model — unchanged content reuses its cached vector for free.
 
 ### Added
+- **Repo-wide graph tier in diagnostics**: `stats` now tags each tree-sitter language with
+  `graph: full|partial`, and `doctor` adds a `graph_coverage` finding listing Tier-B languages
+  present in the index. Surfaces upfront which languages have partial `refs`/`impact` (symbols but
+  no import/inheritance edges) instead of only signaling per-query.
 - **Graph coverage signal**: `refs` and `impact` now report a `coverage` block
   (`partial`, `languages`, `reason`). Import/inheritance edges are only extracted
   for the hand-tuned (Tier-A) languages, so a symbol or file in a Tier-B language

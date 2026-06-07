@@ -279,3 +279,12 @@ def is_supported(lang: Optional[str]) -> bool:
 
 def spec_for(lang: Optional[str]) -> Optional[LangSpec]:
     return LANGS.get(lang) if lang else None
+
+
+def has_full_graph(lang: Optional[str]) -> bool:
+    """True if `lang` has a Tier-A spec (full import/inheritance edges for refs/impact).
+
+    Tier-B languages (a loadable grammar but no hand-tuned spec) yield symbols and
+    best-effort call sites only, so their dependency graph is partial.
+    """
+    return spec_for(lang) is not None

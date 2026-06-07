@@ -129,10 +129,14 @@ Fall back to built-in search **only** when: results are empty, `confidence` is `
 
 0. If confidence is consistently low across queries, run diagnostics first:
    ```bash
-   codebase-index stats --json    # check coverage and symbol counts per language
+   codebase-index stats --json    # per-language file/symbol counts + graph tier
    codebase-index doctor          # surface config or security issues
    ```
    Low symbol counts for a language may mean the index needs a full rebuild: `codebase-index index`.
+   In `stats`, each language carries `graph: full|partial` (and `doctor` reports a
+   `graph_coverage` finding): `partial` (Tier-B) means `refs`/`impact` lack
+   import/inheritance edges for that language — treat empty results there as
+   inconclusive.
 
 1. Use `fallback_suggestions.ripgrep` patterns from the response via Grep.
 2. If still nothing, Glob for likely paths, then Grep within them.
