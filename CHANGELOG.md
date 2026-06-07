@@ -6,6 +6,37 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Content-addressed embedding cache**: a new `vec_cache` table (keyed by `(model, content_sha)`)
+  persists chunk embeddings across rebuilds. Because chunk ids churn on every full rebuild, the
+  embedding pass now hashes chunk content and only calls the (potentially slow or paid) backend for
+  text never embedded under the active model — unchanged content reuses its cached vector for free.
+
+### Changed
+- The embedding pass reports cache **misses** (vectors actually computed) as its "embedded" count.
+- `prune_orphan_vectors` now deletes stale `vec_chunks` rows in a single batched `executemany`.
+- **Skill**: documented the `--mode vector` semantic-search path, the `intent`/`mode`/`pagination`
+  response fields, and clarified that `graph --open` renders an HTML view for a human (use
+  `impact`/`refs` for agent-readable dependency answers).
+- **Skill**: narrowed the skill's `allowed-tools` from `Bash(python *)`/`Bash(python3 *)` to
+  `Bash(python -m codebase_index *)`/`Bash(python3 -m codebase_index *)`, so the skill can no longer
+  run arbitrary Python.
+
+### Fixed
+- `explain` now honors the index freshness contract: it passes `root`/`config` into the retrieval
+  pipeline, so `index.stale` / `files_changed_since_build` reflect reality instead of a hardcoded
+  "fresh" block. Previously the skill's freshness check silently never triggered for
+  "how does X work" questions. `explain` also blends in vector results when embeddings are enabled,
+  matching `search --mode hybrid`.
+- The `cbx` wrapper whitelist (skill + plugin `bin/`) now includes `doctor`, which the skill's
+  fallback diagnostics already invoke; previously `cbx doctor` was refused.
+
+## [1.2.2] - 2026-06-05
+
+### Changed
+- Synced the version to `1.2.2` across the package, plugin manifest, and lockfile.
+- Documentation cleanup: removed stale prompt files and screenshots, refreshed the README.
+
 ## [1.2.1] - 2026-06-05
 
 ### Added

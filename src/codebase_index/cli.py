@@ -489,12 +489,18 @@ def explain(
     from .retrieval.pipeline import search as run_search
     from .storage.db import Database
 
-    db_path, _cfg = _ensure_index(ctx)
+    backend = _resolve_backend_for_search(ctx)
+    db_path, cfg = _ensure_index(ctx)
 
     q = query if any(w in query.lower() for w in ("how", "architecture", "overview")) else f"how does {query} work"
     with Database(db_path) as db:
-        payload = run_search(db.conn, q, mode="hybrid", limit=10,
-                             token_budget=token_budget, no_fallback=False)
+        if getattr(backend, "enabled", False):
+            db.enable_vectors()
+        payload = run_search(
+            db.conn, q, mode="hybrid", limit=10,
+            token_budget=token_budget, no_fallback=False, backend=backend,
+            root=Path(cfg.root), config=cfg,
+        )
 
     want_json = json_out or (ctx.obj and ctx.obj.get("json"))
     typer.echo(json_renderer.render(payload) if want_json else md_renderer.render(payload))
