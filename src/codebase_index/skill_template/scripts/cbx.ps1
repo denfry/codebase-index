@@ -8,7 +8,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$allowed = @("search", "explain", "symbol", "refs", "impact", "graph", "stats", "update", "index")
+$allowed = @("search", "explain", "symbol", "refs", "impact", "graph", "stats", "doctor", "update", "index")
 
 if ($allowed -notcontains $Subcommand) {
     Write-Error "cbx: refusing subcommand '$Subcommand'. Allowed: $($allowed -join ', ')"
