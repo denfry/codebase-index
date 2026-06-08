@@ -5,9 +5,9 @@ Mirrors the payload documented in docs/RETRIEVAL.md §8.
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Iterable, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 Intent = Literal[
     "locate_impl", "how_it_works", "impact", "find_refs",
@@ -67,6 +67,48 @@ class SymbolResponse(BaseModel):
     symbols: list[SymbolDef] = []
 
 
+class GraphCoverage(BaseModel):
+    """Honesty signal for graph-derived answers (refs/impact).
+
+    Dependency edges (imports / inheritance) are only extracted for the fully
+    supported (Tier-A) languages. A symbol or file in a Tier-B language (generic
+    tree-sitter walk) yields symbols and best-effort call sites but no
+    import/extends/implements edges, so refs/impact can undercount. When
+    ``partial`` is true an *empty or short* result does not prove there are no
+    references — it may just be unanalyzed; confirm with Grep.
+    """
+
+    partial: bool = False
+    languages: list[str] = []
+    reason: Optional[str] = None
+
+    @classmethod
+    def for_paths(cls, paths: Iterable[str]) -> "GraphCoverage":
+        from .discovery.classify import detect_language, parser_for
+        from .parsers.languages import spec_for
+
+        tier_b = sorted(
+            {
+                lang
+                for p in paths
+                if (lang := detect_language(p)) is not None
+                and parser_for(lang) == "treesitter"
+                and spec_for(lang) is None
+            }
+        )
+        if not tier_b:
+            return cls()
+        return cls(
+            partial=True,
+            languages=tier_b,
+            reason=(
+                "Import/inheritance edges are not extracted for "
+                f"{', '.join(tier_b)} (best-effort symbols only). An empty or short "
+                "result is inconclusive — confirm with a Grep over the codebase."
+            ),
+        )
+
+
 class RefSite(BaseModel):
     path: str
     line: int
@@ -77,6 +119,7 @@ class RefsResponse(BaseModel):
     query: str
     index: IndexFreshness
     sites: list[RefSite] = []
+    coverage: GraphCoverage = Field(default_factory=GraphCoverage)
 
 
 class ImpactNode(BaseModel):
@@ -95,3 +138,4 @@ class ImpactResponse(BaseModel):
     index: IndexFreshness
     nodes: list[ImpactNode] = []
     files: list[str] = []           # distinct affected files, ranked
+    coverage: GraphCoverage = Field(default_factory=GraphCoverage)

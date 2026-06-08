@@ -375,6 +375,9 @@ def search(
     ctx: typer.Context,
     query: str = typer.Argument(..., help="Search query."),
     limit: int = typer.Option(10, "--limit"),
+    offset: int = typer.Option(
+        0, "--offset", help="Skip the first N results (use pagination.next_offset to page)."
+    ),
     token_budget: int = typer.Option(1500, "--token-budget"),
     mode: str = typer.Option("hybrid", "--mode", help="hybrid|fts|symbol|vector"),
     no_fallback: bool = typer.Option(False, "--no-fallback"),
@@ -385,6 +388,10 @@ def search(
     from .output import markdown as md_renderer
     from .retrieval.pipeline import search as run_search
     from .storage.db import Database
+
+    if offset < 0:
+        typer.echo("[codebase-index] --offset must be >= 0.")
+        raise typer.Exit(code=2)
 
     backend = None
     if mode in ("vector", "hybrid"):
@@ -402,7 +409,7 @@ def search(
         if backend is not None and getattr(backend, "enabled", False):
             db.enable_vectors()
         payload = run_search(
-            db.conn, query, mode=mode, limit=limit,
+            db.conn, query, mode=mode, limit=limit, offset=offset,
             token_budget=token_budget, no_fallback=no_fallback, backend=backend,
             root=Path(cfg.root), config=cfg,
         )
@@ -489,12 +496,18 @@ def explain(
     from .retrieval.pipeline import search as run_search
     from .storage.db import Database
 
-    db_path, _cfg = _ensure_index(ctx)
+    backend = _resolve_backend_for_search(ctx)
+    db_path, cfg = _ensure_index(ctx)
 
     q = query if any(w in query.lower() for w in ("how", "architecture", "overview")) else f"how does {query} work"
     with Database(db_path) as db:
-        payload = run_search(db.conn, q, mode="hybrid", limit=10,
-                             token_budget=token_budget, no_fallback=False)
+        if getattr(backend, "enabled", False):
+            db.enable_vectors()
+        payload = run_search(
+            db.conn, q, mode="hybrid", limit=10,
+            token_budget=token_budget, no_fallback=False, backend=backend,
+            root=Path(cfg.root), config=cfg,
+        )
 
     want_json = json_out or (ctx.obj and ctx.obj.get("json"))
     typer.echo(json_renderer.render(payload) if want_json else md_renderer.render(payload))
@@ -556,6 +569,7 @@ def stats(
     import json as _json
 
     from .config import load
+    from .parsers.languages import has_full_graph
     from .storage import repo
     from .storage.db import Database
 
@@ -578,7 +592,14 @@ def stats(
         built_at = repo.get_meta(db.conn, "built_at")
         head = repo.get_meta(db.conn, "head_commit")
         coverage = [
-            {"lang": r["lang"], "files": r["files"], "symbols": r["symbols"]}
+            {
+                "lang": r["lang"],
+                "files": r["files"],
+                "symbols": r["symbols"],
+                # Tier-A languages get import/inheritance edges; Tier-B is symbols-only,
+                # so refs/impact are partial for them.
+                "graph": "full" if has_full_graph(r["lang"]) else "partial",
+            }
             for r in repo.treesitter_coverage(db.conn)
         ]
 
@@ -599,7 +620,8 @@ def stats(
         typer.echo(f"files={files}  symbols={symbols}  built_at={built_at}  head={head}")
         for r in coverage:
             flag = "  ⚠ 0 symbols" if (r["symbols"] or 0) == 0 and r["files"] >= 3 else ""
-            typer.echo(f"  {r['lang']}: {r['files']} files, {r['symbols']} symbols{flag}")
+            tier = "  · partial graph (Tier-B)" if r["graph"] == "partial" else ""
+            typer.echo(f"  {r['lang']}: {r['files']} files, {r['symbols']} symbols{flag}{tier}")
 
 
 @app.command()

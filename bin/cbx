@@ -3,7 +3,7 @@
 # from the venv provisioned by scripts/bootstrap.sh (located via the .venv-path pointer).
 set -euo pipefail
 
-ALLOWED="search explain symbol refs impact graph stats update index"
+ALLOWED="search explain symbol refs impact graph stats doctor update index"
 sub="${1:-}"
 case " $ALLOWED " in
   *" ${sub} "*) : ;;

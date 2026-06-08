@@ -438,13 +438,22 @@ def count_resolved_edges(conn: sqlite3.Connection) -> int:
 
 
 def ensure_vec_tables(conn: sqlite3.Connection, *, dim: int) -> None:
-    """Create vec_chunks (sqlite-vec) + vec_meta if absent. dim is fixed per build."""
+    """Create vec_chunks (sqlite-vec) + vec_meta + vec_cache if absent. dim is fixed per build."""
     dim = int(dim)
     conn.execute(
         f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0("
         f"chunk_id INTEGER PRIMARY KEY, embedding FLOAT[{dim}])"
     )
     conn.execute("CREATE TABLE IF NOT EXISTS vec_meta (model TEXT, dim INTEGER, built_at TEXT)")
+    # Content-addressed embedding cache: chunk ids churn on every full rebuild
+    # (replace_chunks deletes + re-inserts), so a chunk-id keyed store alone would
+    # re-embed the whole repo each time. Keyed by (model, content_sha) the cache
+    # survives that churn and lets unchanged content reuse its vector for free.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS vec_cache ("
+        "model TEXT NOT NULL, content_sha TEXT NOT NULL, embedding BLOB NOT NULL, "
+        "PRIMARY KEY (model, content_sha))"
+    )
 
 
 def set_vec_meta(conn: sqlite3.Connection, *, model: str, dim: int, built_at: str) -> None:
@@ -467,10 +476,49 @@ def upsert_chunk_vector(
 ) -> None:
     import sqlite_vec  # type: ignore[import-untyped]
 
+    upsert_chunk_vector_blob(conn, chunk_id, sqlite_vec.serialize_float32(embedding))
+
+
+def upsert_chunk_vector_blob(conn: sqlite3.Connection, chunk_id: int, blob: bytes) -> None:
+    """Write a pre-serialized float32 embedding blob for a chunk (cache-reuse path)."""
     conn.execute("DELETE FROM vec_chunks WHERE chunk_id = ?", (int(chunk_id),))
     conn.execute(
         "INSERT INTO vec_chunks (chunk_id, embedding) VALUES (?, ?)",
-        (int(chunk_id), sqlite_vec.serialize_float32(embedding)),
+        (int(chunk_id), blob),
+    )
+
+
+def cached_embeddings(
+    conn: sqlite3.Connection, *, model: str, shas: Iterable[str]
+) -> dict[str, bytes]:
+    """Return {content_sha: serialized embedding blob} already cached for this model."""
+    shas = list(dict.fromkeys(shas))
+    if not shas:
+        return {}
+    out: dict[str, bytes] = {}
+    # Chunk the IN list to stay well under SQLite's variable limit on huge repos.
+    for start in range(0, len(shas), 500):
+        batch = shas[start : start + 500]
+        placeholders = ",".join("?" * len(batch))
+        rows = conn.execute(
+            f"SELECT content_sha, embedding FROM vec_cache "
+            f"WHERE model = ? AND content_sha IN ({placeholders})",
+            (model, *batch),
+        ).fetchall()
+        for r in rows:
+            out[r[0]] = r[1]
+    return out
+
+
+def store_cached_embeddings(
+    conn: sqlite3.Connection, *, model: str, items: Sequence[tuple[str, bytes]]
+) -> None:
+    """Insert (content_sha, blob) pairs into the content-addressed embedding cache."""
+    if not items:
+        return
+    conn.executemany(
+        "INSERT OR REPLACE INTO vec_cache (model, content_sha, embedding) VALUES (?, ?, ?)",
+        [(model, sha, blob) for sha, blob in items],
     )
 
 
@@ -496,12 +544,12 @@ def prune_orphan_vectors(conn: sqlite3.Connection) -> int:
     try:
         current_ids = {r[0] for r in conn.execute("SELECT id FROM chunks").fetchall()}
         orphan_ids = [
-            r[0]
+            (r[0],)
             for r in conn.execute("SELECT chunk_id FROM vec_chunks").fetchall()
             if r[0] not in current_ids
         ]
-        for oid in orphan_ids:
-            conn.execute("DELETE FROM vec_chunks WHERE chunk_id = ?", (oid,))
+        if orphan_ids:
+            conn.executemany("DELETE FROM vec_chunks WHERE chunk_id = ?", orphan_ids)
         return len(orphan_ids)
     except Exception:
         return 0

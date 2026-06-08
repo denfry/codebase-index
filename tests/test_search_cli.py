@@ -126,6 +126,40 @@ def test_search_reports_stale_after_edit(sample_repo, tmp_path, monkeypatch):
     assert stale["index"]["files_changed_since_build"] >= 1
 
 
+def test_explain_reports_stale_after_edit(sample_repo):
+    """Regression: explain must honor the freshness contract like search.
+
+    Before the fix, explain called the retrieval pipeline without root/config, so
+    it always fell back to a hardcoded ``stale=False, files_changed_since_build=0``
+    block — silently breaking the skill's freshness check for "how does X work".
+    """
+    import sqlite3
+
+    assert runner.invoke(app, ["--root", str(sample_repo), "index"]).exit_code == 0
+
+    res = runner.invoke(
+        app, ["--root", str(sample_repo), "--json", "explain", "how does token refresh work"]
+    )
+    assert res.exit_code == 0, res.output
+    fresh = _json.loads(res.output)
+    assert fresh["index"]["exists"] is True
+    assert fresh["index"]["stale"] is False
+
+    db_path = sample_repo / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("UPDATE files SET mtime_ns = 1")
+    conn.execute("DELETE FROM meta WHERE key = 'head_commit'")
+    conn.commit()
+    conn.close()
+
+    res2 = runner.invoke(
+        app, ["--root", str(sample_repo), "--json", "explain", "how does token refresh work"]
+    )
+    stale = _json.loads(res2.output)
+    assert stale["index"]["stale"] is True
+    assert stale["index"]["files_changed_since_build"] >= 1
+
+
 def test_search_kind_words_filter_symbol_kind(sample_repo):
     assert runner.invoke(app, ["--root", str(sample_repo), "index"]).exit_code == 0
 
@@ -145,3 +179,52 @@ def test_search_kind_words_filter_symbol_kind(sample_repo):
     assert result.exit_code == 0, result.output
     payload = _json.loads(result.output)
     assert payload["results"][0]["symbols"] == ["refresh_access_token"]
+
+
+def test_search_offset_paginates_through_cli(sample_repo):
+    """Regression: --offset must reach the retrieval pipeline.
+
+    Before the fix, the CLI search command never exposed --offset, so the
+    pipeline's pagination contract (advertised via the JSON ``pagination`` block
+    and MCP's ``next_offset``) was unreachable from the CLI/skill — every call
+    silently returned page one.
+    """
+    assert runner.invoke(app, ["--root", str(sample_repo), "index"]).exit_code == 0
+
+    page1 = runner.invoke(
+        app, ["--root", str(sample_repo), "--json", "search", "token", "--limit", "1"]
+    )
+    assert page1.exit_code == 0, page1.output
+    p1 = _json.loads(page1.output)
+    pag = p1.get("pagination")
+    if not pag or not pag.get("has_more"):
+        # Fixture too small to page; the flag must still be accepted.
+        return
+
+    page2 = runner.invoke(
+        app,
+        [
+            "--root",
+            str(sample_repo),
+            "--json",
+            "search",
+            "token",
+            "--limit",
+            "1",
+            "--offset",
+            str(pag["next_offset"]),
+        ],
+    )
+    assert page2.exit_code == 0, page2.output
+    p2 = _json.loads(page2.output)
+    assert p2["pagination"]["offset"] == pag["next_offset"]
+    # The second page must not repeat the first page's top hit.
+    k1 = (p1["results"][0]["path"], p1["results"][0]["line_start"])
+    k2 = (p2["results"][0]["path"], p2["results"][0]["line_start"])
+    assert k1 != k2
+
+
+def test_search_negative_offset_rejected(sample_repo):
+    result = runner.invoke(app, ["--root", str(sample_repo), "search", "token", "--offset", "-1"])
+    assert result.exit_code == 2
+    assert "offset" in result.output.lower()

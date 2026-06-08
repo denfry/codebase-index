@@ -74,6 +74,10 @@ Ranked retrieval packet with confidence score
 
 **Score:** Cosine similarity (0.0 to 1.0).
 
+> **Indexing note:** chunk embeddings are reused across rebuilds via a content-addressed
+> `vec_cache` (keyed by model + content SHA-256), so only new or changed chunks are re-embedded.
+> See [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) and [SCHEMA.md](SCHEMA.md) for details.
+
 ## 5. Graph Expansion
 
 **Trigger:** After initial results are found.
