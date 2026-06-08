@@ -85,6 +85,7 @@ def _pool_init(config: Config) -> None:
 def _parse_one(cand) -> _ParseResult:
     """Parse a single file. Top-level for ProcessPoolExecutor pickling; uses _PARSE_CONFIG."""
     config = _PARSE_CONFIG
+    assert config is not None, "_pool_init must set _PARSE_CONFIG before any worker parses"
     try:
         sha256 = _sha256_file(cand.path)
     except OSError:
