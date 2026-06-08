@@ -129,9 +129,27 @@ CREATE VIRTUAL TABLE vec_chunks USING vec0(
 );
 -- A side table records which embedding model/dim produced these vectors:
 CREATE TABLE vec_meta (model TEXT, dim INTEGER, built_at TEXT);
+-- Content-addressed embedding cache, keyed by (model, content SHA-256):
+CREATE TABLE vec_cache (
+    model       TEXT NOT NULL,
+    content_sha TEXT NOT NULL,
+    embedding   BLOB NOT NULL,  -- pre-serialized float32 vector
+    PRIMARY KEY (model, content_sha)
+);
 ```
 
-If embeddings are disabled, `vec_chunks` does not exist and the vector searcher is skipped.
+If embeddings are disabled, none of `vec_chunks`, `vec_meta`, or `vec_cache` exist and the vector
+searcher is skipped.
+
+### Embedding reuse via `vec_cache`
+
+`chunk_id`s churn on every full rebuild because `replace_chunks` deletes and re-inserts rows, so a
+`chunk_id`-keyed store alone would re-embed the entire repository each time. The embedding pass
+therefore hashes each chunk's content (SHA-256) and looks it up in `vec_cache` under the active
+model name. Only content never embedded under that model is sent to the (potentially slow or paid)
+backend; everything else is copied straight from the cache into `vec_chunks`. Newly computed vectors
+are written back to `vec_cache` so subsequent rebuilds reuse them. The reported "embedded" count
+reflects cache **misses** — i.e. the work actually performed.
 
 ## Migrations
 
