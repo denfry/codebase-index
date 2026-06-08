@@ -43,6 +43,30 @@ def test_doctor_cli_json(tmp_path):
     assert any(f["id"] == "cache_gitignored" for f in data["findings"])
 
 
+def test_doctor_flags_tier_b_partial_graph(tmp_path):
+    """A Tier-B language (Lua) in the index must surface a partial-graph info finding."""
+    (tmp_path / "mod.lua").write_text("local function greet()\n  return 1\nend\n", encoding="utf-8")
+    assert runner.invoke(app, ["--root", str(tmp_path), "index"]).exit_code == 0
+
+    cfg = Config()
+    cfg.root = str(tmp_path)
+    findings = {f.id: f for f in run_doctor(tmp_path, cfg)}
+    gc = findings["graph_coverage"]
+    assert gc.ok is True and gc.severity == "info"
+    assert "lua" in gc.detail
+
+
+def test_doctor_full_graph_when_only_tier_a(tmp_path):
+    (tmp_path / "mod.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+    assert runner.invoke(app, ["--root", str(tmp_path), "index"]).exit_code == 0
+
+    cfg = Config()
+    cfg.root = str(tmp_path)
+    findings = {f.id: f for f in run_doctor(tmp_path, cfg)}
+    assert "lua" not in findings["graph_coverage"].detail
+    assert "full dependency-graph support" in findings["graph_coverage"].detail
+
+
 def test_doctor_strict_exits_nonzero_on_high_severity(tmp_path):
     # uncovered cache is a high-severity finding → --strict must fail
     res = runner.invoke(app, ["--root", str(tmp_path), "doctor", "--strict"])

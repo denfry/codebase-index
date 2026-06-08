@@ -1,7 +1,7 @@
 ---
 name: codebase-index
 description: Use this skill before answering questions about a repository's architecture, implementation locations, symbols, references, dependencies, refactoring impact, data flow, bugs, or where something is implemented. It searches a local hybrid codebase index so Claude reads only the most relevant files instead of scanning the entire project.
-allowed-tools: Bash(python *), Bash(python3 *), Bash(codebase-index *), Bash(cbx *), Read, Grep, Glob
+allowed-tools: Bash(python -m codebase_index *), Bash(python3 -m codebase_index *), Bash(codebase-index *), Bash(cbx *), Read, Grep, Glob
 ---
 
 # Codebase Index
@@ -44,7 +44,12 @@ Pick the subcommand by intent:
 | a specific symbol name | `codebase-index symbol "<name>" --json` |
 | "who calls / references" | `codebase-index refs "<name>" --json` |
 | "what breaks if I change" | `codebase-index impact "<file-or-symbol>" --json` |
-| visual graph / "open graph" | `codebase-index graph "<file-or-symbol>" --open` |
+| visual graph / "open graph" (for the human, not for you to read) | `codebase-index graph "<file-or-symbol>" --open` |
+
+The `graph` command renders an HTML dependency graph for a person to look at —
+it is not a retrieval packet. Use it only when the user explicitly wants a visual
+graph; for "what depends on X" answer from `impact`/`refs` instead. In a headless
+session prefer `--out <path>` over `--open`.
 
 `explain` has a higher default token budget (2200) and HOW_IT_WORKS intent weights — use it whenever the question is about understanding behavior or flow.
 
@@ -52,6 +57,10 @@ For `search`, pick a `--mode` when the intent is clear:
 - `--mode symbol` — pure symbol lookups (faster, no FTS noise)
 - `--mode fts` — text/keyword queries where symbol names don't matter
 - `--mode hybrid` — default; best for mixed queries
+- `--mode vector` — semantic / near-synonym queries ("where do we rate-limit
+  requests" without the exact words). Requires opt-in embeddings; falls back with
+  a clear message when they are not enabled. `hybrid` already blends vectors in
+  when embeddings are on, so reach for `vector` only for pure-semantic recall.
 
 Natural-language kind words such as `method`, `function`, `class`, `interface`,
 `enum`, and `type` constrain the symbol retriever inside `search`.
@@ -89,6 +98,20 @@ Top-level fields:
 - `recommended_reads` — the precise `{path, line_start, line_end}` list to open next. This is your read plan.
 - `confidence` — `high` (answer directly), `medium` (read + optionally confirm with one Grep), `low` (use fallback).
 - `fallback_suggestions` — ripgrep patterns and paths to try if the index is weak.
+- `intent` / `mode` — how the query was classified and which retrievers ran;
+  useful to sanity-check a weak result (e.g. a "how does X work" question that
+  resolved to a bare symbol lookup may need `explain` instead).
+- `pagination` — present only when more results exist than fit the page. It
+  reports `has_more` and `next_offset`. To page, re-run `search` with
+  `--offset <next_offset>` (e.g. `search "query" --limit 10 --offset 10`). Prefer
+  refining with a more specific subcommand or raising `--token-budget` first —
+  page only when the top results genuinely miss the answer.
+- `coverage` (on `refs`/`impact` only) — graph-completeness signal. Dependency
+  edges (imports/inheritance) are extracted only for fully supported languages.
+  When `coverage.partial` is `true` (the symbol/file is in a Tier-B language such
+  as Lua), an **empty or short `refs`/`impact` result is inconclusive** — it may
+  just be unanalyzed, not absent. Confirm with a Grep before concluding "nothing
+  references this". `coverage.languages` lists the affected languages.
 
 ## Token efficiency rules
 
@@ -106,10 +129,14 @@ Fall back to built-in search **only** when: results are empty, `confidence` is `
 
 0. If confidence is consistently low across queries, run diagnostics first:
    ```bash
-   codebase-index stats --json    # check coverage and symbol counts per language
+   codebase-index stats --json    # per-language file/symbol counts + graph tier
    codebase-index doctor          # surface config or security issues
    ```
    Low symbol counts for a language may mean the index needs a full rebuild: `codebase-index index`.
+   In `stats`, each language carries `graph: full|partial` (and `doctor` reports a
+   `graph_coverage` finding): `partial` (Tier-B) means `refs`/`impact` lack
+   import/inheritance edges for that language — treat empty results there as
+   inconclusive.
 
 1. Use `fallback_suggestions.ripgrep` patterns from the response via Grep.
 2. If still nothing, Glob for likely paths, then Grep within them.

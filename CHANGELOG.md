@@ -6,6 +6,55 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Content-addressed embedding cache**: a new `vec_cache` table (keyed by `(model, content_sha)`)
+  persists chunk embeddings across rebuilds. Because chunk ids churn on every full rebuild, the
+  embedding pass now hashes chunk content and only calls the (potentially slow or paid) backend for
+  text never embedded under the active model — unchanged content reuses its cached vector for free.
+
+### Added
+- **Repo-wide graph tier in diagnostics**: `stats` now tags each tree-sitter language with
+  `graph: full|partial`, and `doctor` adds a `graph_coverage` finding listing Tier-B languages
+  present in the index. Surfaces upfront which languages have partial `refs`/`impact` (symbols but
+  no import/inheritance edges) instead of only signaling per-query.
+- **Graph coverage signal**: `refs` and `impact` now report a `coverage` block
+  (`partial`, `languages`, `reason`). Import/inheritance edges are only extracted
+  for the hand-tuned (Tier-A) languages, so a symbol or file in a Tier-B language
+  (generic tree-sitter walk, e.g. Lua) can produce an empty/short result that is
+  inconclusive rather than authoritative. `coverage.partial` flags this so agents
+  fall back to Grep instead of reading "no references" as proof. Markdown output
+  prints a matching warning; the skill documents the field.
+
+### Changed
+- The embedding pass reports cache **misses** (vectors actually computed) as its "embedded" count.
+- `prune_orphan_vectors` now deletes stale `vec_chunks` rows in a single batched `executemany`.
+- **Skill**: documented the `--mode vector` semantic-search path, the `intent`/`mode`/`pagination`
+  response fields, and clarified that `graph --open` renders an HTML view for a human (use
+  `impact`/`refs` for agent-readable dependency answers).
+- **Skill**: narrowed the skill's `allowed-tools` from `Bash(python *)`/`Bash(python3 *)` to
+  `Bash(python -m codebase_index *)`/`Bash(python3 -m codebase_index *)`, so the skill can no longer
+  run arbitrary Python.
+
+### Fixed
+- `search` now exposes `--offset`, so the pagination contract is reachable from the CLI/skill.
+  The retrieval pipeline and MCP already supported paging, but the CLI command never surfaced the
+  flag — every call silently returned page one and the advertised `pagination.next_offset` was a
+  dead end. Markdown output now also notes when more results are available. `--offset` rejects
+  negative values.
+- `explain` now honors the index freshness contract: it passes `root`/`config` into the retrieval
+  pipeline, so `index.stale` / `files_changed_since_build` reflect reality instead of a hardcoded
+  "fresh" block. Previously the skill's freshness check silently never triggered for
+  "how does X work" questions. `explain` also blends in vector results when embeddings are enabled,
+  matching `search --mode hybrid`.
+- The `cbx` wrapper whitelist (skill + plugin `bin/`) now includes `doctor`, which the skill's
+  fallback diagnostics already invoke; previously `cbx doctor` was refused.
+
+## [1.2.2] - 2026-06-05
+
+### Changed
+- Synced the version to `1.2.2` across the package, plugin manifest, and lockfile.
+- Documentation cleanup: removed stale prompt files and screenshots, refreshed the README.
+
 ## [1.2.1] - 2026-06-05
 
 ### Added
