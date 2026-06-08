@@ -85,16 +85,39 @@ FTS5 virtual table for full-text search (auto-managed by triggers).
 | `text` | TEXT | Chunk text (indexed by FTS5) |
 | `chunk_id` | INTEGER | References chunks(id) |
 
-### embeddings (optional)
+### vec_chunks (optional)
 
-Stores vector embeddings for semantic search.
+Vector embeddings for semantic search. Created **only** when `embeddings.enabled = true`, via the
+`sqlite-vec` extension (a `vec0` virtual table).
 
 | Column | Type | Description |
 |---|---|---|
-| `chunk_id` | INTEGER PRIMARY KEY REFERENCES chunks(id) | Associated chunk |
-| `vector` | BLOB | Serialized embedding vector |
+| `chunk_id` | INTEGER PRIMARY KEY | References chunks(id) |
+| `embedding` | FLOAT[dim] | Embedding vector; `dim` is fixed per build by the configured model |
+
+### vec_meta (optional)
+
+Records which embedding model/dimension produced the vectors currently in `vec_chunks`.
+
+| Column | Type | Description |
+|---|---|---|
 | `model` | TEXT | Embedding model identifier |
-| `created_at` | TEXT | Creation timestamp |
+| `dim` | INTEGER | Vector dimension |
+| `built_at` | TEXT | ISO 8601 timestamp of the embedding pass |
+
+### vec_cache (optional)
+
+Content-addressed embedding cache. `chunk_id`s churn on every full rebuild (chunks are deleted and
+re-inserted), so this cache is keyed by `(model, content_sha)` instead — letting unchanged content
+reuse its vector for free across rebuilds, so only new or changed text hits the backend.
+
+| Column | Type | Description |
+|---|---|---|
+| `model` | TEXT NOT NULL | Embedding model identifier |
+| `content_sha` | TEXT NOT NULL | SHA-256 of the chunk content |
+| `embedding` | BLOB NOT NULL | Pre-serialized float32 vector |
+
+Primary key: `(model, content_sha)`.
 
 ### summaries
 

@@ -201,6 +201,8 @@ def _embed_chunks(cfg, db, conn) -> int:
     backend = resolve_backend(cfg, warn=lambda m: print(m))
     if not getattr(backend, "enabled", False):
         return 0
+    import sqlite_vec  # type: ignore[import-untyped]
+
     db.enable_vectors()
     repo.ensure_vec_tables(conn, dim=backend.dim)
     repo.prune_orphan_vectors(conn)
@@ -208,13 +210,29 @@ def _embed_chunks(cfg, db, conn) -> int:
     rows = [r for r in repo.chunks_for_embedding(conn) if int(r["id"]) not in existing]
     if not rows:
         return 0
-    texts = [r["content"] for r in rows]
-    vectors = backend.embed(texts)
-    for row, vec in zip(rows, vectors):
-        repo.upsert_chunk_vector(conn, int(row["id"]), vec)
+
+    # Content-addressed reuse: chunk ids churn on every full rebuild (replace_chunks),
+    # so a chunk-id keyed skip alone re-embeds the whole repo each time. Hash the content
+    # and only call the (potentially slow / paid) backend for text never embedded under
+    # this model; everything else is copied straight from the cache.
+    shas = [hashlib.sha256(r["content"].encode("utf-8")).hexdigest() for r in rows]
+    cached = repo.cached_embeddings(conn, model=backend.name, shas=shas)
+    misses = [(r, sha) for r, sha in zip(rows, shas) if sha not in cached]
+
+    fresh: dict[str, bytes] = {}
+    if misses:
+        vectors = backend.embed([r["content"] for r, _ in misses])
+        for (_row, sha), vec in zip(misses, vectors):
+            fresh[sha] = sqlite_vec.serialize_float32(vec)
+        repo.store_cached_embeddings(conn, model=backend.name, items=list(fresh.items()))
+
+    for row, sha in zip(rows, shas):
+        blob = cached.get(sha) or fresh[sha]
+        repo.upsert_chunk_vector_blob(conn, int(row["id"]), blob)
+
     built_at = datetime.now(timezone.utc).isoformat()
     repo.set_vec_meta(conn, model=backend.name, dim=backend.dim, built_at=built_at)
-    return len(rows)
+    return len(misses)
 
 
 def _sha256_file(path: Path) -> str:
