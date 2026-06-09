@@ -63,6 +63,67 @@ def test_build_graph_resolves_symbol_and_import_edges(tmp_path):
     db.close()
 
 
+def _file(db, path, sha="x"):
+    return repo.upsert_file(
+        db.conn, path=path, lang="python", size_bytes=1, sha256=sha,
+        mtime_ns=1, git_status=None, parser="treesitter", indexed_at="t", is_generated=False,
+    )
+
+
+def test_ambiguous_symbol_name_stays_unresolved(tmp_path):
+    db = _db(tmp_path)
+    fid_a = _file(db, "src/a.py", "a")
+    fid_b = _file(db, "src/b.py", "b")
+    repo.replace_symbols(db.conn, fid_a, [
+        Symbol(name="helper", kind="function", line_start=1, line_end=2, qualified="helper"),
+    ])
+    repo.replace_symbols(db.conn, fid_b, [
+        Symbol(name="helper", kind="function", line_start=1, line_end=2, qualified="helper"),
+    ])
+    repo.replace_edges(db.conn, fid_a, [
+        {"edge_type": "call", "src_kind": "file", "src_id": fid_a,
+         "dst_kind": None, "dst_id": None, "dst_name": "helper", "line": 3, "resolved": 0},
+    ])
+    res = build_graph(db.conn)
+    assert res["resolved"] == 0 and res["unresolved"] == 1
+    db.close()
+
+
+def test_ambiguous_import_suffix_needs_longer_path(tmp_path):
+    db = _db(tmp_path)
+    fid_a = _file(db, "pkg_a/utils.py", "a")
+    _file(db, "pkg_b/utils.py", "b")
+    src = _file(db, "src/main.py", "c")
+    repo.replace_edges(db.conn, src, [
+        {"edge_type": "import", "src_kind": "file", "src_id": src,
+         "dst_kind": None, "dst_id": None, "dst_name": "utils", "line": 1, "resolved": 0},
+        {"edge_type": "import", "src_kind": "file", "src_id": src,
+         "dst_kind": None, "dst_id": None, "dst_name": "pkg_a.utils", "line": 2, "resolved": 0},
+    ])
+    res = build_graph(db.conn)
+    # bare "utils" matches two files -> unresolved; the qualified path is unique.
+    assert res["resolved"] == 1 and res["unresolved"] == 1
+    inc = repo.incoming_edges(db.conn, "file", fid_a)
+    assert any(r["edge_type"] == "import" for r in inc)
+    db.close()
+
+
+def test_import_resolution_is_case_insensitive(tmp_path):
+    # SQLite LIKE folds ASCII case; the in-memory suffix map must keep that.
+    db = _db(tmp_path)
+    fid_a = _file(db, "src/Auth/Token.py", "a")
+    src = _file(db, "src/main.py", "b")
+    repo.replace_edges(db.conn, src, [
+        {"edge_type": "import", "src_kind": "file", "src_id": src,
+         "dst_kind": None, "dst_id": None, "dst_name": "auth.token", "line": 1, "resolved": 0},
+    ])
+    res = build_graph(db.conn)
+    assert res["resolved"] == 1
+    inc = repo.incoming_edges(db.conn, "file", fid_a)
+    assert any(r["edge_type"] == "import" for r in inc)
+    db.close()
+
+
 def _indexed(sample_repo, tmp_path):
     cfg = Config()
     cfg.root = str(sample_repo)
