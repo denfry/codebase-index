@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-`codebase-index` is a **local-first** code intelligence layer for AI coding agents. In `1.2.0`
+`codebase-index` is a **local-first** code intelligence layer for AI coding agents. In `1.3.0`
 it has two shipped faces:
 
 1. **A Claude Code Skill** (`.claude/skills/codebase-index/SKILL.md`) that Claude auto-invokes for
