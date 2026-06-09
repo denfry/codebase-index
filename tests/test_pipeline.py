@@ -153,3 +153,27 @@ def test_reindex_graph_idempotent(sample_repo, tmp_path):
     s2 = build_index(cfg, db, root=sample_repo)
     assert s1.edges == s2.edges and s1.edges_resolved == s2.edges_resolved
     db.close()
+
+
+def test_parse_all_falls_back_sequentially_with_warning(tmp_path, monkeypatch, capsys):
+    from codebase_index.discovery.walker import walk
+    from codebase_index.indexer import pipeline
+
+    (tmp_path / "a.py").write_text("def a(): ...\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text("def b(): ...\n", encoding="utf-8")
+    cfg = Config()
+    cfg.root = str(tmp_path)
+    candidates = list(walk(tmp_path, cfg))
+    assert candidates
+
+    class BrokenPool:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("no pool for you")
+
+    monkeypatch.setattr(pipeline, "_MIN_PARALLEL_FILES", 1)
+    monkeypatch.setattr(pipeline, "ProcessPoolExecutor", BrokenPool)
+
+    results = pipeline._parse_all(candidates, cfg)
+    assert len(results) == len(candidates)
+    # The degradation must be visible, not silent.
+    assert "falling back to sequential" in capsys.readouterr().err

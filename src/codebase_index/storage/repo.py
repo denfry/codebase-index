@@ -570,8 +570,8 @@ def embedded_chunk_ids(conn: sqlite3.Connection) -> set[int]:
     try:
         rows = conn.execute("SELECT chunk_id FROM vec_chunks").fetchall()
         return {int(r[0]) for r in rows}
-    except Exception:
-        return set()
+    except sqlite3.OperationalError:
+        return set()  # vec tables not created yet (embeddings never enabled)
 
 
 def prune_orphan_vectors(conn: sqlite3.Connection) -> int:
@@ -586,8 +586,8 @@ def prune_orphan_vectors(conn: sqlite3.Connection) -> int:
         if orphan_ids:
             conn.executemany("DELETE FROM vec_chunks WHERE chunk_id = ?", orphan_ids)
         return len(orphan_ids)
-    except Exception:
-        return 0
+    except sqlite3.OperationalError:
+        return 0  # vec tables not created yet (embeddings never enabled)
 
 
 def path_mtimes(conn: sqlite3.Connection) -> dict[str, int]:

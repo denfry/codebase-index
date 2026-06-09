@@ -173,8 +173,9 @@ def _try_auto_update_skills(root_opt: Optional[Path]) -> None:
         root = Path(root_opt).resolve() if root_opt else find_root()
         for target in scaffold.CLI_TARGETS:
             auto_update_if_needed(root, target)
-    except Exception:
-        pass  # never let an auto-update failure crash the real command
+    except Exception as exc:
+        # Never let an auto-update failure crash the real command — but say so.
+        typer.echo(f"[codebase-index] skill auto-update skipped: {exc}", err=True)
 
 
 @app.callback()

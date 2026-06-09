@@ -101,7 +101,7 @@ def test_auto_update_applies_when_outdated(tmp_path):
     assert skill_update.needs_update(skill_dir) is False
 
 
-def test_auto_update_swallows_failures(tmp_path, monkeypatch):
+def test_auto_update_swallows_failures_but_warns(tmp_path, monkeypatch, capsys):
     skill_dir = _install(tmp_path)
     (skill_dir / skill_update.VERSION_FILE).write_text("0.0.1\n", encoding="utf-8")
 
@@ -110,6 +110,8 @@ def test_auto_update_swallows_failures(tmp_path, monkeypatch):
 
     monkeypatch.setattr(scaffold, "materialize_skill", boom)
     assert skill_update.auto_update_if_needed(tmp_path, "claude") is False
+    err = capsys.readouterr().err
+    assert "skill auto-update" in err and "materialize failed" in err
 
 
 def test_cli_auto_update_respects_disable_env(tmp_path, monkeypatch):
