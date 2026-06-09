@@ -44,3 +44,17 @@ def test_semantic_intents_have_vector_weight():
 def test_locate_impl_still_favors_symbol_over_vector():
     plan = detect_intent("where is refresh_access_token implemented")
     assert plan.weight("symbol") > plan.weight("vector")
+
+
+def test_multiple_matched_intents_merge():
+    # Matches both ARCHITECTURE ("architecture") and HOW_IT_WORKS ("how does").
+    plan = detect_intent("how does the architecture work")
+    # Primary intent comes from the first matched rule (ARCHITECTURE precedes
+    # HOW_IT_WORKS in the rule list), as do graph_strategy and summaries_first.
+    assert plan.intent is Intent.ARCHITECTURE
+    assert plan.graph_strategy == "none"
+    assert plan.summaries_first is True
+    # Weights take the max per retriever; budget takes the max across plans.
+    assert plan.weight("fts") == 1.0  # max(0.6 architecture, 1.0 how_it_works)
+    assert plan.weight("vector") == 0.8  # max(0.5, 0.8)
+    assert plan.token_budget == 2500  # max(2500, 2200)

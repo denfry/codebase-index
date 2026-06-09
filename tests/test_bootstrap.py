@@ -105,7 +105,15 @@ def test_cold_run_installs_from_requirements_lock(tmp_path):
     res = _run(root, env)
     assert res.returncode == 0, res.stderr
     pip_log = Path(env["FAKE_PIP_LOG"]).read_text(encoding="utf-8")
-    assert f"-r {root / 'requirements.lock'}" in pip_log
+    # Compare as paths, not raw strings: bootstrap.sh joins with "/", while
+    # pathlib on Windows renders "\", so the bytes differ but the path is equal.
+    lock_args = [
+        line.split(" install -r ", 1)[1]
+        for line in pip_log.splitlines()
+        if " install -r " in line
+    ]
+    assert lock_args, pip_log
+    assert any(Path(arg) == root / "requirements.lock" for arg in lock_args)
 
 
 @pytest.mark.skipif(not BASH_OK, reason="bash not available or non-functional")
