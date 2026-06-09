@@ -381,6 +381,30 @@ def resolve_edge(conn: sqlite3.Connection, edge_id: int, dst_kind: str, dst_id: 
     )
 
 
+def resolve_edges_bulk(
+    conn: sqlite3.Connection, resolutions: Sequence[tuple[str, int, int]]
+) -> None:
+    """Apply (dst_kind, dst_id, edge_id) resolutions in one executemany."""
+    conn.executemany(
+        "UPDATE edges SET dst_kind = ?, dst_id = ?, resolved = 1 WHERE id = ?",
+        resolutions,
+    )
+
+
+def unique_symbol_ids_by_name(conn: sqlite3.Connection) -> dict[str, int]:
+    """Map symbol name -> id for names defined exactly once in the repo."""
+    return {
+        row["name"]: int(row["sym_id"])
+        for row in conn.execute(
+            "SELECT name, MIN(id) AS sym_id FROM symbols GROUP BY name HAVING COUNT(*) = 1"
+        )
+    }
+
+
+def all_file_ids_with_paths(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute("SELECT id, path FROM files").fetchall()
+
+
 def symbol_id_for_unique_name(conn: sqlite3.Connection, name: str) -> Optional[int]:
     rows = conn.execute(
         "SELECT id FROM symbols WHERE name = ? LIMIT 2", (name,)
@@ -481,10 +505,21 @@ def upsert_chunk_vector(
 
 def upsert_chunk_vector_blob(conn: sqlite3.Connection, chunk_id: int, blob: bytes) -> None:
     """Write a pre-serialized float32 embedding blob for a chunk (cache-reuse path)."""
-    conn.execute("DELETE FROM vec_chunks WHERE chunk_id = ?", (int(chunk_id),))
-    conn.execute(
+    upsert_chunk_vector_blobs(conn, [(chunk_id, blob)])
+
+
+def upsert_chunk_vector_blobs(
+    conn: sqlite3.Connection, items: Sequence[tuple[int, bytes]]
+) -> None:
+    """Batch-write pre-serialized embedding blobs (one executemany per statement)."""
+    if not items:
+        return
+    conn.executemany(
+        "DELETE FROM vec_chunks WHERE chunk_id = ?", [(int(cid),) for cid, _ in items]
+    )
+    conn.executemany(
         "INSERT INTO vec_chunks (chunk_id, embedding) VALUES (?, ?)",
-        (int(chunk_id), blob),
+        [(int(cid), blob) for cid, blob in items],
     )
 
 
@@ -535,8 +570,8 @@ def embedded_chunk_ids(conn: sqlite3.Connection) -> set[int]:
     try:
         rows = conn.execute("SELECT chunk_id FROM vec_chunks").fetchall()
         return {int(r[0]) for r in rows}
-    except Exception:
-        return set()
+    except sqlite3.OperationalError:
+        return set()  # vec tables not created yet (embeddings never enabled)
 
 
 def prune_orphan_vectors(conn: sqlite3.Connection) -> int:
@@ -551,8 +586,8 @@ def prune_orphan_vectors(conn: sqlite3.Connection) -> int:
         if orphan_ids:
             conn.executemany("DELETE FROM vec_chunks WHERE chunk_id = ?", orphan_ids)
         return len(orphan_ids)
-    except Exception:
-        return 0
+    except sqlite3.OperationalError:
+        return 0  # vec tables not created yet (embeddings never enabled)
 
 
 def path_mtimes(conn: sqlite3.Connection) -> dict[str, int]:

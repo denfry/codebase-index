@@ -6,13 +6,18 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-09
+
 ### Added
 - **Content-addressed embedding cache**: a new `vec_cache` table (keyed by `(model, content_sha)`)
   persists chunk embeddings across rebuilds. Because chunk ids churn on every full rebuild, the
   embedding pass now hashes chunk content and only calls the (potentially slow or paid) backend for
   text never embedded under the active model — unchanged content reuses its cached vector for free.
-
-### Added
+- **Shared CLI/MCP service layer** (`codebase_index/service.py`): both surfaces now resolve the
+  index path, run search sessions, and build stats payloads through the same code, so they cannot
+  drift. Two real drifts were closed: MCP `search_code`/`explain_code` now blend in vector results
+  when embeddings are enabled (previously the vector channel was CLI-only), and MCP `index_stats`
+  now reports the per-language `graph: full|partial` tier the skill keys on.
 - **Repo-wide graph tier in diagnostics**: `stats` now tags each tree-sitter language with
   `graph: full|partial`, and `doctor` adds a `graph_coverage` finding listing Tier-B languages
   present in the index. Surfaces upfront which languages have partial `refs`/`impact` (symbols but
@@ -24,8 +29,24 @@ All notable changes to this project are documented here. The format is based on
   inconclusive rather than authoritative. `coverage.partial` flags this so agents
   fall back to Grep instead of reading "no references" as proof. Markdown output
   prints a matching warning; the skill documents the field.
+- **Skill-copy sync tooling**: `scripts/sync_skill_copies.py` regenerates every committed copy of
+  the skill (`.claude/`, `.codex/`, `.opencode/`, `skills/`, shared `skill/` files) plus all
+  version stamps from the canonical `src/codebase_index/skill_template/`; CI fails when copies
+  drift (`--check`). The package version now lives in one place
+  (`src/codebase_index/__init__.py`) via hatch dynamic versioning.
+- `CBX_NO_SKILL_AUTO_UPDATE=1` disables the silent skill auto-update — used by the test suite,
+  useful for CI and scripted environments.
 
 ### Changed
+- **Graph build is batched**: edge resolution now runs one query for globally-unique symbol names
+  and one pass over file paths (in-memory suffix map) instead of per-edge lookups and up to ~20
+  full-table `LIKE` scans per import edge — 7–28× faster on a small repo with identical results,
+  and the gap grows with repository size. Vector blobs are written with a single batched
+  `executemany`; a new `edges(file_id)` index removes full-table scans from incremental updates
+  and file-deletion cascades.
+- Silent failure paths now report to stderr: the ProcessPool→sequential parsing fallback and skill
+  auto-update failures were previously invisible; vector helpers only swallow
+  `sqlite3.OperationalError` (missing vec tables) instead of every exception.
 - The embedding pass reports cache **misses** (vectors actually computed) as its "embedded" count.
 - `prune_orphan_vectors` now deletes stale `vec_chunks` rows in a single batched `executemany`.
 - **Skill**: documented the `--mode vector` semantic-search path, the `intent`/`mode`/`pagination`
@@ -48,6 +69,10 @@ All notable changes to this project are documented here. The format is based on
   matching `search --mode hybrid`.
 - The `cbx` wrapper whitelist (skill + plugin `bin/`) now includes `doctor`, which the skill's
   fallback diagnostics already invoke; previously `cbx doctor` was refused.
+- The test suite is green on Windows again (`bootstrap` path comparison) and no longer rewrites
+  the committed `.skill_version` stamps as a side effect of running the CLI inside the checkout.
+- `docs/ARCHITECTURE.md` no longer shows two contradictory repository layouts or claims `graph/`
+  is a stub.
 
 ## [1.2.2] - 2026-06-05
 

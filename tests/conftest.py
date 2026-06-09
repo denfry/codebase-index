@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 from pathlib import Path
 
 import pytest
 
 from codebase_index.storage.db import Database
+
+# Tests invoke the CLI from inside this checkout; without the guard, the skill
+# version-stamp auto-update rewrites the committed copies under .claude/.codex/
+# .opencode whenever the installed package metadata is stale.
+os.environ.setdefault("CBX_NO_SKILL_AUTO_UPDATE", "1")
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "sample_repo"
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import subprocess
+import sys
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -123,7 +124,12 @@ def _parse_all(candidates: list, config: Config) -> list[_ParseResult]:
             initargs=(config,),
         ) as pool:
             return list(pool.map(_parse_one, candidates))
-    except Exception:
+    except Exception as exc:
+        print(
+            f"[codebase-index] parallel parse unavailable ({type(exc).__name__}: {exc}); "
+            f"falling back to sequential parsing for {len(candidates)} files.",
+            file=sys.stderr,
+        )
         return [_parse_one_inline(c, config) for c in candidates]
 
 
@@ -227,9 +233,10 @@ def _embed_chunks(cfg, db, conn) -> int:
             fresh[sha] = sqlite_vec.serialize_float32(vec)
         repo.store_cached_embeddings(conn, model=backend.name, items=list(fresh.items()))
 
-    for row, sha in zip(rows, shas):
-        blob = cached.get(sha) or fresh[sha]
-        repo.upsert_chunk_vector_blob(conn, int(row["id"]), blob)
+    repo.upsert_chunk_vector_blobs(
+        conn,
+        [(int(row["id"]), cached.get(sha) or fresh[sha]) for row, sha in zip(rows, shas)],
+    )
 
     built_at = datetime.now(timezone.utc).isoformat()
     repo.set_vec_meta(conn, model=backend.name, dim=backend.dim, built_at=built_at)

@@ -105,7 +105,15 @@ def test_cold_run_installs_from_requirements_lock(tmp_path):
     res = _run(root, env)
     assert res.returncode == 0, res.stderr
     pip_log = Path(env["FAKE_PIP_LOG"]).read_text(encoding="utf-8")
-    assert f"-r {root / 'requirements.lock'}" in pip_log
+    # Compare as paths, not raw strings: bootstrap.sh joins with "/", while
+    # pathlib on Windows renders "\", so the bytes differ but the path is equal.
+    lock_args = [
+        line.split(" install -r ", 1)[1]
+        for line in pip_log.splitlines()
+        if " install -r " in line
+    ]
+    assert lock_args, pip_log
+    assert any(Path(arg) == root / "requirements.lock" for arg in lock_args)
 
 
 @pytest.mark.skipif(not BASH_OK, reason="bash not available or non-functional")
@@ -132,24 +140,23 @@ def test_lock_change_triggers_reinstall(tmp_path):
 @pytest.mark.skipif(not BASH_OK, reason="bash not available or non-functional")
 def test_missing_python_reports_clearly(tmp_path):
     root, data, env = _stage(tmp_path)
-    # Remove python from PATH while KEEPING coreutils (mkdir/diff/cp/rm) — on
-    # Git Bash for Windows those live in a different dir than python, so the
-    # script can run far enough to hit its "Python not found" branch instead of
-    # dying at `mkdir`. (Wiping PATH entirely would also remove mkdir itself.)
-    empty = tmp_path / "empty"
-    empty.mkdir()
-    util_dirs = {
-        str(Path(p).parent)
-        for p in (shutil.which("mkdir"), shutil.which("diff"), shutil.which("cp"), shutil.which("rm"))
-        if p
-    }
-    python_dirs = {
-        str(Path(p).parent)
-        for p in (shutil.which("python"), shutil.which("python3"))
-        if p
-    }
-    safe_dirs = [d for d in util_dirs if d not in python_dirs]
-    env["PATH"] = os.pathsep.join([str(empty), *safe_dirs])  # no python on PATH
+    # PATH contains ONLY thin wrappers for the coreutils bootstrap.sh needs,
+    # each exec'ing its real binary by absolute path — and no python at all.
+    # Subtracting python's directories from PATH is not enough: on CI runners
+    # the system python3 lives in /usr/bin right next to mkdir, so the script
+    # found it and attempted a real install instead of hitting the
+    # "Python not found" branch.
+    safebin = tmp_path / "safebin"
+    safebin.mkdir()
+    for name in ("mkdir", "diff", "cp", "rm"):
+        real = shutil.which(name)
+        assert real, f"{name} missing from PATH"
+        wrapper = safebin / name
+        wrapper.write_text(
+            f'#!/bin/sh\nexec "{Path(real).as_posix()}" "$@"\n', encoding="utf-8"
+        )
+        wrapper.chmod(0o755)
+    env["PATH"] = str(safebin)  # no python anywhere on PATH
     res = _run(root, env)
     assert res.returncode == 0  # SessionStart must not hard-fail the session
     assert "Python 3.11+" in res.stderr
