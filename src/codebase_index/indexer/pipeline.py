@@ -227,9 +227,10 @@ def _embed_chunks(cfg, db, conn) -> int:
             fresh[sha] = sqlite_vec.serialize_float32(vec)
         repo.store_cached_embeddings(conn, model=backend.name, items=list(fresh.items()))
 
-    for row, sha in zip(rows, shas):
-        blob = cached.get(sha) or fresh[sha]
-        repo.upsert_chunk_vector_blob(conn, int(row["id"]), blob)
+    repo.upsert_chunk_vector_blobs(
+        conn,
+        [(int(row["id"]), cached.get(sha) or fresh[sha]) for row, sha in zip(rows, shas)],
+    )
 
     built_at = datetime.now(timezone.utc).isoformat()
     repo.set_vec_meta(conn, model=backend.name, dim=backend.dim, built_at=built_at)

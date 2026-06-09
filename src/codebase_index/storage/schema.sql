@@ -64,6 +64,9 @@ CREATE INDEX IF NOT EXISTS idx_edges_src  ON edges(src_kind, src_id);
 CREATE INDEX IF NOT EXISTS idx_edges_dst  ON edges(dst_kind, dst_id);
 CREATE INDEX IF NOT EXISTS idx_edges_name ON edges(dst_name);
 CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(edge_type);
+-- replace_edges deletes per file on every incremental update, and files(id)
+-- deletions cascade here; without this index both are full edges scans.
+CREATE INDEX IF NOT EXISTS idx_edges_file ON edges(file_id);
 
 CREATE TABLE IF NOT EXISTS modules (
     id            INTEGER PRIMARY KEY,
