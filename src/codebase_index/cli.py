@@ -1,8 +1,9 @@
 """Typer CLI app — the single entry point for both humans and the Claude Code skill.
 
-Commands map 1:1 to docs/ARCHITECTURE.md §5 (CLI contract). At M0 these are stubs that parse the
-documented flags and emit `not implemented`; later milestones fill in the bodies by delegating to
-the `indexer`, `retrieval`, and `storage` layers.
+Commands map 1:1 to docs/ARCHITECTURE.md §5 (CLI contract) and delegate to the
+`indexer`, `retrieval`, and `storage` layers through `service.py` — the same
+layer the MCP server uses, so the two surfaces cannot drift. Only `clean` is
+still a stub.
 
 Conventions:
   * every command accepts global options via the Typer context: --root, --json, --quiet
@@ -40,25 +41,13 @@ def _todo(name: str) -> None:
     raise typer.Exit(code=0)
 
 
-def _resolve_db_path(ctx: "typer.Context") -> Path:
-    from .config import load
-
-    override = os.environ.get("CBX_DB_PATH")
-    if override:
-        return Path(override)
-    root_opt = ctx.obj.get("root") if ctx.obj else None
-    cfg = load(root_opt)
-    return Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
-
-
 def _ensure_index(ctx: "typer.Context") -> tuple[Path, Any]:
-    from .config import load
     from .indexer.pipeline import build_index
+    from .service import resolve_db
     from .storage.db import Database
 
     root_opt = ctx.obj.get("root") if ctx.obj else None
-    cfg = load(root_opt)
-    db_path = _resolve_db_path(ctx)
+    db_path, cfg = resolve_db(root_opt)
     if db_path.exists():
         return db_path, cfg
 
@@ -86,17 +75,12 @@ def _open_in_browser(path: Path) -> None:
 
 
 def _resolve_backend_for_search(ctx: "typer.Context"):
-    """Resolve an embedding backend from config for query-time vector search.
-
-    Returns a NoopBackend (enabled=False) when embeddings are off, so callers can
-    branch on `backend.enabled`. Network/external gating is enforced by
-    resolve_backend (SECURITY.md §4).
-    """
+    """Embedding backend for query-time vector search (see service.search_backend)."""
     from .config import load
-    from .embeddings.backend import resolve_backend
+    from .service import search_backend
 
     cfg = load(ctx.obj.get("root") if ctx.obj else None)
-    return resolve_backend(cfg, warn=lambda m: typer.echo(m, err=True))
+    return search_backend(cfg, warn=lambda m: typer.echo(m, err=True))
 
 
 def _interactive_target_choice(detected_cli: list[str], detected_mcp: list[str]) -> str:
@@ -179,6 +163,8 @@ def _resolve_init_targets(root: Path, requested: str | None) -> tuple[list[str],
 
 def _try_auto_update_skills(root_opt: Optional[Path]) -> None:
     """Silently update all installed skills when the package version changed."""
+    if os.environ.get("CBX_NO_SKILL_AUTO_UPDATE") == "1":
+        return
     try:
         from .config import find_root
         from . import scaffold
@@ -187,8 +173,9 @@ def _try_auto_update_skills(root_opt: Optional[Path]) -> None:
         root = Path(root_opt).resolve() if root_opt else find_root()
         for target in scaffold.CLI_TARGETS:
             auto_update_if_needed(root, target)
-    except Exception:
-        pass  # never let an auto-update failure crash the real command
+    except Exception as exc:
+        # Never let an auto-update failure crash the real command — but say so.
+        typer.echo(f"[codebase-index] skill auto-update skipped: {exc}", err=True)
 
 
 @app.callback()
@@ -386,8 +373,7 @@ def search(
     """Hybrid ranked search; returns compact results + recommended_reads."""
     from .output import json as json_renderer
     from .output import markdown as md_renderer
-    from .retrieval.pipeline import search as run_search
-    from .storage.db import Database
+    from .service import search_payload
 
     if offset < 0:
         typer.echo("[codebase-index] --offset must be >= 0.")
@@ -404,15 +390,10 @@ def search(
             raise typer.Exit(code=2)
 
     db_path, cfg = _ensure_index(ctx)
-
-    with Database(db_path) as db:
-        if backend is not None and getattr(backend, "enabled", False):
-            db.enable_vectors()
-        payload = run_search(
-            db.conn, query, mode=mode, limit=limit, offset=offset,
-            token_budget=token_budget, no_fallback=no_fallback, backend=backend,
-            root=Path(cfg.root), config=cfg,
-        )
+    payload = search_payload(
+        db_path, cfg, query, mode=mode, limit=limit, offset=offset,
+        token_budget=token_budget, no_fallback=no_fallback, backend=backend,
+    )
 
     want_json = json_out or (ctx.obj and ctx.obj.get("json"))
     typer.echo(json_renderer.render(payload) if want_json else md_renderer.render(payload))
@@ -493,21 +474,15 @@ def explain(
     """Intent-aware bundle for 'how does X work' / overview questions."""
     from .output import json as json_renderer
     from .output import markdown as md_renderer
-    from .retrieval.pipeline import search as run_search
-    from .storage.db import Database
+    from .service import normalize_explain_query, search_payload
 
     backend = _resolve_backend_for_search(ctx)
     db_path, cfg = _ensure_index(ctx)
 
-    q = query if any(w in query.lower() for w in ("how", "architecture", "overview")) else f"how does {query} work"
-    with Database(db_path) as db:
-        if getattr(backend, "enabled", False):
-            db.enable_vectors()
-        payload = run_search(
-            db.conn, q, mode="hybrid", limit=10,
-            token_budget=token_budget, no_fallback=False, backend=backend,
-            root=Path(cfg.root), config=cfg,
-        )
+    payload = search_payload(
+        db_path, cfg, normalize_explain_query(query), mode="hybrid", limit=10,
+        token_budget=token_budget, no_fallback=False, backend=backend,
+    )
 
     want_json = json_out or (ctx.obj and ctx.obj.get("json"))
     typer.echo(json_renderer.render(payload) if want_json else md_renderer.render(payload))
@@ -527,11 +502,12 @@ def graph_view(
     import json as _json
 
     from .graph.export import export_graph_html
+    from .service import cache_dir_for
     from .storage.db import Database
 
     is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
     db_path, cfg = _ensure_index(ctx)
-    out = output or Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "graph.html"
+    out = output or cache_dir_for(cfg) / "graph.html"
 
     with Database(db_path) as db:
         stats = export_graph_html(
@@ -568,14 +544,11 @@ def stats(
     """Index size, coverage %, and freshness."""
     import json as _json
 
-    from .config import load
-    from .parsers.languages import has_full_graph
-    from .storage import repo
+    from .service import resolve_db, stats_payload
     from .storage.db import Database
 
     root_opt = ctx.obj.get("root") if ctx.obj else None
-    cfg = load(root_opt)
-    db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+    db_path, _cfg = resolve_db(root_opt)
 
     is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
 
@@ -587,38 +560,16 @@ def stats(
         raise typer.Exit(code=0)
 
     with Database(db_path) as db:
-        files = repo.count_files(db.conn)
-        symbols = repo.count_symbols(db.conn)
-        built_at = repo.get_meta(db.conn, "built_at")
-        head = repo.get_meta(db.conn, "head_commit")
-        coverage = [
-            {
-                "lang": r["lang"],
-                "files": r["files"],
-                "symbols": r["symbols"],
-                # Tier-A languages get import/inheritance edges; Tier-B is symbols-only,
-                # so refs/impact are partial for them.
-                "graph": "full" if has_full_graph(r["lang"]) else "partial",
-            }
-            for r in repo.treesitter_coverage(db.conn)
-        ]
+        payload = stats_payload(db.conn)
 
     if is_json:
-        typer.echo(
-            _json.dumps(
-                {
-                    "files": files,
-                    "symbols": symbols,
-                    "built_at": built_at,
-                    "head_commit": head,
-                    "treesitter_coverage": coverage,
-                    "exists": True,
-                }
-            )
-        )
+        typer.echo(_json.dumps(payload))
     else:
-        typer.echo(f"files={files}  symbols={symbols}  built_at={built_at}  head={head}")
-        for r in coverage:
+        typer.echo(
+            f"files={payload['files']}  symbols={payload['symbols']}  "
+            f"built_at={payload['built_at']}  head={payload['head_commit']}"
+        )
+        for r in payload["treesitter_coverage"]:
             flag = "  ⚠ 0 symbols" if (r["symbols"] or 0) == 0 and r["files"] >= 3 else ""
             tier = "  · partial graph (Tier-B)" if r["graph"] == "partial" else ""
             typer.echo(f"  {r['lang']}: {r['files']} files, {r['symbols']} symbols{flag}{tier}")
@@ -710,11 +661,10 @@ def watch(
     debounce: int = typer.Option(500, "--debounce", help="Debounce window in ms."),
 ) -> None:
     """Live incremental indexing via filesystem events (requires the 'watch' extra)."""
-    from .config import load
+    from .service import resolve_db
     from .watch.watcher import run_watch
 
-    cfg = load(ctx.obj.get("root") if ctx.obj else None)
-    db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
+    db_path, cfg = resolve_db(ctx.obj.get("root") if ctx.obj else None)
     if not db_path.exists():
         typer.echo("No index found. Run `codebase-index index` before `watch`.")
         raise typer.Exit(code=1)

@@ -14,6 +14,7 @@ Manual commands exposed via cli.py:
 from __future__ import annotations
 
 import shutil
+import sys
 from pathlib import Path
 
 VERSION_FILE = ".skill_version"
@@ -140,5 +141,10 @@ def auto_update_if_needed(root: Path, target: str) -> bool:
 
         update_skill(root, target, backup=True)
         return True
-    except Exception:
+    except Exception as exc:
+        print(
+            f"[codebase-index] skill auto-update for '{target}' failed "
+            f"({type(exc).__name__}: {exc}); run `codebase-index skill-update`.",
+            file=sys.stderr,
+        )
         return False

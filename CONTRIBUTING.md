@@ -105,6 +105,13 @@ the project version unless a maintainer explicitly requests it. Add user-visible
 changes to `CHANGELOG.md` under `[Unreleased]`; maintainers choose the release
 version according to the project's versioning policy.
 
+The version lives in one place: `src/codebase_index/__init__.py` (`__version__`).
+`pyproject.toml` reads it via hatch dynamic versioning. After changing the
+version or anything under `src/codebase_index/skill_template/`, run
+`python scripts/sync_skill_copies.py` to regenerate the committed skill copies
+and version stamps; CI rejects the PR if they drift
+(`python scripts/sync_skill_copies.py --check`).
+
 ## Test Requirements
 
 - All new features must include tests.

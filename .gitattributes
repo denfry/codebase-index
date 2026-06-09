@@ -3,3 +3,5 @@
 *.sh    text eol=lf
 *.ps1   text eol=lf
 *.py    text eol=lf
+# cbx — POSIX-скрипт без расширения; CRLF в worktree ломает shebang при копировании
+cbx     text eol=lf

@@ -398,3 +398,90 @@ def test_fingerprints_returns_mtime_size_and_sha(tmp_path):
         "src/b.py": (222, 20, "bbb"),
     }
     db.close()
+
+
+def _create_vec_tables(conn):
+    # Plain stand-ins matching the vec0 layout: every function under test runs
+    # ordinary SQL against these tables, so the optional sqlite-vec extension
+    # is not needed to exercise the cache/meta/orphan logic.
+    conn.execute("CREATE TABLE vec_chunks (chunk_id INTEGER PRIMARY KEY, embedding BLOB)")
+    conn.execute("CREATE TABLE vec_meta (model TEXT, dim INTEGER, built_at TEXT)")
+    conn.execute(
+        "CREATE TABLE vec_cache (model TEXT NOT NULL, content_sha TEXT NOT NULL, "
+        "embedding BLOB NOT NULL, PRIMARY KEY (model, content_sha))"
+    )
+
+
+def test_vec_meta_roundtrip_replaces_previous_row(tmp_path):
+    db = _open(tmp_path)
+    _create_vec_tables(db.conn)
+    assert repo.get_vec_meta(db.conn) is None
+    repo.set_vec_meta(db.conn, model="m1", dim=4, built_at="2026-06-09T00:00:00Z")
+    repo.set_vec_meta(db.conn, model="m2", dim=8, built_at="2026-06-09T01:00:00Z")
+    row = repo.get_vec_meta(db.conn)
+    assert (row["model"], row["dim"]) == ("m2", 8)
+    db.close()
+
+
+def test_embedding_cache_roundtrip_dedup_and_batching(tmp_path):
+    db = _open(tmp_path)
+    _create_vec_tables(db.conn)
+    assert repo.cached_embeddings(db.conn, model="m", shas=[]) == {}
+    items = [(f"sha{i}", f"blob{i}".encode()) for i in range(600)]
+    repo.store_cached_embeddings(db.conn, model="m", items=items)
+    repo.store_cached_embeddings(db.conn, model="m", items=[])  # no-op
+    # 600 shas exercise the >500 IN-list chunking; duplicates collapse to one.
+    shas = [sha for sha, _ in items] + ["sha0", "missing"]
+    out = repo.cached_embeddings(db.conn, model="m", shas=shas)
+    assert len(out) == 600
+    assert out["sha0"] == b"blob0"
+    # The cache is keyed by model: another model sees nothing.
+    assert repo.cached_embeddings(db.conn, model="other", shas=["sha0"]) == {}
+    db.close()
+
+
+def test_vector_blob_upsert_count_and_clear(tmp_path):
+    db = _open(tmp_path)
+    _create_vec_tables(db.conn)
+    repo.upsert_chunk_vector_blob(db.conn, 1, b"v1")
+    repo.upsert_chunk_vector_blob(db.conn, 1, b"v2")  # replaces, no duplicate
+    repo.upsert_chunk_vector_blob(db.conn, 2, b"v3")
+    assert repo.count_vectors(db.conn) == 2
+    assert repo.embedded_chunk_ids(db.conn) == {1, 2}
+    repo.clear_vectors(db.conn)
+    assert repo.count_vectors(db.conn) == 0
+    db.close()
+
+
+def test_vector_helpers_tolerate_missing_vec_tables(tmp_path):
+    db = _open(tmp_path)
+    assert repo.embedded_chunk_ids(db.conn) == set()
+    assert repo.prune_orphan_vectors(db.conn) == 0
+    db.close()
+
+
+def test_chunks_for_embedding_and_prune_orphans(tmp_path):
+    db = _open(tmp_path)
+    _create_vec_tables(db.conn)
+    fid = repo.upsert_file(
+        db.conn, path="src/a.py", lang="python", size_bytes=1, sha256="a",
+        mtime_ns=111, git_status=None, parser="line", indexed_at="t", is_generated=False,
+    )
+    repo.replace_chunks(
+        db.conn,
+        fid,
+        [
+            Chunk(line_start=1, line_end=5, content="def a(): ...", token_est=5),
+            Chunk(line_start=6, line_end=9, content="def b(): ...", token_est=5),
+        ],
+    )
+    rows = repo.chunks_for_embedding(db.conn)
+    assert [r["content"] for r in rows] == ["def a(): ...", "def b(): ..."]
+
+    live_ids = [int(r["id"]) for r in rows]
+    for cid in live_ids:
+        repo.upsert_chunk_vector_blob(db.conn, cid, b"vec")
+    repo.upsert_chunk_vector_blob(db.conn, 9999, b"orphan")
+    assert repo.prune_orphan_vectors(db.conn) == 1
+    assert repo.embedded_chunk_ids(db.conn) == set(live_ids)
+    db.close()

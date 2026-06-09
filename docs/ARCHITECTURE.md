@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-`codebase-index` is a **local-first** code intelligence layer for AI coding agents. In `1.2.0`
+`codebase-index` is a **local-first** code intelligence layer for AI coding agents. In `1.3.0`
 it has two shipped faces:
 
 1. **A Claude Code Skill** (`.claude/skills/codebase-index/SKILL.md`) that Claude auto-invokes for
@@ -64,180 +64,51 @@ keeps the prompt small and lets the engine evolve without editing the skill.
 
 ```
 codebase-index/
-├── README.md
-├── LICENSE
-├── CHANGELOG.md
-├── CONTRIBUTING.md
-├── CODE_OF_CONDUCT.md
-├── SECURITY.md
-├── ROADMAP.md
-├── pyproject.toml
-├── .gitignore
-├── .editorconfig
-├── .github/
-│   ├── ISSUE_TEMPLATE/
-│   │   ├── bug_report.yml
-│   │   ├── feature_request.yml
-│   │   └── skill_listing_request.yml
-│   ├── PULL_REQUEST_TEMPLATE.md
-│   ├── workflows/
-│   │   ├── ci.yml
-│   │   └── release.yml
-│   └── FUNDING.yml
-├── docs/
-│   ├── ARCHITECTURE.md          # this file
-│   ├── INSTALLATION.md          # install guide + troubleshooting
-│   ├── QUICKSTART.md            # 5-minute setup
-│   ├── SKILL_DESIGN.md          # skill behavior and extension
-│   ├── RETRIEVAL_PIPELINE.md    # retrieval + ranking detail
-│   ├── DATABASE_SCHEMA.md       # SQLite/FTS5 schema
-│   ├── SECURITY_MODEL.md        # security model + threat model
-│   ├── COMPARISON.md            # vs Cursor, Aider, Cody, grep
-│   ├── FAQ.md                   # user questions
-│   ├── SEO.md                   # repository SEO plan
-│   └── ROADMAP.md               # milestones M0-M9
-├── skill/                       # canonical source of the skill
-│   ├── SKILL.md
-│   ├── scripts/
-│   │   ├── install.py           # skill installation script
-│   │   ├── doctor.py            # environment check
-│   │   └── smoke_test.py        # end-to-end test
-│   └── examples/
-│       ├── basic-usage.md
-│       ├── claude-md-example.md
-│       └── hooks-example.json
-├── src/
-│   └── codebase_index/
-│       ├── __init__.py
-│       ├── cli.py               # Typer app: all commands
-│       ├── config.py            # config load/merge/validate (pydantic)
-│       ├── models.py            # shared pydantic result models
-│       ├── discovery/           # file walking + ignore rules + classification
-│       │   ├── __init__.py
-│       │   ├── walker.py
-│       │   ├── ignore.py        # .gitignore/.claudeignore/.codeindexignore
-│       │   └── classify.py      # language, binary, secret, size gates
-│       ├── parsers/             # turn files into chunks + symbols
-│       │   ├── __init__.py
-│       │   ├── base.py          # Parser protocol + data types
-│       │   ├── treesitter.py    # AST symbol extraction
-│       │   ├── line_chunker.py  # fallback chunking
-│       │   ├── symbol_chunks.py # symbol-aligned chunking
-│       │   └── languages.py     # grammar registry + node→symbol maps
-│       ├── indexer/             # orchestration of a build/update
-│       │   ├── __init__.py
-│       │   └── pipeline.py      # full + incremental build
-│       ├── graph/               # import/call/reference/dependency edges
-│       │   └── __init__.py      # stub — dependency/call graph
-│       ├── storage/             # SQLite persistence
-│       │   ├── __init__.py
-│       │   ├── db.py            # connection, pragmas, migrations
-│       │   ├── schema.sql       # DDL
-│       │   └── repo.py          # typed read/write accessors
-│       ├── retrieval/           # the search engine
-│       │   ├── __init__.py
-│       │   └── searchers.py     # FTS5 searcher + query building
-│       ├── embeddings/          # OPTIONAL, opt-in vector backend
-│       │   └── __init__.py      # stub
-│       ├── output/              # rendering results
-│       │   ├── __init__.py
-│       │   ├── markdown.py      # compact Markdown for Claude
-│       │   ├── json.py          # machine JSON
-│       │   └── redact.py        # secret redaction
-│       └── watch/               # OPTIONAL live indexing
-│           └── __init__.py      # stub
-├── tests/
-│   ├── fixtures/                # sample repos with planted secrets
-│   └── test_*.py                # test suite
-└── examples/
-    ├── queries.md               # example questions → commands
-    ├── config.example.json
-    └── hooks/
-        └── settings.json        # optional PostToolUse auto-update hook
+├── README.md / LICENSE / CHANGELOG.md / CONTRIBUTING.md / SECURITY.md / ROADMAP.md
+├── pyproject.toml               # hatch dynamic version <- src/codebase_index/__init__.py
+├── requirements.lock            # pinned install spec for the plugin bootstrap
+├── install.sh / install.ps1     # multi-CLI installer (drives adapters/ + lib/)
+├── adapters/                    # per-CLI install logic (claude/codex/opencode, sh + ps1)
+├── lib/                         # shared shell helpers for the installer
+├── bin/                         # plugin wrappers (cbx resolves the provisioned venv)
+├── scripts/                     # bootstrap.sh/.ps1, release_smoke.py, sync_skill_copies.py
+├── hooks/                       # plugin hooks.json (SessionStart bootstrap)
+├── .claude-plugin/              # plugin manifest + marketplace catalog
+├── .github/                     # CI (lint, skill-sync gate, OS/Python test matrix), release
+├── docs/                        # this file + installation/retrieval/schema/security/faq
+├── skill/                       # installer source package (SKILL.md, scripts, examples)
+├── skills/codebase-index/       # plugin skill copy (generated — scripts/sync_skill_copies.py)
+├── .claude/ .codex/ .opencode/  # committed installed copies (generated — same script)
+├── examples/                    # sample queries, configs, hooks
+├── tests/                       # pytest suite + fixtures (sample_repo, multilang)
+└── src/codebase_index/
+    ├── cli.py                   # Typer app: all commands (delegates to service.py)
+    ├── service.py               # shared CLI/MCP service layer: paths, search sessions, stats
+    ├── config.py                # config load/merge/validate (pydantic)
+    ├── models.py                # shared pydantic result models
+    ├── doctor.py                # config/security diagnostics
+    ├── scaffold.py              # init: skill + config + gitignore + MCP client configs
+    ├── skill_update.py          # skill auto-update/rollback with version stamps
+    ├── discovery/               # walker.py, ignore.py, classify.py
+    ├── parsers/                 # treesitter.py, languages.py, line_chunker.py,
+    │                            #   symbol_chunks.py, base.py
+    ├── indexer/                 # pipeline.py (full + incremental build), freshness.py,
+    │                            #   doc_chunks.py
+    ├── graph/                   # builder.py (edge resolution), expand.py (impact),
+    │                            #   export.py (HTML graph)
+    ├── storage/                 # db.py (pragmas, schema, version guard), schema.sql, repo.py
+    ├── retrieval/               # intent.py, searchers.py, fusion.py, rerank.py,
+    │                            #   budget.py, pipeline.py, types.py
+    ├── embeddings/              # backend.py, noop.py (default), local.py, external.py — opt-in
+    ├── output/                  # markdown.py, json.py, redact.py
+    ├── watch/                   # watcher.py (optional, watchdog-based)
+    ├── mcp/                     # server.py (stdio MCP over the same service layer)
+    └── skill_template/          # canonical skill source shipped in the wheel
 ```
-codebase-index/
-├── README.md
-├── pyproject.toml
-├── .gitignore
-├── docs/
-│   ├── ARCHITECTURE.md          # this file
-│   ├── RETRIEVAL.md             # retrieval pipeline + intent detection
-│   ├── SCHEMA.md                # SQLite/FTS5 schema
-│   ├── SECURITY.md              # security model
-│   ├── INSTALLATION.md          # install + configure + hooks
-│   └── ROADMAP.md               # milestones M0–M9
-├── skill/                       # canonical source of the skill (copied on `init`)
-│   ├── SKILL.md
-│   └── scripts/
-│       ├── cbx                  # POSIX wrapper -> resolves CLI, passes args
-│       └── cbx.ps1              # Windows PowerShell wrapper
-├── src/
-│   └── codebase_index/
-│       ├── __init__.py
-│       ├── cli.py               # Typer app: all commands
-│       ├── config.py            # config load/merge/validate (pydantic)
-│       ├── models.py            # shared dataclasses/pydantic result models
-│       ├── discovery/           # file walking + ignore rules + file classification
-│       │   ├── __init__.py
-│       │   ├── walker.py
-│       │   ├── ignore.py        # .gitignore/.cursorignore/.claudeignore/.codeindexignore
-│       │   └── classify.py      # language detection, binary/secret/size gates
-│       ├── parsers/             # turn files into chunks + symbols
-│       │   ├── __init__.py
-│       │   ├── base.py          # Parser protocol
-│       │   ├── treesitter.py    # AST symbol extraction
-│       │   ├── line_chunker.py  # fallback chunking
-│       │   └── languages.py     # grammar registry + node→symbol maps
-│       ├── indexer/             # orchestration of a build/update
-│       │   ├── __init__.py
-│       │   ├── pipeline.py      # full + incremental build
-│       │   ├── incremental.py   # hash/mtime/git change detection
-│       │   └── summarize.py     # file/module/package summaries
-│       ├── graph/               # import/call/reference/dependency edges
-│       │   ├── __init__.py
-│       │   ├── builder.py       # extract edges from AST + resolve targets
-│       │   └── expand.py        # graph expansion + impact (blast radius)
-│       ├── storage/             # SQLite persistence
-│       │   ├── __init__.py
-│       │   ├── db.py            # connection, pragmas, migrations
-│       │   ├── schema.sql       # DDL (mirrors docs/SCHEMA.md)
-│       │   └── repo.py          # typed read/write accessors
-│       ├── retrieval/           # the search engine
-│       │   ├── __init__.py
-│       │   ├── intent.py        # query intent classification
-│       │   ├── searchers.py     # path/symbol/fts/vector searchers
-│       │   ├── fusion.py        # Reciprocal Rank Fusion
-│       │   ├── rerank.py        # feature-based reranking
-│       │   └── budget.py        # token budgeting of results
-│       ├── embeddings/          # OPTIONAL, opt-in vector backend
-│       │   ├── __init__.py
-│       │   ├── backend.py       # pluggable Backend protocol
-│       │   ├── local.py         # sentence-transformers / local model
-│       │   └── noop.py          # default: disabled
-│       ├── output/              # rendering results
-│       │   ├── __init__.py
-│       │   ├── markdown.py      # compact Markdown for Claude
-│       │   └── json.py          # machine JSON
-│       ├── watch/               # OPTIONAL live indexing
-│       │   ├── __init__.py
-│       │   └── watcher.py
-│       └── skill_template/      # packaged copy of skill/ shipped in the wheel
-│           ├── SKILL.md
-│           └── scripts/
-├── tests/
-│   ├── fixtures/                # tiny sample repos
-│   ├── test_discovery.py
-│   ├── test_ignore.py
-│   ├── test_parsers.py
-│   ├── test_storage.py
-│   ├── test_retrieval.py
-│   ├── test_graph.py
-│   └── test_cli.py
-└── examples/
-    ├── hooks/settings.json      # optional PostToolUse auto-update hook
-    ├── config.example.json
-    └── queries.md               # example questions → commands
-```
+
+The committed skill copies (`skill/`, `skills/`, `.claude/`, `.codex/`, `.opencode/`) are
+generated from `src/codebase_index/skill_template/` by `scripts/sync_skill_copies.py`;
+CI fails if they drift (`--check`).
 
 ## 4. Module responsibilities
 
@@ -249,9 +120,11 @@ codebase-index/
   Tree-sitter when a grammar exists; line-based chunker otherwise.
 - **graph/builder** — From AST, extract `imports`, `calls`, `references`, `extends/implements`, and
   resolve them to target symbols/files where possible. Unresolved edges are kept as soft text refs.
-- **indexer/pipeline** — Drives a build: discovery → parse → store chunks/symbols → build graph →
-  summaries → FTS sync → (optional) embeddings. `incremental.py` decides what to re-process.
-- **storage** — Owns the SQLite DB, pragmas (WAL, foreign keys), migrations, and typed accessors.
+- **indexer/pipeline** — Drives a build: discovery → parse (process pool on large repos) → store
+  chunks/symbols → build graph → FTS sync → (optional) embeddings. `update_index` re-processes
+  only files whose (mtime, size, sha256) fingerprint changed; `freshness.py` reports staleness.
+- **storage** — Owns the SQLite DB, pragmas (WAL, foreign keys), the schema version guard
+  (a future-versioned index asks for a rebuild rather than guessing), and typed accessors.
   FTS5 virtual tables and (optional) `sqlite-vec` vector tables live here.
 - **retrieval** — The query path. `intent.py` classifies the query; `searchers.py` runs the
   relevant retrievers; `fusion.py` merges them with RRF; `rerank.py` reorders; `graph.expand`

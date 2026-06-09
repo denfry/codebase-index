@@ -6,6 +6,11 @@ Symbol-target edges (call/reference/extends/implements) resolve only on an
 UNAMBIGUOUS name match — if two definitions share a name, the edge is left
 unresolved rather than guessed. Import edges resolve their module path to a file
 by POSIX path-suffix match (e.g. 'auth.token' -> '%/auth/token.py').
+
+The pass is batched: one query for globally-unique symbol names, one for file
+paths (expanded into an in-memory suffix map), one executemany for the updates.
+The per-edge variant did an indexed lookup per symbol edge and up to ~20
+full-table LIKE scans per import edge, which dominated large builds.
 """
 
 from __future__ import annotations
@@ -26,30 +31,55 @@ def build_graph(conn: sqlite3.Connection) -> dict[str, int]:
 
 
 def resolve_edges(conn: sqlite3.Connection) -> int:
-    resolved = 0
-    for edge in repo.unresolved_edges(conn):
+    edges = repo.unresolved_edges(conn)
+    if not edges:
+        return 0
+
+    unique_symbols = repo.unique_symbol_ids_by_name(conn)
+    suffix_map = _path_suffix_map(repo.all_file_ids_with_paths(conn))
+
+    resolutions: list[tuple[str, int, int]] = []
+    for edge in edges:
         name = edge["dst_name"]
         if edge["edge_type"] == "import":
-            file_id = _module_to_file_id(conn, name)
+            file_id = _module_to_file_id(suffix_map, name)
             if file_id is not None:
-                repo.resolve_edge(conn, edge["id"], "file", file_id)
-                resolved += 1
+                resolutions.append(("file", file_id, edge["id"]))
         elif edge["edge_type"] in _SYMBOL_EDGE_TYPES:
-            sym_id = repo.symbol_id_for_unique_name(conn, name)
+            sym_id = unique_symbols.get(name)
             if sym_id is not None:
-                repo.resolve_edge(conn, edge["id"], "symbol", sym_id)
-                resolved += 1
-    return resolved
+                resolutions.append(("symbol", sym_id, edge["id"]))
+
+    repo.resolve_edges_bulk(conn, resolutions)
+    return len(resolutions)
 
 
-def _module_to_file_id(conn: sqlite3.Connection, module: str) -> Optional[int]:
+def _path_suffix_map(rows: list[sqlite3.Row]) -> dict[str, Optional[int]]:
+    """Map every '/'-aligned path suffix to its file id, or None when ambiguous.
+
+    Mirrors files_with_suffix(path = suffix OR path LIKE '%/suffix') semantics:
+    a suffix shared by several files resolves to None (like a multi-row result),
+    and matching is case-insensitive the way SQLite LIKE folds ASCII.
+    """
+    mapping: dict[str, Optional[int]] = {}
+    for row in rows:
+        parts = row["path"].lower().split("/")
+        for i in range(len(parts)):
+            suffix = "/".join(parts[i:])
+            mapping[suffix] = None if suffix in mapping else int(row["id"])
+    return mapping
+
+
+def _module_to_file_id(
+    suffix_map: dict[str, Optional[int]], module: str
+) -> Optional[int]:
     """Resolve a module/import path to a unique file id, or None.
 
     Handles Python, TypeScript/JavaScript, Java/Kotlin/Scala, Rust (:: separator),
     Go (last path segment), C#, Ruby, and PHP import conventions.
     """
-    base = module.replace(".", "/").strip("/")
-    rust_base = module.replace("::", "/").strip("/")
+    base = module.lower().replace(".", "/").strip("/")
+    rust_base = module.lower().replace("::", "/").strip("/")
     if not base:
         return None
     # Last segment used for Go package-level resolution
@@ -84,7 +114,7 @@ def _module_to_file_id(conn: sqlite3.Connection, module: str) -> Optional[int]:
         # PHP
         f"{base}.php",
     ):
-        rows = repo.files_with_suffix(conn, suffix)
-        if len(rows) == 1:
-            return int(rows[0]["id"])
+        file_id = suffix_map.get(suffix)
+        if file_id is not None:
+            return file_id
     return None

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "codebase-index"
-version = "1.2.2"
+dynamic = ["version"]
 description = "Local-first hybrid codebase index for AI coding agents, exposed as CLI, Skill, and MCP tools."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -58,6 +58,9 @@ Homepage = "https://github.com/denfry/codebase-index"
 Documentation = "https://github.com/denfry/codebase-index/tree/main/docs"
 Changelog = "https://github.com/denfry/codebase-index/blob/main/CHANGELOG.md"
 Issues = "https://github.com/denfry/codebase-index/issues"
+
+[tool.hatch.version]
+path = "src/codebase_index/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/codebase_index"]

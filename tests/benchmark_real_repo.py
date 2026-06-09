@@ -29,8 +29,7 @@ from typing import Any
 
 from codebase_index.config import Config
 from codebase_index.graph.expand import impact_lookup
-from codebase_index.indexer.freshness import compute_freshness
-from codebase_index.indexer.pipeline import build_index, update_index
+from codebase_index.indexer.pipeline import build_index
 from codebase_index.retrieval.pipeline import search
 from codebase_index.storage import repo as repo_store
 from codebase_index.storage.db import Database

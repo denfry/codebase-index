@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -44,20 +45,19 @@ mcp = FastMCP(
 )
 
 
-def _resolve_db() -> tuple[Path, Config]:
+def _resolve_db() -> tuple[Path, "Config"]:
     """Return (db_path, config). Respects CBX_DB_PATH and CBX_ROOT env vars."""
-    from ..config import load
-
-    override = os.environ.get("CBX_DB_PATH")
-    if override:
-        db_path = Path(override)
-        cfg: Config = load(Path(db_path.parent))
-        return db_path, cfg
+    from ..service import resolve_db
 
     root_env = os.environ.get("CBX_ROOT")
-    cfg = load(Path(root_env) if root_env else None)
-    db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
-    return db_path, cfg
+    return resolve_db(Path(root_env) if root_env else None)
+
+
+def _search_backend(cfg: "Config"):
+    # stdout carries the JSON-RPC stream — warnings must go to stderr.
+    from ..service import search_backend
+
+    return search_backend(cfg, warn=lambda m: print(m, file=sys.stderr))
 
 
 def _no_index_error() -> str:
@@ -114,21 +114,12 @@ def search_code(
     if not db_path.exists():
         return _no_index_error()
 
-    from ..retrieval.pipeline import search as run_search
-    from ..storage.db import Database
+    from ..service import search_payload
 
-    with Database(db_path) as db:
-        payload = run_search(
-            db.conn,
-            query,
-            mode=mode,
-            limit=limit,
-            token_budget=token_budget,
-            no_fallback=False,
-            root=Path(cfg.root),
-            config=cfg,
-            offset=offset,
-        )
+    payload = search_payload(
+        db_path, cfg, query, mode=mode, limit=limit, offset=offset,
+        token_budget=token_budget, no_fallback=False, backend=_search_backend(cfg),
+    )
     return json.dumps(payload)
 
 
@@ -232,22 +223,13 @@ def explain_code(
     if not db_path.exists():
         return _no_index_error()
 
-    from ..retrieval.pipeline import search as run_search
-    from ..storage.db import Database
+    from ..service import normalize_explain_query, search_payload
 
-    q = query if any(w in query.lower() for w in ("how", "architecture", "overview")) else f"how does {query} work"
-    with Database(db_path) as db:
-        payload = run_search(
-            db.conn,
-            q,
-            mode="hybrid",
-            limit=10,
-            token_budget=token_budget,
-            no_fallback=False,
-            root=Path(cfg.root),
-            config=cfg,
-            offset=offset,
-        )
+    payload = search_payload(
+        db_path, cfg, normalize_explain_query(query), mode="hybrid", limit=10,
+        offset=offset, token_budget=token_budget, no_fallback=False,
+        backend=_search_backend(cfg),
+    )
     return json.dumps(payload)
 
 
@@ -258,27 +240,12 @@ def index_stats() -> str:
     if not db_path.exists():
         return json.dumps({"exists": False, "error": "No index found."})
 
-    from ..storage import repo
+    from ..service import stats_payload
     from ..storage.db import Database
 
     with Database(db_path) as db:
-        files = repo.count_files(db.conn)
-        symbols = repo.count_symbols(db.conn)
-        built_at = repo.get_meta(db.conn, "built_at")
-        head = repo.get_meta(db.conn, "head_commit")
-        coverage = [
-            {"lang": r["lang"], "files": r["files"], "symbols": r["symbols"]}
-            for r in repo.treesitter_coverage(db.conn)
-        ]
-
-    return json.dumps({
-        "exists": True,
-        "files": files,
-        "symbols": symbols,
-        "built_at": built_at,
-        "head_commit": head,
-        "treesitter_coverage": coverage,
-    })
+        payload = stats_payload(db.conn)
+    return json.dumps(payload)
 
 
 def run() -> None:

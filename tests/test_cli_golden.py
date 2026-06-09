@@ -44,9 +44,16 @@ def indexed_repo(tmp_path_factory):
     dest = tmp_path_factory.mktemp("indexed") / "repo"
     shutil.copytree(FIXTURE_ROOT, dest)
 
+    # Explicit identity: CI runners have no global git config, and on Windows
+    # git's identity auto-detection fails, so the commit silently never happens
+    # and head_commit becomes null instead of "<SHA>".
+    identity = ["-c", "user.name=golden", "-c", "user.email=golden@test"]
     subprocess.run(["git", "init"], cwd=dest, capture_output=True)
     subprocess.run(["git", "add", "."], cwd=dest, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "initial"], cwd=dest, capture_output=True)
+    commit = subprocess.run(
+        ["git", *identity, "commit", "-m", "initial"], cwd=dest, capture_output=True, text=True
+    )
+    assert commit.returncode == 0, commit.stderr
     assert runner.invoke(app, ["--root", str(dest), "index"]).exit_code == 0
     return dest
 
