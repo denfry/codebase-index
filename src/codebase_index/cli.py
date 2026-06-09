@@ -179,6 +179,8 @@ def _resolve_init_targets(root: Path, requested: str | None) -> tuple[list[str],
 
 def _try_auto_update_skills(root_opt: Optional[Path]) -> None:
     """Silently update all installed skills when the package version changed."""
+    if os.environ.get("CBX_NO_SKILL_AUTO_UPDATE") == "1":
+        return
     try:
         from .config import find_root
         from . import scaffold
