@@ -27,9 +27,11 @@ def test_marketplace_lists_plugin_from_repo_root():
     assert entries["codebase-index"]["source"] == "./"
 
 
-def test_plugin_version_matches_pyproject():
-    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    ver = re.search(r'^version = "([^"]+)"', pyproject, re.MULTILINE).group(1)
+def test_plugin_version_matches_package():
+    # pyproject.toml uses hatch dynamic versioning; the single source of truth
+    # for the version is src/codebase_index/__init__.py.
+    init_text = (ROOT / "src/codebase_index/__init__.py").read_text(encoding="utf-8")
+    ver = re.search(r'^__version__ = "([^"]+)"$', init_text, re.MULTILINE).group(1)
     assert _load(".claude-plugin/plugin.json")["version"] == ver
 
 

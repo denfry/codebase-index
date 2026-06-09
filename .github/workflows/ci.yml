@@ -19,6 +19,8 @@ jobs:
         run: ruff check src tests
       - name: Mypy
         run: mypy src/codebase_index
+      - name: Skill copies in sync
+        run: python scripts/sync_skill_copies.py --check
 
   test:
     needs: lint
