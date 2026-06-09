@@ -146,7 +146,7 @@ Submit to these lists for backlinks and discoverability:
 ## Release Announcement Template
 
 ```
-codebase-index v1.2.1
+codebase-index v1.3.0
 
 A local-first codebase index for AI coding agents.
 
@@ -162,7 +162,7 @@ Features:
 - Secret redaction
 - Respects .gitignore
 
-Install: pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.2.1"
+Install: pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.3.0"
 GitHub: https://github.com/denfry/codebase-index
 ```
 
@@ -177,5 +177,5 @@ codebase-index builds a local hybrid index so Claude finds the right files witho
 - No network by default
 - Token-efficient output
 
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.2.1"
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.3.0"
 ```
