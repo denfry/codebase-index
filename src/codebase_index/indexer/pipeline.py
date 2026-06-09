@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import subprocess
+import sys
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -123,7 +124,12 @@ def _parse_all(candidates: list, config: Config) -> list[_ParseResult]:
             initargs=(config,),
         ) as pool:
             return list(pool.map(_parse_one, candidates))
-    except Exception:
+    except Exception as exc:
+        print(
+            f"[codebase-index] parallel parse unavailable ({type(exc).__name__}: {exc}); "
+            f"falling back to sequential parsing for {len(candidates)} files.",
+            file=sys.stderr,
+        )
         return [_parse_one_inline(c, config) for c in candidates]
 
 
