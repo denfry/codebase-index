@@ -17,6 +17,11 @@ references without scanning an entire repository.
 [![SQLite](https://img.shields.io/badge/database-SQLite-blue.svg)](docs/DATABASE_SCHEMA.md)
 [![Tree-sitter](https://img.shields.io/badge/parsing-Tree--sitter-orange.svg)](docs/ARCHITECTURE.md)
 
+<p align="center">
+  <img src="assets/demo.png" width="820"
+       alt="codebase-index ranking a local search for 'where is user authentication implemented?' into scored files with recommended file:line ranges to read">
+</p>
+
 ## What Is codebase-index?
 
 **codebase-index is a private, offline retrieval layer for AI code search.** It
