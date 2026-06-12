@@ -27,6 +27,24 @@ an AI coding agent can read instead of opening broad file sets.
 Use it when you want Cursor-like codebase awareness in terminal-based AI tools
 while keeping source code, snippets, and search metadata on your machine.
 
+> **codebase-index is not an IDE and not a coding agent.** It is the local
+> retrieval/index layer that gives terminal and MCP-based AI agents precise
+> codebase context. The agent stays your interface; this gives it better aim.
+
+## Who Is It For?
+
+- **Claude Code / Codex CLI / OpenCode users** on medium-to-large repos who want
+  the agent to read 3 ranked files instead of grepping and scanning 60.
+- **Privacy-constrained teams** (proprietary or regulated code) who cannot send
+  source to a cloud code-intelligence service.
+- **MCP power users** who want a stable, queryable code index as a tool, not a
+  black box baked into one agent's prompt.
+- **Tooling authors** who need scriptable retrieval (`--json`, SQLite, MCP) that
+  other tools can build on.
+
+Not for you if you want a full IDE, org-scale multi-repo search, or a hosted
+platform — use Cursor or Sourcegraph for those.
+
 ## Start Here
 
 If you are opening this repository for the first time, follow this order:
@@ -144,6 +162,61 @@ a ranked local retrieval packet before they read source files.
 Developers get Cursor-like codebase awareness in Claude Code, Codex CLI, and
 OpenCode without leaving the terminal or sending code to a remote indexing
 service.
+
+## How Is This Different?
+
+Short answers to the questions people actually ask. The full, honest matrix —
+including when you should pick the other tool — is in
+[docs/COMPARISON.md](docs/COMPARISON.md).
+
+- **Why not just `grep`/`rg`?** Grep returns every match with no ranking, no
+  symbol awareness, and no idea which files relate. codebase-index ranks results,
+  knows a definition from a call, expands along the dependency graph, and returns
+  specific line ranges under a token budget — so the agent reads less and answers
+  with citations.
+- **Why not Cursor?** Cursor is a great AI IDE with strong codebase awareness, but
+  it is proprietary and IDE-centric. codebase-index is a local, open retrieval
+  layer for **terminal and MCP** agents, offline by default, with no IDE lock-in.
+  If you live inside Cursor, keep using Cursor.
+- **Why not Aider repo-map?** Aider's repo-map is a good graph-ranked,
+  token-budgeted context map — but it is optimized to feed Aider's own chat.
+  codebase-index is a **reusable, queryable index**: CLI/JSON/MCP commands return
+  ranked `file:line` ranges, symbols, references, and impact that *any*
+  shell-capable agent can consume, with freshness and security gates.
+- **Why not Sourcegraph / Cody / Amp?** They are excellent enterprise-grade,
+  cross-repo code intelligence platforms. They are also heavier and
+  account/platform-oriented. codebase-index is single-repo, local, and
+  lightweight — no server, no account, no code leaving the machine by default.
+- **Why not Codebase-Memory MCP?** It is the closest direct alternative — a
+  broader graph engine with a static binary and wide language/agent coverage. We
+  do **not** claim to beat it globally. We differentiate on simplicity, a strict
+  privacy model, token-budgeted retrieval packets, a transparent Python
+  implementation, the Claude/Codex/OpenCode workflow, and honest benchmarks. If
+  you need its broader graph and language reach today, choose it.
+
+**What makes it trustworthy?** No telemetry, no network by default, a multi-gate
+exclusion pipeline (secrets/binaries/generated/dependencies never indexed),
+output-time secret redaction, a `doctor --strict` safety self-check, and a
+public benchmark suite wired as a CI regression gate. Claims that aren't proven
+in this repo are marked as roadmap, not done.
+
+### Proven today vs. roadmap
+
+| Capability | Status |
+|---|---|
+| Hybrid retrieval (path + symbol + FTS5 + graph), token-budgeted packets | ✅ Shipped |
+| Tree-sitter symbols for 12 Tier-A languages + Tier-B generic path | ✅ Shipped |
+| Import/call/reference/inheritance graph, `refs`/`impact` | ✅ Shipped |
+| Optional local embeddings; external embeddings gated 3 ways | ✅ Shipped |
+| stdio MCP server; CLI/skill/MCP share one service layer | ✅ Shipped |
+| Honest 55k LOC Java benchmark (recall@3 70% vs 40% `rg`, ~13× fewer tokens) | ✅ Shipped |
+| 10k/100k/1M LOC public-repo benchmarks | 🚧 Roadmap |
+| Framework-aware typed edges (route→handler→service→model) | 🚧 Roadmap |
+| PyPI / `uvx` / Homebrew, signed checksums, SBOM | 🚧 Roadmap |
+| Verified per-client MCP docs, paged/progressive results | 🚧 Roadmap |
+
+See [docs/PRODUCT_UPGRADE_PLAN.md](docs/PRODUCT_UPGRADE_PLAN.md) for the full
+upgrade plan and ranked roadmap.
 
 ## How Does codebase-index Work?
 
@@ -537,7 +610,8 @@ Yes. The CLI is agent-agnostic. Any agent that can run shell commands can use
 ### How do I reset the index?
 
 ```bash
-codebase-index clean
+codebase-index clean          # reset the index DB (keeps the skill)
+codebase-index clean --all    # wipe the whole .claude/cache/codebase-index/ dir
 # Or manually: rm -rf .claude/cache/codebase-index/
 codebase-index index
 ```
