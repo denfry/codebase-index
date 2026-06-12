@@ -14,8 +14,9 @@ platform.
 | codebase-index | Local CLI/skill/MCP retrieval for Claude Code, Codex CLI, OpenCode, and MCP clients | Broad framework-aware graph is still a roadmap item |
 | Cursor indexing | Integrated AI IDE workflow | Proprietary and tied to Cursor |
 | Aider repo-map | Aider chat sessions with compact repository context | Context map, not a reusable local search API |
-| Sourcegraph Cody | Enterprise-scale code intelligence across many repos | Cloud/account setup and heavier platform surface |
-| Serena / MCP tools | MCP-first local tool integration | Quality and schemas vary by server |
+| Sourcegraph / Cody / Amp | Enterprise-scale code intelligence across many repos | Cloud/account setup and heavier platform surface |
+| Continue | Open-source coding agent for IDE + CLI | An agent with context features, not a standalone retrieval index |
+| Codebase-Memory MCP | Local graph-based code-memory over MCP | Broader/heavier graph engine; different simplicity/privacy tradeoffs |
 | Manual grep/read | Exact ad hoc search | No ranking, graph, symbol contract, or token budgeting |
 
 ## Criteria
@@ -45,6 +46,100 @@ platform.
 | Security posture | `.gitignore`/`.codeindexignore`, secret filename gates, redaction, no telemetry, no network by default | Proprietary behavior; depends on settings | Local map, but model provider path depends on Aider config | Requires platform trust and account policy | Varies by server | No built-in redaction |
 | Update model | Manual `index`/`update`, hooks, optional watcher | IDE-managed | Rebuilt as Aider manages context | Platform-managed | Varies | Always live but manual |
 | Extensibility | CLI `--json`; MCP schema v1.0; SQLite local DB | Limited external contract | Aider internals/context | Sourcegraph APIs | MCP by design | Shell pipelines |
+
+## When to choose what
+
+Honest, per-tool guidance. None of these are attacks — each tool is good at the
+job it was built for. The question is which layer you actually need.
+
+### Manual grep / read
+
+- **Good at:** exact string matching, zero setup, always live, universally
+  available. For a single known identifier in a small scope, nothing beats `rg`.
+- **Where codebase-index differs:** ranking, symbol awareness (definition vs
+  call), graph expansion to related files, and token-budgeted line ranges instead
+  of every matching line.
+- **Choose grep when:** you know the exact string, the repo is small, or you only
+  need one match.
+- **Choose codebase-index when:** the question is conceptual ("where is auth
+  implemented?"), the repo is large, or an AI agent will pay for every irrelevant
+  line it reads.
+
+### Cursor
+
+- **Good at:** an integrated AI IDE with strong, low-friction codebase awareness
+  for people who work inside Cursor.
+- **Where codebase-index differs:** it is a local, open retrieval layer for
+  **terminal and MCP** agents, offline by default, with no IDE lock-in and a
+  scriptable CLI/JSON/MCP contract.
+- **Choose Cursor when:** you want an AI-native IDE and are comfortable with a
+  proprietary, IDE-centric workflow.
+- **Choose codebase-index when:** your agent is Claude Code, Codex CLI, OpenCode,
+  or any MCP client in the terminal, and you want code to stay on your machine.
+
+### Aider repo-map
+
+- **Good at:** a compact, graph-ranked, token-budgeted repository map that feeds
+  Aider's chat context well. It is not "just grep" — it ranks with a graph
+  algorithm over source and dependencies.
+- **Where codebase-index differs:** it is a reusable, queryable index rather than
+  context injection for one agent. CLI/JSON/MCP commands return ranked `file:line`
+  ranges, symbols, references, and `impact` that any shell-capable agent can
+  consume, with freshness checks and security/ignore gates.
+- **Choose Aider repo-map when:** Aider is your agent and you want its built-in
+  context with nothing extra to run.
+- **Choose codebase-index when:** you want one index shared across multiple agents
+  (Claude Code, Codex, OpenCode, MCP) with a stable, scriptable contract.
+
+### Sourcegraph / Cody / Amp
+
+- **Good at:** enterprise-grade, cross-repo code intelligence, search, and code
+  graph at organization scale, with mature platform features.
+- **Where codebase-index differs:** single-repo, local, and lightweight — no
+  server, no account, no code leaving the machine by default. It is a retrieval
+  layer for an agent, not a platform.
+- **Choose Sourcegraph/Cody/Amp when:** you need org-wide search across many
+  repositories, team features, and are fine with a hosted/account-based platform.
+- **Choose codebase-index when:** you want per-repo retrieval for a terminal/MCP
+  agent with a strict local-first privacy model and minimal moving parts.
+
+### Continue
+
+- **Good at:** an open-source coding **agent** with IDE and CLI integrations and
+  built-in context features. It is a full assistant, not just an index.
+- **Where codebase-index differs:** it is the **retrieval/index layer itself**,
+  not an agent. It exposes a CLI/JSON/MCP contract that an agent (including, in
+  principle, agents like Continue) can query, and it focuses on token-budgeted
+  packets and a strict privacy model rather than on being the chat surface.
+- **Choose Continue when:** you want the agent — an open assistant to drive your
+  edits.
+- **Choose codebase-index when:** you already have an agent and want to give it
+  precise, local, ranked codebase context.
+
+### Codebase-Memory MCP
+
+This is the closest direct alternative, so the comparison is the most careful.
+
+- **Good at:** a broader graph engine with a static binary, wide language and
+  agent coverage, and more advanced graph features than codebase-index ships
+  today.
+- **Where codebase-index differs — and we do not claim to beat it globally:**
+  - **Simplicity and safety:** a small pure-Python surface, a multi-gate exclusion
+    pipeline, output-time secret redaction, and a `doctor --strict` self-check.
+  - **Strict privacy model:** no telemetry, no network by default; external
+    embeddings are opt-in and gated three ways.
+  - **Token-budgeted retrieval packets:** ranked `file:line` ranges and
+    `recommended_reads` under an explicit budget, tuned for the Claude/Codex/
+    OpenCode workflow.
+  - **Transparency:** readable Python, 80% coverage gate, golden CLI snapshots,
+    and a public benchmark suite wired as a CI regression gate.
+  - **Honest benchmarks:** we publish raw logs (see the 55k LOC Java run) and mark
+    unproven scale/graph claims as roadmap.
+- **Choose Codebase-Memory MCP when:** you need its broader graph engine,
+  static-binary distribution, or wider language/agent reach today.
+- **Choose codebase-index when:** you want a simpler, privacy-strict, transparent
+  retrieval layer tuned for terminal AI agents with token-budgeted output and
+  benchmarks you can audit.
 
 ## Aider repo-map clarification
 

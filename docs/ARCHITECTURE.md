@@ -153,7 +153,7 @@ upward to nearest `.git`/`.claude`), and `--quiet`. Search-family commands accep
 | `explain` | `"<query>"`, `--token-budget` | 0 | intent-aware bundle |
 | `stats` | — | 0 | counts, coverage %, freshness |
 | `doctor` | `--strict` | non-zero if unsafe config found | findings list |
-| `clean` | `--yes` | removes cache | confirmation |
+| `clean` | `--yes`, `--all` | resets index DB (`--all` wipes cache dir) | removed-count |
 | `watch` | `--debounce ms` | long-running | event log |
 
 The skill only ever calls the **read-only** family (`search`, `symbol`, `refs`, `impact`,

@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **`clean` is now implemented** (it was a documented-but-stubbed `_todo` since M0).
+  `codebase-index clean` resets the index database (`index.sqlite` + WAL/SHM
+  sidecars); `codebase-index clean --all` wipes the whole per-project cache
+  directory. It prompts before deleting (skip with `--yes`), supports `--json`,
+  and never touches the installed skill. Locked in by `tests/test_clean_cli.py`.
+- **`docs/PRODUCT_UPGRADE_PLAN.md`**: positioning, target users, competitor matrix,
+  differentiators, current weaknesses, a ranked roadmap, and documentation /
+  benchmark / distribution / technical task lists.
+- **`docs/RELEASE_CHECKLIST.md`**: a repeatable release checklist (version sync,
+  tests, benchmarks, doctor, install/plugin/MCP smoke, changelog) with signed
+  checksums + SBOM tracked as future hardening.
+
+### Changed
+- **README**: added "Who Is It For?" and a "How Is This Different?" section that
+  answers why-not-grep / Cursor / Aider repo-map / Sourcegraph / Codebase-Memory
+  MCP on the first screen, plus a proven-today-vs-roadmap table.
+- **`docs/COMPARISON.md`**: explicit rows and "choose them when / choose us when"
+  guidance for Continue, Sourcegraph/Cody/Amp, and Codebase-Memory MCP.
+- **`docs/BENCHMARKS.md`**: a status table separating proven / toy / honest
+  surfaces, an explicit "claims that should NOT be made yet" list, and a
+  TODO-friendly benchmark task checklist with a no-overclaim procedure.
+
+### Fixed
+- `docs/FAQ.md`: removed a dangling/duplicated sentence in "Is it
+  production-ready?" and documented the real `clean` / `clean --all` behavior.
+
 ## [1.3.0] - 2026-06-09
 
 ### Added
