@@ -177,7 +177,7 @@ Features:
 - Secret redaction
 - Respects .gitignore
 
-Install: pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.3.0"
+Install: pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.4.0"
 GitHub: https://github.com/denfry/codebase-index
 ```
 
@@ -192,5 +192,5 @@ codebase-index builds a local hybrid index so Claude finds the right files witho
 - No network by default
 - Token-efficient output
 
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.3.0"
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.4.0"
 ```

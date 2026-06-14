@@ -21,7 +21,13 @@ REPO = Path(__file__).resolve().parents[1]
 
 def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     print("+", " ".join(cmd))
-    return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=True)
+    # Decode child output as UTF-8 (the CLI emits UTF-8, e.g. «redacted» / em dashes)
+    # instead of the locale default — on a non-UTF-8 console (e.g. Windows cp1251)
+    # text=True would raise UnicodeDecodeError on the CLI's output.
+    return subprocess.run(
+        cmd, cwd=cwd, capture_output=True, check=True,
+        encoding="utf-8", errors="replace",
+    )
 
 
 def main() -> int:
@@ -50,7 +56,9 @@ def main() -> int:
         )
         run(["git", "init"], cwd=proj)
 
-        run([str(cbx), "--root", str(proj), "init"])
+        # Explicit --target: init's picker is interactive and aborts without a TTY
+        # (e.g. in CI / captured subprocesses), which would fail the smoke spuriously.
+        run([str(cbx), "--root", str(proj), "init", "--target", "claude"])
         assert (proj / ".claude" / "skills" / "codebase-index" / "SKILL.md").is_file()
 
         run([str(cbx), "--root", str(proj), "index"])
