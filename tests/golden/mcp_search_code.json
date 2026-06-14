@@ -139,5 +139,7 @@
       "symbols": [],
       "token_est": 38
     }
-  ]
+  ],
+  "schema_version": 1,
+  "tool": "search_code"
 }

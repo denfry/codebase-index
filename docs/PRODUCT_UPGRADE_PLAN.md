@@ -89,7 +89,7 @@ transparent Python implementation, a strict privacy model, and honest benchmarks
 | Weakness | Impact | Plan |
 |---|---|---|
 | No large-scale real-repo benchmark | Can't claim 100k/1M LOC quality | Benchmark tasks §8; recruit public repos |
-| Graph is import/call/ref only | `impact` misses framework wiring | ARCHITECTURE §9 typed-edge roadmap |
+| Graph is import/call/ref only | `impact` misses framework wiring | ARCHITECTURE §9 + design doc `specs/2026-06-14-typed-framework-edges-design.md`; implementation behind §8 benchmark |
 | GitHub-only distribution | No `pip install codebase-index` / `uvx` | Distribution tasks §9 |
 | MCP client docs unverified | Templates may be wrong per client version | Verify against each client, add per-client docs |
 | Single-repo only | No monorepo/fleet context | Out of scope near-term; documented as non-goal |
@@ -101,12 +101,15 @@ transparent Python implementation, a strict privacy model, and honest benchmarks
    logs. Highest credibility lever.
 2. **Typed framework edges** (route→handler→service→model, test→impl, config→consumer)
    with source spans + confidence. Biggest product-quality lever for `impact`.
+   *Design approved this pass* (`specs/2026-06-14-typed-framework-edges-design.md`);
+   implementation gated on the §8 graph benchmark.
 3. **Distribution hardening**: PyPI publish, `uvx`/`pipx` story, signed checksums,
    SBOM. Lowers adoption friction and raises supply-chain trust.
-4. **MCP contract hardening**: `schema_version` on every payload, golden
-   snapshots per tool, verified client docs, paging/progressive results.
-5. **Retrieval tuning**: dampen the god-class `in_degree` tiebreak (the 3 honest
-   misses in the Java run), per-intent weights review.
+4. **MCP contract hardening**: ✅ `schema_version` on every payload + golden
+   snapshots per tool (this pass). Remaining: verified client docs, paging/progressive results.
+5. **Retrieval tuning**: ✅ dampened the god-class `in_degree` tiebreak this pass
+   (log curve + lower cap, validated no-regression on the public suite). Remaining:
+   confirm the real-repo gain on the 3 honest Java misses (needs M12.5), per-intent weights review.
 6. **Language reach**: config/IaC awareness (Dockerfile, Terraform, migrations,
    CI), plus Swift/Dart/Scala/Vue/Svelte gaps called out in FAQ.
 
@@ -119,7 +122,7 @@ transparent Python implementation, a strict privacy model, and honest benchmarks
 - [x] `docs/BENCHMARKS.md` "claims not to make yet" + TODO benchmark checklist.
 - [x] `docs/RELEASE_CHECKLIST.md`.
 - [ ] Verified per-client MCP setup docs (after testing each client version).
-- [ ] A short "trust model in 60 seconds" callout reused across README/SECURITY.
+- [x] A short "trust model in 60 seconds" callout reused across README/SECURITY.
 
 ## 8. Benchmark tasks
 
@@ -150,13 +153,18 @@ Track in [BENCHMARKS.md](BENCHMARKS.md); none may be reported until run with log
 
 | # | Improvement | Impact | Risk | Status |
 |---|---|---|---|---|
-| 1 | Implement `clean` (documented but was a stub) | Fixes doc/reality gap | Low | **Shipped this pass** |
-| 2 | Dampen god-class `in_degree` tiebreak in rerank | +recall on real repos | Medium (retune) | Planned |
-| 3 | `schema_version` on every MCP payload | Stable contract | Low | Partly (architecture claims it) — verify+test |
-| 4 | Golden snapshots for each MCP tool output | Regression safety | Low | Planned |
-| 5 | Typed framework edges in the graph | Better `impact` | High | Roadmap (ARCHITECTURE §9) |
-| 6 | Config/IaC parsers (Dockerfile, Terraform, migrations) | Coverage | Medium | Roadmap |
+| 1 | Implement `clean` (documented but was a stub) | Fixes doc/reality gap | Low | **Shipped (1.3.0 line)** |
+| 2 | Dampen god-class `in_degree` tiebreak in rerank | +recall on real repos | Medium (retune) | **Shipped this pass** — log dampening + lower cap; no-regression on the public suite + a targeted regression test. Real-repo gain still needs M12.5. |
+| 3 | `schema_version` on every MCP payload | Stable contract | Low | **Shipped this pass** — `schema_version` + `tool` envelope on every payload (incl. errors), asserted + golden-locked. |
+| 4 | Golden snapshots for each MCP tool output | Regression safety | Low | **Shipped this pass** — `tests/golden/mcp_*.json` via `tests/test_mcp_golden.py`. |
+| 5 | Typed framework edges in the graph | Better `impact` | High | Design doc shipped this pass (`docs/superpowers/specs/2026-06-14-typed-framework-edges-design.md`); implementation behind the §8 benchmark. |
+| 6 | Config/IaC parsers (Dockerfile, Terraform, migrations) | Coverage | Medium | **Partly shipped this pass** — Tier-C labeling for Dockerfile/Terraform/HCL/INI/Make (already FTS-indexed, now language-labeled); tree-sitter parsing of these still roadmap. |
 | 7 | Paging/progressive MCP results | Big-repo UX | Medium | Roadmap (MCP.md) |
+
+Also fixed this pass (not previously tracked): the MCP server failed to import on
+`mcp>=1.27` + `pydantic>=2.10` (FastMCP auto-built a structured-output schema from
+the `-> str` return annotation and raised). Tools now register as unstructured
+(`structured_output=False` where supported), so the server loads on current `mcp`.
 
 Rule for this repo: small, safe, tested changes land directly; anything that
 risks destabilizing retrieval quality or the security model is documented here

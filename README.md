@@ -429,6 +429,14 @@ Answer with precise file:line citations
 
 ## Safety and Privacy
 
+> **Trust model in 60 seconds**
+> 1. **Offline by default** — the base install has zero network dependencies; nothing leaves your machine.
+> 2. **One opt-in exit, triple-gated** — external embeddings require `allow_external` **and** an env API key **and** a printed endpoint warning, or they are refused.
+> 3. **Secrets never get in** — `.env`, keys, certs, and credential files are excluded before parsing (multi-gate ignore pipeline).
+> 4. **Secrets never get out** — every snippet is redacted (AWS keys, private keys, JWTs, bearer tokens, connection strings) before it reaches the agent.
+> 5. **No telemetry, ever** — no analytics, no phone-home, no usage data.
+> 6. **Verify it yourself** — `codebase-index doctor --strict` audits all of the above and exits non-zero in CI on any high-severity finding.
+
 `codebase-index` is designed with privacy as a first principle:
 
 - **No telemetry** — No usage data, analytics, or crash reports are collected or transmitted.

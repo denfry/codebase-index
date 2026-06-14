@@ -18,8 +18,37 @@ All notable changes to this project are documented here. The format is based on
 - **`docs/RELEASE_CHECKLIST.md`**: a repeatable release checklist (version sync,
   tests, benchmarks, doctor, install/plugin/MCP smoke, changelog) with signed
   checksums + SBOM tracked as future hardening.
+- **MCP contract hardening (M11.5)**: every MCP tool payload — success *and* the
+  no-index/error path — is now wrapped in a stable envelope (`schema_version`: 1,
+  `tool`: <name>). Golden snapshots lock every tool's output
+  (`tests/golden/mcp_*.json` via `tests/test_mcp_golden.py`), and the contract
+  values are asserted explicitly so a golden can't freeze a wrong version. Closes
+  the long-standing `docs/MCP.md` follow-ups and makes the `schema_version` claim
+  in `docs/ARCHITECTURE.md` §8 true.
+- **Config / IaC language labeling**: Dockerfile, Containerfile, `*.tf`/`*.tfvars`
+  (terraform), `*.hcl`, `*.ini`/`*.cfg`/`*.conf`/`*.properties` (ini), and
+  Makefiles now get a real language label. These files were already FTS-indexed as
+  unknown text; labeling surfaces infra files in `stats` and lets agents scope
+  searches to config. They stay on the line/FTS floor (no tree-sitter spec).
+- **Typed framework edges — design doc**
+  (`docs/superpowers/specs/2026-06-14-typed-framework-edges-design.md`): the
+  documented-first deliverable for the M13 code-intelligence graph
+  (route→handler→service→model, test→impl, config→consumer, …) with a schema,
+  confidence/provenance model, resolver architecture, and a benchmark gate.
+- **"Trust model in 60 seconds"** callout, identical in `README.md` and
+  `docs/SECURITY.md`.
 
 ### Changed
+- **Reranker: dampened the god-class `in_degree` tiebreak** (`retrieval/rerank.py`).
+  The graph-centrality bonus is now logarithmic with a lower cap instead of linear
+  (which saturated by in_degree 10, giving 100-caller "god classes" the full bonus
+  and floating them above genuinely relevant low-degree matches on stray-term ties).
+  Validated as no-regression on the public benchmark (Recall@k / MRR / nDCG
+  unchanged) with a targeted regression test; the real-repo gain on the honest Java
+  misses is tracked under M12.5. CLI/MCP `search` goldens regenerated accordingly.
+- **`docs/ROADMAP.md`**: M10 MCP bridge marked shipped (was "planned"); reconciled
+  the technical-vs-product milestone numbering instead of claiming one is canonical.
+
 - **README**: added "Who Is It For?" and a "How Is This Different?" section that
   answers why-not-grep / Cursor / Aider repo-map / Sourcegraph / Codebase-Memory
   MCP on the first screen, plus a proven-today-vs-roadmap table.
@@ -30,6 +59,12 @@ All notable changes to this project are documented here. The format is based on
   TODO-friendly benchmark task checklist with a no-overclaim procedure.
 
 ### Fixed
+- **MCP server failed to import on `mcp>=1.27` + `pydantic>=2.10`**: newer FastMCP
+  auto-built a structured-output schema from each tool's `-> str` return annotation
+  and raised `PydanticUserError` at import time, breaking the server and its test
+  suite. Tools now register as unstructured (`structured_output=False` where the
+  kwarg exists; older `mcp` is detected and unaffected), preserving the existing
+  text-content wire contract.
 - `docs/FAQ.md`: removed a dangling/duplicated sentence in "Is it
   production-ready?" and documented the real `clean` / `clean --all` behavior.
 
