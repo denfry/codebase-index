@@ -1,8 +1,13 @@
 # Roadmap & First Implementation Tasks
 
 Milestones are vertical-ish slices: each ends with something runnable and testable.
-This numbering is canonical — the product-level [ROADMAP.md](../ROADMAP.md) and the
-`(Mx)` tags in [CHANGELOG.md](../CHANGELOG.md) follow it.
+This is the **technical-milestone** view (M0–M10). The product-level
+[ROADMAP.md](../ROADMAP.md) tells the same story at a finer grain and carries it
+further (it splits the MCP server into M11 and adds M11.5/M12/M12.5/M13 for MCP
+hardening, benchmarks, and the typed-edge graph). Where the two disagree on a
+number, the product roadmap is the current product view; this file tracks the
+original implementation slices. The `(Mx)` tags in
+[CHANGELOG.md](../CHANGELOG.md) follow this technical numbering.
 
 ## M0 — Architecture & scaffold ✅ (this repo)
 - Repo tree, docs (ARCHITECTURE/RETRIEVAL/SCHEMA/SECURITY/INSTALLATION), SKILL.md draft.
@@ -77,11 +82,15 @@ release with the built artifacts (GitHub-only distribution — no PyPI publish).
 "git+https://github.com/denfry/codebase-index.git@v1.2.0"` -> `init` -> `index` -> ask a question is
 verified end-to-end by `scripts/release_smoke.py`.*
 
-## M10 — Optional MCP bridge (planned)
-- Model Context Protocol server exposing `search`, `symbol`, `refs`, `impact` as tools for
-  MCP-compatible clients (Claude Desktop, Cursor, etc.). An optional addition, not a replacement
-  for the Skill/CLI interface.
-- **Exit:** `codebase-index` can be used as an MCP tool by any MCP-compatible client.
+## M10 — MCP bridge ✅ (product roadmap M11)
+- Shipped: a stdio Model Context Protocol server (`codebase-index mcp --root <repo>`, or the
+  `codebase-index-mcp` entry point) exposing `healthcheck`, `search_code`, `find_symbol`,
+  `find_refs`, `impact_of`, `explain_code`, and `index_stats` over the same `service.py` layer the
+  CLI uses — an optional addition, not a replacement for the Skill/CLI interface. Every payload
+  carries a `schema_version` + `tool` envelope, locked by golden snapshots (`tests/golden/mcp_*.json`).
+- **Exit:** `codebase-index` can be used as an MCP tool by any MCP-compatible client. See
+  [MCP.md](MCP.md).
+- Follow-up (product roadmap M11.5): verified per-client setup docs and paging/progressive results.
 
 ---
 
