@@ -199,7 +199,8 @@ Current implementation:
 - `src/codebase_index/mcp/server.py` is a thin adapter over `retrieval/`, `storage/`, and
   `indexer/freshness.py`.
 - `codebase-index mcp --root <repo>` runs the stdio server.
-- JSON payloads include `schema_version`.
+- Every JSON payload (including the error path) carries a `schema_version` + `tool` envelope,
+  locked by golden snapshots (`tests/golden/mcp_*.json`).
 - [MCP.md](MCP.md) provides config templates for Claude Desktop, Claude Code, Cursor, VS Code,
   Zed, and Windsurf.
 - `healthcheck` lets MCP clients distinguish "server running", "index missing",

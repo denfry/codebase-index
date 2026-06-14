@@ -1,0 +1,40 @@
+{
+  "coverage": {
+    "languages": [],
+    "partial": false,
+    "reason": null
+  },
+  "depth": 2,
+  "direction": "up",
+  "files": [
+    "src/api/service.py"
+  ],
+  "index": {
+    "built_at": "<TS>",
+    "exists": true,
+    "files_changed_since_build": 0,
+    "head_commit": "<SHA>",
+    "stale": false
+  },
+  "nodes": [
+    {
+      "distance": 1,
+      "kind": "file",
+      "line_start": null,
+      "name": null,
+      "path": "src/api/service.py",
+      "via_edge": "import"
+    },
+    {
+      "distance": 1,
+      "kind": "symbol",
+      "line_start": 7,
+      "name": "AdminUser",
+      "path": "src/api/service.py",
+      "via_edge": "extends"
+    }
+  ],
+  "schema_version": 1,
+  "target": "src/models/user.py",
+  "tool": "impact_of"
+}

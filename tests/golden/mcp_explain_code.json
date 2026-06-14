@@ -1,0 +1,23 @@
+{
+  "confidence": "low",
+  "fallback_suggestions": {
+    "ripgrep": [
+      "rg -n \"authentication\"",
+      "rg -n \"how.*does.*authentication\""
+    ]
+  },
+  "index": {
+    "built_at": "<TS>",
+    "exists": true,
+    "files_changed_since_build": 0,
+    "head_commit": "<SHA>",
+    "stale": false
+  },
+  "intent": "how_it_works",
+  "mode": "hybrid",
+  "query": "how does authentication work",
+  "recommended_reads": [],
+  "results": [],
+  "schema_version": 1,
+  "tool": "explain_code"
+}
