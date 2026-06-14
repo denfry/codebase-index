@@ -36,6 +36,26 @@ _LANG_BY_SUFFIX = {
     ".yaml": "yaml",
     ".toml": "toml",
     ".sql": "sql",
+    # Config / IaC (Tier C: line-chunk + FTS, no tree-sitter spec). These were already
+    # indexed as unknown-language text; labeling them surfaces infra files in `stats`
+    # and lets agents scope searches to config without a tree-sitter grammar.
+    ".tf": "terraform",
+    ".tfvars": "terraform",
+    ".hcl": "hcl",
+    ".ini": "ini",
+    ".cfg": "ini",
+    ".conf": "ini",
+    ".properties": "ini",
+}
+
+# Extension-less or specially-named config/IaC files, matched on the lowercased
+# filename (and a `name.suffix` form, e.g. `web.Dockerfile`). Kept separate from
+# the suffix table because these carry their identity in the name, not the suffix.
+_LANG_BY_NAME = {
+    "dockerfile": "dockerfile",
+    "containerfile": "dockerfile",
+    "makefile": "make",
+    "gnumakefile": "make",
 }
 
 # Authoritative set of *code* languages routed to tree-sitter (Guardrail 1). Every entry MUST
@@ -74,7 +94,19 @@ _SECRET_SUFFIXES = (".pem", ".key", ".p12", ".pfx")
 
 
 def detect_language(path: str) -> Optional[str]:
-    return _LANG_BY_SUFFIX.get(PurePosixPath(path).suffix.lower())
+    pure = PurePosixPath(path)
+    suffix = pure.suffix.lower()
+    if suffix:
+        lang = _LANG_BY_SUFFIX.get(suffix)
+        if lang is not None:
+            return lang
+    name = pure.name.lower()
+    if name in _LANG_BY_NAME:
+        return _LANG_BY_NAME[name]
+    # `web.Dockerfile`, `base.dockerfile`, etc.: identity is the suffix-as-name.
+    if suffix and suffix[1:] in _LANG_BY_NAME:
+        return _LANG_BY_NAME[suffix[1:]]
+    return None
 
 
 def parser_for(lang: Optional[str]) -> str:
