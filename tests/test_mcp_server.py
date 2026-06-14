@@ -60,6 +60,27 @@ def test_search_code_no_index():
     assert "index" in result["error"].lower()
 
 
+# ── schema envelope (schema_version + tool on every payload, incl. errors) ─────
+
+_ENVELOPE_CALLS = {
+    "healthcheck": lambda: _call(mcp_server.healthcheck),
+    "search_code": lambda: _call(mcp_server.search_code, query="foo"),
+    "find_symbol": lambda: _call(mcp_server.find_symbol, name="Foo"),
+    "find_refs": lambda: _call(mcp_server.find_refs, symbol="foo"),
+    "impact_of": lambda: _call(mcp_server.impact_of, target="foo.py"),
+    "explain_code": lambda: _call(mcp_server.explain_code, query="how does foo work"),
+    "index_stats": lambda: _call(mcp_server.index_stats),
+}
+
+
+@pytest.mark.parametrize("tool,call", list(_ENVELOPE_CALLS.items()), ids=list(_ENVELOPE_CALLS))
+def test_every_tool_payload_carries_schema_envelope(tool, call):
+    """Even the no-index error path is wrapped in the stable envelope."""
+    result = _with_missing_db(call)
+    assert result["schema_version"] == mcp_server.MCP_SCHEMA_VERSION
+    assert result["tool"] == tool
+
+
 def test_healthcheck_no_index():
     result = _with_missing_db(lambda: _call(mcp_server.healthcheck))
     assert result["package_version"]

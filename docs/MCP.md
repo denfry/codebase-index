@@ -41,11 +41,14 @@ The MCP server exposes the same retrieval contract as the CLI.
 
 ## Output contract
 
-Tool responses are JSON strings returned through MCP content blocks. The
-intended stable shape for retrieval responses is:
+Tool responses are JSON strings returned through MCP content blocks. **Every**
+payload — success or error — is wrapped in a stable envelope so clients can
+branch on the contract without sniffing the shape:
 
 ```json
 {
+  "schema_version": 1,
+  "tool": "search_code",
   "index": {
     "exists": true,
     "stale": false,
@@ -53,17 +56,29 @@ intended stable shape for retrieval responses is:
     "files_changed_since_build": 0
   },
   "results": [],
-  "recommended_reads": [],
-  "warnings": []
+  "recommended_reads": []
 }
 ```
 
+- `schema_version` (int) — the payload contract version. Bumped only on a
+  breaking change (field removal or type change); additive fields keep the same
+  version. The current version is **1**.
+- `tool` (string) — the emitting tool name (`search_code`, `find_symbol`,
+  `find_refs`, `impact_of`, `explain_code`, `index_stats`, `healthcheck`).
+- The no-index / error path carries the same envelope plus an `"error"` field.
+
 Rules:
 
-- Additive fields are allowed within a tool output version.
-- Field removal or type changes should be treated as a protocol change.
+- Additive fields are allowed within a `schema_version`.
+- Field removal or type changes bump `schema_version`.
 - Tool descriptions should include examples and expected failure modes.
 - Errors should fail closed: no partial unsafe result when config or index state is unsafe.
+
+Every tool's enveloped output is locked by golden snapshots in
+`tests/golden/mcp_*.json` (regenerate intentionally with
+`UPDATE_GOLDEN=1 pytest tests/test_mcp_golden.py`), and the `schema_version` /
+`tool` values are asserted explicitly so a golden can never silently freeze a
+wrong contract version.
 
 ## Client config templates
 
@@ -143,8 +158,12 @@ same trust boundaries:
 - Done: `healthcheck`, `search_code`, `find_symbol`, `find_refs`, `impact_of`, `explain_code`,
   and `index_stats` tools.
 - Done: focused tests for tool registration, missing-index behavior, config resolution, and run entrypoint.
-- Follow-up: explicit schema/version field in every structured tool payload.
-- Follow-up: golden snapshots for every tool output.
+- Done: explicit `schema_version` + `tool` envelope on every structured tool payload (including the
+  error path), asserted by `tests/test_mcp_server.py` and `tests/test_mcp_golden.py`.
+- Done: golden snapshots for every tool output (`tests/golden/mcp_*.json`).
+- Done: unstructured-output registration (`structured_output=False` where supported) so the server
+  loads on `mcp>=1.27` + `pydantic>=2.10`, where auto-detecting a structured schema from the `-> str`
+  return annotation otherwise raises at import time.
 - Follow-up: verified client-specific docs for Claude Desktop, Claude Code, Cursor, VS Code, Zed,
   and Windsurf.
 - Follow-up: paging or progressive result support.
