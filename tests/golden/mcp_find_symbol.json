@@ -1,0 +1,23 @@
+{
+  "index": {
+    "built_at": "<TS>",
+    "exists": true,
+    "files_changed_since_build": 0,
+    "head_commit": "<SHA>",
+    "stale": false
+  },
+  "query": "User",
+  "schema_version": 1,
+  "symbols": [
+    {
+      "kind": "class",
+      "line_end": 6,
+      "line_start": 4,
+      "name": "User",
+      "path": "src/models/user.py",
+      "qualified": "User",
+      "signature": "class User:"
+    }
+  ],
+  "tool": "find_symbol"
+}

@@ -20,6 +20,9 @@ GOLDEN_DIR = Path(__file__).parent / "golden"
 # Keys whose values are inherently volatile and must be masked, not compared.
 _TS_KEYS = {"built_at", "indexed_at", "generated_at"}
 _SHA_KEYS = {"head_commit"}
+# Released package version churns on every bump; mask it so goldens don't. Note
+# `schema_version` is deliberately NOT masked — it IS the contract under test.
+_VERSION_KEYS = {"package_version"}
 
 
 def _scrub(value: Any, root: str) -> Any:
@@ -30,6 +33,8 @@ def _scrub(value: Any, root: str) -> Any:
                 out[k] = "<TS>"
             elif k in _SHA_KEYS and v is not None:
                 out[k] = "<SHA>"
+            elif k in _VERSION_KEYS and v is not None:
+                out[k] = "<VERSION>"
             else:
                 out[k] = _scrub(v, root)
         return out

@@ -1,0 +1,14 @@
+{
+  "index": {
+    "built_at": "<TS>",
+    "exists": true,
+    "files_changed_since_build": 0,
+    "head_commit": "<SHA>",
+    "path": ".claude/cache/codebase-index/index.sqlite",
+    "stale": false
+  },
+  "package_version": "<VERSION>",
+  "root": "",
+  "schema_version": 1,
+  "tool": "healthcheck"
+}

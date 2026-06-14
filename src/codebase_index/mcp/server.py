@@ -17,6 +17,7 @@ MCP client config example (.claude/settings.json):
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import sys
@@ -44,6 +45,35 @@ mcp = FastMCP(
     ),
 )
 
+# Contract version for every structured tool payload. Bump on a breaking change
+# (field removal / type change); additive fields keep the same version. Every tool
+# return — including errors — is wrapped by `_emit`, so clients can branch on
+# `schema_version` and `tool` without sniffing the shape. See docs/MCP.md.
+MCP_SCHEMA_VERSION = 1
+
+
+def _emit(tool: str, payload: dict) -> str:
+    """Serialize a tool payload inside the stable MCP envelope.
+
+    `schema_version` and `tool` lead; the payload follows. A payload key never
+    shadows the envelope (payloads do not carry these keys), but the explicit
+    order makes the contract self-describing in the raw JSON.
+    """
+    return json.dumps({"schema_version": MCP_SCHEMA_VERSION, "tool": tool, **payload})
+
+
+# Tools return JSON *strings* (unstructured text). Newer FastMCP otherwise
+# auto-builds a structured-output schema from the `-> str` return annotation,
+# which crashes on some mcp/pydantic combinations (mcp>=1.27 + pydantic 2.10).
+# Force unstructured output where the kwarg exists; older mcp (>=1.0) lacks it.
+_SUPPORTS_STRUCTURED_OUTPUT = "structured_output" in inspect.signature(mcp.tool).parameters
+
+
+def _tool():
+    if _SUPPORTS_STRUCTURED_OUTPUT:
+        return mcp.tool(structured_output=False)
+    return mcp.tool()
+
 
 def _resolve_db() -> tuple[Path, "Config"]:
     """Return (db_path, config). Respects CBX_DB_PATH and CBX_ROOT env vars."""
@@ -60,11 +90,11 @@ def _search_backend(cfg: "Config"):
     return search_backend(cfg, warn=lambda m: print(m, file=sys.stderr))
 
 
-def _no_index_error() -> str:
-    return json.dumps({"error": "No index found. Run `codebase-index index` in your project first."})
+def _no_index_payload() -> dict:
+    return {"error": "No index found. Run `codebase-index index` in your project first."}
 
 
-@mcp.tool()
+@_tool()
 def healthcheck() -> str:
     """Report package, root, and index health for MCP clients."""
     db_path, cfg = _resolve_db()
@@ -83,10 +113,10 @@ def healthcheck() -> str:
                 "path": str(db_path),
                 **compute_freshness(db.conn, Path(cfg.root), cfg).model_dump(),
             }
-    return json.dumps(payload)
+    return _emit("healthcheck", payload)
 
 
-@mcp.tool()
+@_tool()
 def search_code(
     query: str,
     mode: str = "hybrid",
@@ -112,7 +142,7 @@ def search_code(
     """
     db_path, cfg = _resolve_db()
     if not db_path.exists():
-        return _no_index_error()
+        return _emit("search_code", _no_index_payload())
 
     from ..service import search_payload
 
@@ -120,10 +150,10 @@ def search_code(
         db_path, cfg, query, mode=mode, limit=limit, offset=offset,
         token_budget=token_budget, no_fallback=False, backend=_search_backend(cfg),
     )
-    return json.dumps(payload)
+    return _emit("search_code", payload)
 
 
-@mcp.tool()
+@_tool()
 def find_symbol(
     name: str,
     kind: Optional[str] = None,
@@ -140,17 +170,17 @@ def find_symbol(
     """
     db_path, _ = _resolve_db()
     if not db_path.exists():
-        return _no_index_error()
+        return _emit("find_symbol", _no_index_payload())
 
     from ..retrieval.searchers import symbol_lookup
     from ..storage.db import Database
 
     with Database(db_path) as db:
         resp = symbol_lookup(db.conn, name, kind=kind, exact=exact)
-    return json.dumps(resp.model_dump())
+    return _emit("find_symbol", resp.model_dump())
 
 
-@mcp.tool()
+@_tool()
 def find_refs(
     symbol: str,
     kind: str = "all",
@@ -165,17 +195,17 @@ def find_refs(
     """
     db_path, _ = _resolve_db()
     if not db_path.exists():
-        return _no_index_error()
+        return _emit("find_refs", _no_index_payload())
 
     from ..retrieval.searchers import refs_lookup
     from ..storage.db import Database
 
     with Database(db_path) as db:
         resp = refs_lookup(db.conn, symbol, kind=kind)
-    return json.dumps(resp.model_dump())
+    return _emit("find_refs", resp.model_dump())
 
 
-@mcp.tool()
+@_tool()
 def impact_of(
     target: str,
     depth: int = 2,
@@ -192,17 +222,17 @@ def impact_of(
     """
     db_path, _ = _resolve_db()
     if not db_path.exists():
-        return _no_index_error()
+        return _emit("impact_of", _no_index_payload())
 
     from ..graph.expand import impact_lookup
     from ..storage.db import Database
 
     with Database(db_path) as db:
         resp = impact_lookup(db.conn, target, depth=depth, direction=direction)
-    return json.dumps(resp.model_dump())
+    return _emit("impact_of", resp.model_dump())
 
 
-@mcp.tool()
+@_tool()
 def explain_code(
     query: str,
     token_budget: int = 2200,
@@ -221,7 +251,7 @@ def explain_code(
     """
     db_path, cfg = _resolve_db()
     if not db_path.exists():
-        return _no_index_error()
+        return _emit("explain_code", _no_index_payload())
 
     from ..service import normalize_explain_query, search_payload
 
@@ -230,22 +260,22 @@ def explain_code(
         offset=offset, token_budget=token_budget, no_fallback=False,
         backend=_search_backend(cfg),
     )
-    return json.dumps(payload)
+    return _emit("explain_code", payload)
 
 
-@mcp.tool()
+@_tool()
 def index_stats() -> str:
     """Return index freshness, file count, symbol count, and per-language coverage."""
     db_path, _ = _resolve_db()
     if not db_path.exists():
-        return json.dumps({"exists": False, "error": "No index found."})
+        return _emit("index_stats", {"exists": False, "error": "No index found."})
 
     from ..service import stats_payload
     from ..storage.db import Database
 
     with Database(db_path) as db:
         payload = stats_payload(db.conn)
-    return json.dumps(payload)
+    return _emit("index_stats", payload)
 
 
 def run() -> None:

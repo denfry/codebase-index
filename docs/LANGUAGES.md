@@ -6,7 +6,7 @@
 |---|---|---|
 | Tier A | Language-specific Tree-sitter `LangSpec` with definition, call, and import/inheritance patterns | Python, JavaScript, TypeScript, Java, Go, Rust, C, C++, C#, Ruby, PHP, Kotlin |
 | Tier B | Generic Tree-sitter path when a loadable grammar exists, without language-specific graph semantics | Lua |
-| Tier C | Line chunks + FTS5 lexical search only | Markdown, JSON, YAML, TOML, SQL and other text/config files |
+| Tier C | Line chunks + FTS5 lexical search only | Markdown, JSON, YAML, TOML, SQL; config/IaC: Dockerfile, Terraform (`.tf`/`.tfvars`), HCL, INI (`.ini`/`.cfg`/`.conf`/`.properties`), Makefiles; and other text/config files |
 
 Tier A is the only tier that should be advertised as symbol-aware. Tier B can
 surface useful definitions, but it is intentionally weaker and should be called
@@ -45,7 +45,11 @@ High-priority code languages:
 - Objective-C
 - Vue and Svelte component structure
 
-High-priority non-code and framework-aware extraction:
+High-priority non-code and framework-aware extraction (config/IaC files are now
+**Tier-C labeled** — indexed, language-tagged, and FTS-searchable; the items below
+are the deeper *structured* extraction still on the roadmap, and the framework
+graph part is designed in
+`docs/superpowers/specs/2026-06-14-typed-framework-edges-design.md`):
 
 - SQL schema-aware parsing: tables, columns, migrations, model/query consumers
 - Terraform/HCL: resources, modules, variables, outputs

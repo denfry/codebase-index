@@ -1,0 +1,23 @@
+{
+  "built_at": "<TS>",
+  "exists": true,
+  "files": 6,
+  "head_commit": "<SHA>",
+  "schema_version": 1,
+  "symbols": 7,
+  "tool": "index_stats",
+  "treesitter_coverage": [
+    {
+      "files": 3,
+      "graph": "full",
+      "lang": "python",
+      "symbols": 6
+    },
+    {
+      "files": 2,
+      "graph": "full",
+      "lang": "typescript",
+      "symbols": 1
+    }
+  ]
+}

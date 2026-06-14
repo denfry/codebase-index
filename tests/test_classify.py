@@ -25,6 +25,32 @@ def test_parser_for_tree_sitter_languages():
     assert parser_for(None) == "line"
 
 
+def test_detect_config_and_iac_languages():
+    assert detect_language("infra/main.tf") == "terraform"
+    assert detect_language("infra/prod.tfvars") == "terraform"
+    assert detect_language("infra/policy.hcl") == "hcl"
+    assert detect_language("setup.cfg") == "ini"
+    assert detect_language("app/settings.ini") == "ini"
+    assert detect_language("app.conf") == "ini"
+    assert detect_language("gradle.properties") == "ini"
+
+
+def test_detect_language_by_filename():
+    # Dockerfile/Makefile carry identity in the name, not the suffix.
+    assert detect_language("Dockerfile") == "dockerfile"
+    assert detect_language("docker/Dockerfile") == "dockerfile"
+    assert detect_language("services/web.Dockerfile") == "dockerfile"
+    assert detect_language("Containerfile") == "dockerfile"
+    assert detect_language("Makefile") == "make"
+    assert detect_language("GNUmakefile") == "make"
+
+
+def test_config_and_iac_languages_stay_on_line_parser():
+    # Tier C: labeled, but FTS-only — never routed to a (missing) tree-sitter spec.
+    for lang in ("terraform", "hcl", "ini", "dockerfile", "make"):
+        assert parser_for(lang) == "line"
+
+
 def test_secret_filename_detection():
     for path in [".env", ".env.local", "secrets.pem", "id_rsa", "config/credentials.json"]:
         assert is_secret_filename(path)
