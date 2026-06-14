@@ -4,4 +4,4 @@ Public surface is intentionally small; the CLI (`codebase_index.cli:app`) is the
 See docs/ARCHITECTURE.md for the module map.
 """
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
