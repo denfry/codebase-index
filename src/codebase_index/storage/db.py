@@ -80,6 +80,18 @@ class Database:
         # rebuild from scratch, since there is no in-place migration framework and
         # schema.sql is applied with IF NOT EXISTS (old tables/triggers persist).
 
+    def enable_vectors(self) -> None:
+        """Load the sqlite-vec extension into this connection (optional extra)."""
+        try:
+            import sqlite_vec  # type: ignore[import-untyped]
+        except ImportError as exc:
+            raise RuntimeError(
+                "Vector search needs the optional extra: pip install codebase-index[embeddings]"
+            ) from exc
+        self.conn.enable_load_extension(True)
+        sqlite_vec.load(self.conn)
+        self.conn.enable_load_extension(False)
+
 
 def peek_schema_version(path: Path | str) -> int:
     """Read meta.schema_version without applying schema or running the guard.
@@ -101,15 +113,3 @@ def peek_schema_version(path: Path | str) -> int:
             conn.close()
     except (sqlite3.Error, ValueError, OSError):
         return 0
-
-    def enable_vectors(self) -> None:
-        """Load the sqlite-vec extension into this connection (optional extra)."""
-        try:
-            import sqlite_vec  # type: ignore[import-untyped]
-        except ImportError as exc:
-            raise RuntimeError(
-                "Vector search needs the optional extra: pip install codebase-index[embeddings]"
-            ) from exc
-        self.conn.enable_load_extension(True)
-        sqlite_vec.load(self.conn)
-        self.conn.enable_load_extension(False)
