@@ -6,6 +6,44 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed — retrieval ranking & fusion (requires a one-time reindex)
+- **RRF fusion rescaled and re-keyed.** Fused scores were ~`w/k` (≈0.017), an order
+  of magnitude below the reranker's bounded bonuses, so rerank silently became the
+  primary ranker. RRF is now scaled by `k` (a pure monotonic rescale — order is
+  unchanged) so fused scores and rerank bonuses share an O(1) scale. Fusion also
+  merges on a coarse `(path, line-bucket)` key instead of an exact `(path, start,
+  end)` one: different retrievers report different ranges for the same place, so the
+  exact key almost never coincided and cross-source agreement never fired.
+  `agreeing_sources` is now counted at file granularity.
+- **Confidence uses a scale-invariant relative gap** instead of absolute thresholds.
+- **Per-file diversification**: at most 3 hits per file stay on the page; the rest
+  are pushed to the tail (nothing is dropped). Combined with bucketing this removes
+  the "same small file returned six times at different line slivers" noise.
+- **FTS recall on natural-language queries**: stopwords (`how`, `does`, `the`, …)
+  are dropped before building the FTS `MATCH`, so a query like "how does auth work"
+  no longer AND-s in filler that code chunks never contain.
+- **Symbol names are FTS-indexed.** `chunks` gained a denormalized `symbol_names`
+  column (mirrored verbatim by the FTS sync triggers, so external-content delete/
+  update stays consistent) — a query matching a symbol's name now hits even when the
+  body text doesn't repeat it. **Bumps `SCHEMA_VERSION` 1 → 2.** Older indexes are
+  still readable; `index`/`update` detect the mismatch and rebuild from scratch.
+- **Centrality fallback for ambiguous names**: symbols whose name isn't globally
+  unique never get a resolved `in_degree`; they now receive a damped, half-capped
+  bonus from a name-reference count so common names (`run`, `handle`, …) aren't
+  flatly zeroed. Precise `in_degree`, where present, still takes precedence.
+- **Test-file demotion is word-boundary aware**: `contest/`, `latest.py`,
+  `testimonials.tsx` are no longer mistaken for test files.
+- **Language-aware import resolution**: `import './base'` from a `.ts` file resolves
+  to `base.ts` rather than a same-named `base.py` earlier in the fallback order.
+- **Freshness is content-aware**: a bare `touch` (mtime change, identical bytes) is
+  a no-op for `update`, so it no longer reports the index as stale — freshness now
+  mirrors the sha-based incremental decision.
+
+### Removed
+- Dead legacy lexical-search path in `retrieval/searchers.py` (`fts_response`,
+  `fts_search`, the second `Candidate` dataclass and `_confidence`/`_fallbacks`/
+  `_trim`) — the live path goes through `pipeline.search` → `fts_candidates`.
+
 ## [1.4.0] - 2026-06-14
 
 ### Added
