@@ -22,6 +22,10 @@ from .types import Confidence
 
 _TERM_RE = re.compile(r"[A-Za-z0-9_]+")
 _RRF_K = 60
+# Max results kept per file before extras are pushed to the tail. Bucketed fusion
+# already collapses co-located hits; this caps the long tail of one big file
+# dominating the page so distinct files get surfaced.
+_MAX_PER_FILE = 3
 _KIND_ALIASES = {
     "method": "method",
     "methods": "method",
@@ -67,9 +71,14 @@ def _confidence(ranked) -> Confidence:
     if not ranked:
         return Confidence.LOW
     top = ranked[0]
+    if top.score <= 0:
+        return Confidence.LOW
     if len(ranked) == 1:
-        return Confidence.MEDIUM if top.score > 0 else Confidence.LOW
-    gap = top.score - ranked[1].score
+        return Confidence.MEDIUM
+    # Relative gap, not absolute: scale-invariant, so it stays meaningful regardless
+    # of fusion's score magnitude. agreeing_sources is file-level (how many retrievers
+    # surfaced the winning file at all), the signal RRF agreement is meant to capture.
+    rel_gap = (top.score - ranked[1].score) / top.score
     agree = getattr(top, "agreeing_sources", 1)
     exact = getattr(top, "exact_symbol", False)
     n = len(ranked)
@@ -77,16 +86,29 @@ def _confidence(ranked) -> Confidence:
     if exact:
         return Confidence.HIGH
     # Strong multi-source agreement with a clear score gap
-    if agree >= 3 and gap > 0.005:
+    if agree >= 3 and rel_gap > 0.15:
         return Confidence.HIGH
-    if agree >= 2 and gap > 0.01:
+    if agree >= 2 and rel_gap > 0.25:
         return Confidence.HIGH
     # Single source but very dominant winner
-    if agree == 1 and gap > 0.05 and top.score > 0.1:
+    if agree == 1 and rel_gap > 0.5:
         return Confidence.HIGH
-    if top.score > 0 and (agree >= 2 or gap > 0.005 or n >= 5):
+    if agree >= 2 or rel_gap > 0.1 or n >= 5:
         return Confidence.MEDIUM
     return Confidence.LOW
+
+
+def _diversify(ranked: list, *, per_file: int) -> list:
+    """Stable reorder: keep the first `per_file` hits of each file in place, push
+    the rest to the tail (preserving their relative order). Nothing is dropped, so
+    recall is intact; the page just isn't monopolised by one file's many regions."""
+    kept: list = []
+    overflow: list = []
+    counts: dict[str, int] = {}
+    for c in ranked:
+        counts[c.path] = counts.get(c.path, 0) + 1
+        (kept if counts[c.path] <= per_file else overflow).append(c)
+    return kept + overflow
 
 
 def _fallback_suggestions(query, ranked) -> dict:
@@ -121,7 +143,8 @@ def search(
         conn, query, mode=mode, limit=fetch_limit, weights=plan.weights, backend=backend
     )
     fused = fuse(lists, weights=weights, k=_RRF_K)
-    ranked = rerank(fused, query=query, intent=plan.intent)[:fetch_limit]
+    ranked = _diversify(rerank(fused, query=query, intent=plan.intent), per_file=_MAX_PER_FILE)
+    ranked = ranked[:fetch_limit]
     confidence = _confidence(ranked)
     # Scale budget proportionally so later pages receive snippet coverage.
     scaled_budget = token_budget * fetch_limit // max(limit, 1) if offset > 0 else token_budget

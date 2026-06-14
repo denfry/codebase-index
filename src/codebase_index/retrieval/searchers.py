@@ -8,31 +8,24 @@ from __future__ import annotations
 
 import re
 import sqlite3
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 from ..config import Config
 from ..indexer.freshness import compute_freshness
 from ..models import (
-    Confidence,
     GraphCoverage,
     IndexFreshness,
-    ReadRange,
     RefSite,
     RefsResponse,
-    Result,
-    SearchResponse,
     SymbolDef,
     SymbolResponse,
 )
-from ..output.redact import redact_snippet
 from ..storage import repo
 from .types import Candidate as M4Candidate
 
 _WORD_RE = re.compile(r"[A-Za-z0-9_]+")
 _CAMEL_RE = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+")
-_SNIPPET_MAX_LINES = 18
 
 
 def fts_candidates(conn: sqlite3.Connection, query: str, *, limit: int) -> list[M4Candidate]:
@@ -142,6 +135,15 @@ def symbol_candidates(
                 exact_symbol=exact,
             )
         )
+
+    # Damped centrality fallback: symbols whose name is not globally unique never
+    # get a resolved in_degree, so back-fill a name-reference count for the zero ones.
+    zero_deg = [c.symbol for c in out if not c.in_degree and c.symbol]
+    if zero_deg:
+        counts = repo.name_ref_counts(conn, zero_deg)
+        for c in out:
+            if not c.in_degree and c.symbol:
+                c.ref_count = counts.get(c.symbol, 0)
     return out
 
 
@@ -161,18 +163,6 @@ def path_candidates(conn: sqlite3.Connection, query: str, *, limit: int) -> list
     return out
 
 
-@dataclass
-class Candidate:
-    chunk_id: int
-    path: str
-    line_start: int
-    line_end: int
-    content: str
-    token_est: int
-    bm25: float
-    kind: str = "window"
-
-
 def _subtokens(term: str) -> list[str]:
     parts: list[str] = []
     for piece in term.split("_"):
@@ -181,115 +171,30 @@ def _subtokens(term: str) -> list[str]:
 
 
 def build_match_query(query: str) -> str:
+    """Build the FTS5 MATCH expression for `query`.
+
+    Each whitespace term expands to an OR group over the term and its
+    camelCase/snake_case subtokens; groups are AND-ed. Natural-language filler
+    ("how does X work") is dropped first: otherwise FTS would AND-in stopwords
+    that code chunks never contain, collapsing recall to zero on the very intents
+    (HOW_IT_WORKS / DEBUG_ERROR) that weight FTS highest. If *every* term is a
+    stopword we fall back to the full set rather than emit an empty match.
+    """
     groups: list[str] = []
+    salient: list[str] = []
     for term in _WORD_RE.findall(query):
         variants = {term, *_subtokens(term)}
         variants = {v for v in variants if len(v) >= 2}
         if not variants:
             continue
         ored = " OR ".join(f'"{v}"' for v in sorted(variants, key=str.lower))
-        groups.append(f"({ored})" if len(variants) > 1 else ored)
-    # FTS5 rejects implicit AND (space) when a group contains parenthesised OR
-    # expressions; explicit AND is required between all groups.
-    return " AND ".join(groups)
-
-
-def fts_search(conn: sqlite3.Connection, query: str, *, limit: int) -> list[Candidate]:
-    match = build_match_query(query)
-    rows = repo.fts_search(conn, match, limit=limit)
-    return [
-        Candidate(
-            chunk_id=r["chunk_id"],
-            path=r["path"],
-            line_start=r["line_start"],
-            line_end=r["line_end"],
-            content=r["content"],
-            token_est=r["token_est"],
-            bm25=r["bm25"],
-            kind=r.get("kind", "window"),  # type: ignore[attr-defined]
-        )
-        for r in rows
-    ]
-
-
-def fts_response(
-    conn: sqlite3.Connection,
-    query: str,
-    *,
-    limit: int,
-    token_budget: int,
-    root: Path,
-    config: Optional[Config] = None,
-) -> SearchResponse:
-    candidates = fts_search(conn, query, limit=limit)
-    results: list[Result] = []
-    recommended: list[ReadRange] = []
-    spent = 0
-
-    for rank, candidate in enumerate(candidates, start=1):
-        recommended.append(
-            ReadRange(
-                path=candidate.path,
-                line_start=candidate.line_start,
-                line_end=candidate.line_end,
-            )
-        )
-        snippet: Optional[str] = None
-        if spent + candidate.token_est <= token_budget:
-            snippet = redact_snippet(_trim(candidate.content))
-            spent += candidate.token_est
-        results.append(
-            Result(
-                rank=rank,
-                path=candidate.path,
-                line_start=candidate.line_start,
-                line_end=candidate.line_end,
-                symbols=[],
-                score=round(1.0 / rank, 4),
-                reason="doc match" if candidate.kind == "doc" else "lexical match (bm25)",
-                snippet=snippet,
-            )
-        )
-
-    confidence = _confidence(candidates)
-    return SearchResponse(
-        query=query,
-        intent="keyword",
-        index=_freshness(conn, root, config),
-        confidence=confidence,
-        results=results,
-        recommended_reads=recommended,
-        fallback_suggestions=_fallbacks(query) if confidence != "high" else {},
-    )
-
-
-def _trim(content: str) -> str:
-    lines = content.splitlines()
-    if len(lines) <= _SNIPPET_MAX_LINES:
-        return content
-    return "\n".join(lines[:_SNIPPET_MAX_LINES]) + "\n..."
-
-
-def _confidence(candidates: list[Candidate]) -> Confidence:
-    if not candidates:
-        return "low"
-    if len(candidates) == 1:
-        return "medium"
-    top, second = candidates[0], candidates[1]
-    gap = abs(second.bm25 - top.bm25)
-    n = len(candidates)
-    # Clear BM25 separation, or moderate gap with several corroborating results
-    if gap >= 2.0 or (gap >= 1.0 and n >= 3):
-        return "high"
-    if gap >= 0.3 or n >= 3:
-        return "medium"
-    return "low"
-
-
-def _fallbacks(query: str) -> dict[str, list[str]]:
-    terms = _WORD_RE.findall(query)
-    primary = terms[0] if terms else query
-    return {"ripgrep": [f'rg -n "{primary}"', f'rg -ni "{primary}"']}
+        # FTS5 rejects implicit AND (space) when a group contains parenthesised OR
+        # expressions; explicit AND is required between all groups.
+        group = f"({ored})" if len(variants) > 1 else ored
+        groups.append(group)
+        if term.lower() not in _SYMBOL_STOPWORDS:
+            salient.append(group)
+    return " AND ".join(salient or groups)
 
 
 def _freshness(

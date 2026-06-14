@@ -115,7 +115,9 @@ def test_search_reports_stale_after_edit(sample_repo, tmp_path, monkeypatch):
 
     db_path = sample_repo / ".claude" / "cache" / "codebase-index" / "index.sqlite"
     conn = sqlite3.connect(str(db_path))
-    conn.execute("UPDATE files SET mtime_ns = 1")
+    # Freshness is content-aware (sha), not mtime-only: corrupt the stored hash so
+    # the recomputed on-disk content no longer matches the index → genuinely stale.
+    conn.execute("UPDATE files SET mtime_ns = 1, sha256 = 'stale-sha'")
     conn.execute("DELETE FROM meta WHERE key = 'head_commit'")
     conn.commit()
     conn.close()
@@ -147,7 +149,9 @@ def test_explain_reports_stale_after_edit(sample_repo):
 
     db_path = sample_repo / ".claude" / "cache" / "codebase-index" / "index.sqlite"
     conn = sqlite3.connect(str(db_path))
-    conn.execute("UPDATE files SET mtime_ns = 1")
+    # Freshness is content-aware (sha), not mtime-only: corrupt the stored hash so
+    # the recomputed on-disk content no longer matches the index → genuinely stale.
+    conn.execute("UPDATE files SET mtime_ns = 1, sha256 = 'stale-sha'")
     conn.execute("DELETE FROM meta WHERE key = 'head_commit'")
     conn.commit()
     conn.close()

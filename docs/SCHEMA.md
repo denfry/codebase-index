@@ -39,7 +39,8 @@ CREATE TABLE chunks (
     kind          TEXT,                        -- 'symbol_body' | 'window' | 'doc'
     symbol_id     INTEGER REFERENCES symbols(id) ON DELETE SET NULL,
     content       TEXT NOT NULL,               -- raw text (secret-redacted before snippet output)
-    token_est     INTEGER NOT NULL             -- estimated tokens, for budgeting
+    token_est     INTEGER NOT NULL,            -- estimated tokens, for budgeting
+    symbol_names  TEXT NOT NULL DEFAULT ''     -- denormalized symbol name, FTS-indexed (mirrored by triggers)
 );
 CREATE INDEX idx_chunks_file ON chunks(file_id);
 

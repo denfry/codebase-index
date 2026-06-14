@@ -42,7 +42,7 @@ def resolve_edges(conn: sqlite3.Connection) -> int:
     for edge in edges:
         name = edge["dst_name"]
         if edge["edge_type"] == "import":
-            file_id = _module_to_file_id(suffix_map, name)
+            file_id = _module_to_file_id(suffix_map, name, lang=edge["lang"])
             if file_id is not None:
                 resolutions.append(("file", file_id, edge["id"]))
         elif edge["edge_type"] in _SYMBOL_EDGE_TYPES:
@@ -70,13 +70,36 @@ def _path_suffix_map(rows: list[sqlite3.Row]) -> dict[str, Optional[int]]:
     return mapping
 
 
+def _lang_suffixes(lang: Optional[str], base: str, rust_base: str, go_pkg: str) -> list[str]:
+    """Import-path suffixes specific to one language, most-specific first."""
+    return {
+        "python": [f"{base}.py", f"{base}/__init__.py"],
+        "typescript": [f"{base}.ts", f"{base}.tsx", f"{base}/index.ts", f"{base}/index.tsx"],
+        "javascript": [f"{base}.js", f"{base}/index.js"],
+        "java": [f"{base}.java"],
+        "kotlin": [f"{base}.kt"],
+        "go": [f"{go_pkg}.go"],
+        "rust": [
+            f"{rust_base}.rs", f"{rust_base}/mod.rs",
+            f"src/{rust_base}.rs", f"src/{rust_base}/mod.rs",
+        ],
+        "csharp": [f"{base}.cs"],
+        "ruby": [f"{base}.rb"],
+        "php": [f"{base}.php"],
+    }.get(lang or "", [])
+
+
 def _module_to_file_id(
-    suffix_map: dict[str, Optional[int]], module: str
+    suffix_map: dict[str, Optional[int]], module: str, lang: Optional[str] = None
 ) -> Optional[int]:
     """Resolve a module/import path to a unique file id, or None.
 
     Handles Python, TypeScript/JavaScript, Java/Kotlin/Scala, Rust (:: separator),
-    Go (last path segment), C#, Ruby, and PHP import conventions.
+    Go (last path segment), C#, Ruby, and PHP import conventions. The importing
+    file's `lang` is tried first so that, in a polyglot repo, `import './base'` from
+    a .ts file resolves to base.ts rather than a same-named base.py earlier in the
+    fixed fallback order. The fallback order is unchanged, so single-language repos
+    and the lang-unknown path behave exactly as before.
     """
     base = module.lower().replace(".", "/").strip("/")
     rust_base = module.lower().replace("::", "/").strip("/")
@@ -85,7 +108,7 @@ def _module_to_file_id(
     # Last segment used for Go package-level resolution
     go_pkg = base.rsplit("/", 1)[-1] if "/" in base else base
 
-    for suffix in (
+    fallback = (
         # Python
         f"{base}.py",
         f"{base}/__init__.py",
@@ -113,7 +136,8 @@ def _module_to_file_id(
         f"{base}.rb",
         # PHP
         f"{base}.php",
-    ):
+    )
+    for suffix in (*_lang_suffixes(lang, base, rust_base, go_pkg), *fallback):
         file_id = suffix_map.get(suffix)
         if file_id is not None:
             return file_id

@@ -44,7 +44,12 @@ CREATE TABLE IF NOT EXISTS chunks (
     kind          TEXT,
     symbol_id     INTEGER REFERENCES symbols(id) ON DELETE SET NULL,
     content       TEXT NOT NULL,
-    token_est     INTEGER NOT NULL
+    token_est     INTEGER NOT NULL,
+    -- Denormalized copy of the chunk's symbol name, populated at write time.
+    -- Stored (not a live join) so the FTS triggers below can replay the exact
+    -- indexed value on delete/update; a subquery would read a symbol row that the
+    -- ON DELETE SET NULL cascade may already have detached, corrupting the index.
+    symbol_names  TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_chunks_file ON chunks(file_id);
 
@@ -92,19 +97,23 @@ CREATE VIRTUAL TABLE IF NOT EXISTS fts_chunks USING fts5(
     tokenize = "unicode61 remove_diacritics 2"
 );
 
+-- symbol_names mirrors new/old.symbol_names (the stored chunk column), NOT a live
+-- join: external-content FTS requires the delete to replay the exact value that was
+-- indexed, which a join could no longer reproduce after a symbol cascade. path is
+-- UNINDEXED so its delete value is irrelevant.
 CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
     INSERT INTO fts_chunks(rowid, content, symbol_names, path)
-    VALUES (new.id, new.content, '', (SELECT path FROM files WHERE id = new.file_id));
+    VALUES (new.id, new.content, new.symbol_names, (SELECT path FROM files WHERE id = new.file_id));
 END;
 CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
     INSERT INTO fts_chunks(fts_chunks, rowid, content, symbol_names, path)
-    VALUES ('delete', old.id, old.content, '', '');
+    VALUES ('delete', old.id, old.content, old.symbol_names, '');
 END;
 CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON chunks BEGIN
     INSERT INTO fts_chunks(fts_chunks, rowid, content, symbol_names, path)
-    VALUES ('delete', old.id, old.content, '', '');
+    VALUES ('delete', old.id, old.content, old.symbol_names, '');
     INSERT INTO fts_chunks(rowid, content, symbol_names, path)
-    VALUES (new.id, new.content, '', (SELECT path FROM files WHERE id = new.file_id));
+    VALUES (new.id, new.content, new.symbol_names, (SELECT path FROM files WHERE id = new.file_id));
 END;
 
 -- vec_chunks (sqlite-vec) is created at runtime ONLY when embeddings.enabled = true.

@@ -30,18 +30,40 @@ def test_freshly_built_index_is_not_stale(sample_repo, tmp_path):
     db.close()
 
 
-def test_edited_file_makes_index_stale(sample_repo, tmp_path, monkeypatch):
-    """An indexed file whose mtime advanced past the build is counted as changed."""
+def test_edited_file_content_makes_index_stale(sample_repo, tmp_path):
+    """A file whose indexed content (sha256) no longer matches disk is stale."""
     cfg, db = _indexed(sample_repo, tmp_path)
 
     from codebase_index.storage import repo
-    indexed = repo.path_mtimes(db.conn)
+    indexed = repo.fingerprints(db.conn)
     a_path = next(iter(indexed))
-    repo.set_meta(db.conn, "head_commit", "deadbeef")
-    db.conn.execute("UPDATE files SET mtime_ns = 1 WHERE path = ?", (a_path,))
+    repo.set_meta(db.conn, "head_commit", "deadbeef")  # force the accurate (non-git) path
+    # Corrupt the stored fingerprint so the on-disk content hashes differently;
+    # mtime is bumped so the (mtime,size) fast-equal check can't short-circuit.
+    db.conn.execute(
+        "UPDATE files SET mtime_ns = 1, sha256 = 'stale-sha' WHERE path = ?", (a_path,)
+    )
     db.conn.commit()
 
     fr = compute_freshness(db.conn, sample_repo, cfg)
     assert fr.stale is True
     assert fr.files_changed_since_build >= 1
+    db.close()
+
+
+def test_touch_without_content_change_is_not_stale(sample_repo, tmp_path):
+    """A bare mtime bump with unchanged bytes is a no-op for update_index, so
+    freshness must not flag it as stale (it mirrors the sha-based decision)."""
+    cfg, db = _indexed(sample_repo, tmp_path)
+
+    from codebase_index.storage import repo
+    indexed = repo.fingerprints(db.conn)
+    a_path = next(iter(indexed))
+    repo.set_meta(db.conn, "head_commit", "deadbeef")  # force the accurate (non-git) path
+    db.conn.execute("UPDATE files SET mtime_ns = 1 WHERE path = ?", (a_path,))
+    db.conn.commit()
+
+    fr = compute_freshness(db.conn, sample_repo, cfg)
+    assert fr.stale is False
+    assert fr.files_changed_since_build == 0
     db.close()

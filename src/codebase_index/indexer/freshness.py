@@ -15,6 +15,7 @@ Strategy:
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from pathlib import Path
 
@@ -47,23 +48,45 @@ def compute_freshness(conn, root: Path, config: Config) -> IndexFreshness:
 
 
 def _changed_count(conn, root: Path, config: Config) -> int:
-    """Added + removed + mtime-modified indexable files vs. the index."""
-    current: dict[str, int] = {}
+    """Added + removed + content-modified indexable files vs. the index.
+
+    Mirrors the incremental update's decision (indexer/pipeline.py): a file is
+    unchanged when (mtime, size) match, and even when they differ it is only
+    counted as changed if its sha256 differs. A bare `touch` that rewrites mtime
+    without changing bytes is a no-op for update_index, so it must not register as
+    stale here either.
+    """
+    indexed = repo.fingerprints(conn)  # path -> (mtime_ns, size_bytes, sha256)
+    seen: set[str] = set()
+    changed = 0
     for cand in walk(root, config):
         try:
-            current[cand.rel_path] = cand.path.stat().st_mtime_ns
+            st = cand.path.stat()
         except OSError:
             continue
-    indexed = repo.path_mtimes(conn)
-
-    changed = 0
-    for path, mtime in current.items():
-        if path not in indexed or indexed[path] != mtime:
+        seen.add(cand.rel_path)
+        prior = indexed.get(cand.rel_path)
+        if prior is None:
             changed += 1
-    for path in indexed:
-        if path not in current:
-            changed += 1
+            continue
+        if prior[0] == st.st_mtime_ns and prior[1] == cand.size_bytes:
+            continue
+        try:
+            if prior[2] == _sha256_file(cand.path):
+                continue
+        except OSError:
+            pass
+        changed += 1
+    changed += sum(1 for path in indexed if path not in seen)
     return changed
+
+
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for block in iter(lambda: fh.read(65536), b""):
+            h.update(block)
+    return h.hexdigest()
 
 
 def _git_clean_at(root: Path, indexed_head: "str | None") -> bool:
