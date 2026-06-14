@@ -95,8 +95,11 @@ Yes. The CLI is agent-agnostic:
 ## How do I reset the index?
 
 ```bash
-# Delete the cache
+# Reset the index database (default — keeps resolved config and skill backups)
 codebase-index clean
+
+# Wipe the whole per-project cache directory
+codebase-index clean --all
 
 # Or manually
 rm -rf .claude/cache/codebase-index/
@@ -104,6 +107,9 @@ rm -rf .claude/cache/codebase-index/
 # Rebuild from scratch
 codebase-index index
 ```
+
+`clean` never touches the installed skill (it lives in `.claude/skills/`, not the
+cache). Add `--yes` to skip the confirmation prompt in scripts.
 
 ## What languages are supported?
 
@@ -152,9 +158,8 @@ Yes. Use any of these methods:
 
 ## Is it production-ready?
 
-Yes — `codebase-index` is released as **v1.3.0**. Indexing, hybrid search, Tree-sitter
-The core indexing and search functionality is implemented and tested. The
-current `1.3.0` package includes:
+Yes — `codebase-index` is released as **v1.3.0**. The core indexing and search
+functionality is implemented and tested. The current `1.3.0` package includes:
 
 - Hybrid FTS/path/symbol/vector retrieval
 - Import/call/reference graph expansion and `impact`

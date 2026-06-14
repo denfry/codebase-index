@@ -1,6 +1,28 @@
 # Benchmarks
 
-`codebase-index` has three benchmark surfaces.
+`codebase-index` has three benchmark surfaces. Read them with their status in
+mind — the whole point of this page is to keep evidence and aspiration separate.
+
+| Surface | What it is | Status | Use it as |
+|---|---|---|---|
+| Public suite (`tests/benchmark_public.py`) | Deterministic synthetic multi-language fixture with the full metric framework | **Toy/synthetic** | CI regression gate + metric shape, **not** product-quality evidence |
+| Smoke/perf (`test_perf_smoke.py`, `test_benchmark_comparison.py`) | Latency + output-size guards on a tiny fixture | **Toy/smoke** | Regression checks only |
+| Honest real-repo (`tests/benchmark_honest.py`) | 55k LOC Java repo, recall@3 vs disciplined `rg` baseline, symmetric token accounting | **Proven (one repo)** | The only headline product-quality number we stand behind today |
+
+### Claims that should NOT be made yet
+
+Do not write, imply, or ship any of these until a run with published logs exists:
+
+- Any 10k / 100k / 1M LOC scale or speed claim (no real run at that size).
+- "Beats Cursor / Sourcegraph / Codebase-Memory MCP" — no head-to-head exists.
+- Per-language quality claims beyond Java (the honest run is Java-only).
+- Generic "Nx faster" / "Nx fewer tokens" without naming the baseline and repo.
+- Latency claims — the honest run explicitly does not headline latency
+  (Python process start dominates; real `rg` is tens of ms).
+
+The defensible headline today is exactly: **on one 55k LOC Java repo, recall@3 was
+70% (index) vs 40% (`rg`+window), using ~13× fewer answer tokens.** Everything
+else is roadmap.
 
 ## Public benchmark suite
 
@@ -67,13 +89,27 @@ objective recall@3 ground truth.
 latency and output-size behavior. They are useful regression checks, not product
 quality evidence.
 
-## Remaining benchmark work
+## Remaining benchmark work (TODO checklist)
 
-The public suite now has the metric framework, but the next step is adding
-larger public or documented external repositories:
+The public suite has the metric framework; the next step is real, larger,
+documented repositories. Each task must publish raw logs alongside any headline
+number (the pattern set by `tests/benchmark_honest_RESULTS.md`).
 
-- 10k, 100k, and 1M LOC scale targets
-- More real-world Python, TypeScript, Java, Go, Rust, C#, PHP repos
-- Agent answer grading with human-reviewed expected answers
-- Comparisons against repo-map style context and vanilla agent exploration
-- Framework graph tasks: route -> handler -> service -> DB, migrations, config consumers, CI/infra
+- [ ] **10k LOC public repo** — Recall@1/3/5, MRR, nDCG, token economy; named repo + commit SHA.
+- [ ] **100k LOC public repo** — same metrics, plus full index build time and incremental update latency.
+- [ ] **1M LOC target** — feasibility + scale counters (files/symbols/edges/bytes); may be partial.
+- [ ] **Multi-language repo** (≥3 Tier-A languages) — per-language recall and answer-correctness breakdown.
+- [ ] **vs vanilla agent grep/read** — tokens and recall against an undisciplined agent exploring the same questions.
+- [ ] **vs repo-map-style context** — tokens and recall against an Aider-repo-map-style context blob.
+- [ ] **Graph task benchmark** — `refs`, `impact`, and route→handler→service paths against hand-labeled ground truth.
+- [ ] **Answer grading** — human-reviewed expected answers, not just file-level recall proxies.
+- [ ] **Framework graph tasks** — migrations, config consumers, CI/infra wiring once typed edges land.
+
+How to add one without overclaiming:
+
+1. Pick a public repo; record its URL and commit SHA.
+2. Derive ground truth independently of the index (e.g. naming convention), so the
+   index cannot grade its own homework.
+3. Use a symmetric token estimator and read window on both sides.
+4. Commit the raw run output next to a short `*_RESULTS.md` summary.
+5. Only then update README/COMPARISON headline numbers.
