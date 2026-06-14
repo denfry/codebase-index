@@ -36,11 +36,6 @@ app = typer.Typer(
 
 
 # --- global state resolved from common options --------------------------------------------------
-def _todo(name: str) -> None:
-    typer.echo(f"[codebase-index] '{name}' is not implemented yet (M0 scaffold). See docs/ROADMAP.md")
-    raise typer.Exit(code=0)
-
-
 def _ensure_index(ctx: "typer.Context") -> tuple[Path, Any]:
     from .indexer.pipeline import build_index
     from .service import resolve_db
@@ -650,9 +645,66 @@ def mcp(
 
 
 @app.command()
-def clean(yes: bool = typer.Option(False, "--yes", help="Skip confirmation.")) -> None:
-    """Remove the per-project cache (keeps the skill)."""
-    _todo("clean")
+def clean(
+    ctx: typer.Context,
+    yes: bool = typer.Option(False, "--yes", help="Skip the confirmation prompt."),
+    all_cache: bool = typer.Option(
+        False,
+        "--all",
+        help="Remove the whole cache dir (index DB, resolved config, graph exports, "
+        "skill backups), not just the index database.",
+    ),
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+) -> None:
+    """Reset the local index. Default removes the index DB; --all wipes the cache dir.
+
+    The installed skill (in .claude/skills/) is never touched. Rebuild with
+    `codebase-index index`.
+    """
+    import json as _json
+    import shutil
+
+    from .service import cache_dir_for, resolve_db
+
+    is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
+    quiet = bool(ctx.obj and ctx.obj.get("quiet"))
+    root_opt = ctx.obj.get("root") if ctx.obj else None
+    db_path, cfg = resolve_db(root_opt)
+    cache_dir = cache_dir_for(cfg)
+
+    if all_cache:
+        targets = [cache_dir]
+    else:
+        # The index database plus its SQLite WAL/SHM sidecar files.
+        targets = [db_path, *(db_path.with_name(db_path.name + s) for s in ("-wal", "-shm"))]
+    existing = [p for p in targets if p.exists()]
+
+    if not existing:
+        if is_json:
+            typer.echo(_json.dumps({"removed": [], "existed": False}))
+        elif not quiet:
+            typer.echo("Nothing to clean (no cache found).")
+        raise typer.Exit(code=0)
+
+    if not yes and not is_json and sys.stdin.isatty():
+        what = "the entire cache directory" if all_cache else "the index database"
+        where = cache_dir if all_cache else db_path
+        typer.confirm(f"Remove {what} at {where}?", abort=True)
+
+    removed: list[str] = []
+    for path in existing:
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+        removed.append(str(path))
+
+    if is_json:
+        typer.echo(_json.dumps({"removed": removed, "existed": True}))
+    elif not quiet:
+        typer.echo(
+            f"Removed {len(removed)} item(s). Run `codebase-index index` to rebuild."
+        )
 
 
 @app.command()

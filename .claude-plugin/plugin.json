@@ -10,7 +10,13 @@
   "repository": "https://github.com/denfry/codebase-index",
   "license": "MIT",
   "keywords": [
+    "claude-code",
     "code-search",
+    "semantic-code-search",
+    "codebase-index",
+    "mcp",
+    "ai-agents",
+    "local-first",
     "tree-sitter",
     "rag",
     "sqlite",

@@ -15,14 +15,17 @@ Rationale: Matches the intended package name and primary product keyword.
 ### GitHub About Description
 
 ```
-Local-first codebase indexing for Claude Code, Codex CLI, OpenCode, and AI coding agents.
+Local-first codebase indexing for Claude Code, Codex CLI, OpenCode & AI coding agents — hybrid FTS5 + Tree-sitter + graph search, fully offline.
 ```
 
 ### GitHub Topics
 
 ```
-claude-code, codex-cli, opencode, ai-coding, codebase-indexing, semantic-code-search, code-search, rag, codebase-rag, tree-sitter, sqlite, fts5, developer-tools, ai-agents, cursor-alternative, context-engineering, token-optimization, local-first, python, cli
+ai-agents, ai-coding, claude-code, cli, code-search, codebase-indexing, codex-cli, context-engineering, cursor-alternative, developer-tools, fts5, local-first, mcp, opencode, python, rag, semantic-code-search, sqlite, token-optimization, tree-sitter
 ```
+
+GitHub caps topics at 20; this list is the live set (all 20 slots used). `codebase-rag`
+is a swap candidate if a slot frees up.
 
 ### Website
 
@@ -77,7 +80,7 @@ Include shields.io badges in the README hero section:
 
 ```markdown
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
+![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![CI](https://github.com/denfry/codebase-index/actions/workflows/ci.yml/badge.svg)
 ![Claude Code Skill](https://img.shields.io/badge/Claude%20Code%20Skill-yes-green.svg)
 ![Codex CLI](https://img.shields.io/badge/Codex%20CLI-supported-green.svg)
@@ -92,22 +95,34 @@ Include shields.io badges in the README hero section:
 
 ## Social Preview Image
 
-Create `assets/social-preview.png`:
+Built and committed as `assets/social-preview.png` (1280×640). Regenerate with:
 
-- **Dimensions:** 1280x640 (GitHub recommended)
-- **Background:** Dark theme (#0d1117 or similar)
-- **Text:** "codebase-index - local codebase indexing for AI coding agents"
-- **Elements:** Terminal screenshot or code snippet graphic
-- **Style:** Clean, minimal, professional
+```bash
+python scripts/gen_assets.py
+```
+
+This also builds `assets/demo.png` (1200×760), the static terminal still embedded
+near the top of `README.md`.
+
+- **Dimensions:** 1280×640 (GitHub recommended)
+- **Background:** GitHub dark theme (#0d1117), accent glow
+- **Text:** wordmark `codebase-index` + "Local codebase indexing for AI coding agents"
+- **Elements:** terminal mock with a ranked search result + capability chips
+- **Style:** clean, minimal, professional
+
+> **Action still required:** the file in the repo is not the social card by itself.
+> Upload it in **Settings → General → Social preview** so GitHub serves it as the
+> `og:image` on X / Slack / Discord / LinkedIn. (`usesCustomOpenGraphImage` is
+> currently `false`.)
 
 ## Launch Checklist
 
-- [x] Create v1.2.0 release with release notes
-- [ ] Add all GitHub topics (see list above)
-- [ ] Set repository description in About section
-- [ ] Upload social preview image
-- [ ] Ensure README first 150 words contain target keywords
-- [ ] Verify all badges render correctly
+- [x] Create v1.3.0 release with release notes
+- [x] Add all GitHub topics (20/20 slots used; see list above)
+- [x] Set repository description in About section
+- [ ] Upload social preview image (`assets/social-preview.png` built; must be uploaded in Settings → Social preview)
+- [x] Ensure README first 150 words contain target keywords
+- [x] Verify all badges render correctly
 - [ ] Submit to awesome Claude Code skills lists
 - [ ] Submit to awesome AI coding tools lists
 - [ ] Post announcement on:
@@ -115,10 +130,10 @@ Create `assets/social-preview.png`:
   - Reddit (r/LocalLLaMA, r/ClaudeAI, r/artificial)
   - Hacker News (Show HN)
   - Dev.to
-- [ ] Add demo GIF or terminal recording to README
-- [ ] Ensure comparison page is complete
-- [ ] Ensure security model page is complete
-- [ ] Tag release on GitHub
+- [~] Add demo GIF or terminal recording to README (`assets/demo.png` static still built; animated GIF still pending)
+- [x] Ensure comparison page is complete (`docs/COMPARISON.md`)
+- [x] Ensure security model page is complete (`docs/SECURITY_MODEL.md`)
+- [x] Tag release on GitHub (`v1.3.0`)
 
 ## Backlink Targets
 
