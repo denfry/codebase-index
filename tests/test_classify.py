@@ -4,6 +4,7 @@ from codebase_index.discovery.classify import (
     detect_language,
     is_generated,
     is_secret_filename,
+    is_test_path,
     looks_binary,
     parser_for,
 )
@@ -66,3 +67,27 @@ def test_generated_detection():
     assert is_generated("src/schema.generated.ts")
     assert is_generated("web/app.min.js")
     assert not is_generated("web/app.ts")
+
+
+def test_is_test_path_matches_test_trees_and_modules():
+    for path in [
+        "tests/test_auth.py",
+        "src/__tests__/user.test.ts",
+        "pkg/foo_test.go",
+        "app/user.spec.ts",
+        "e2e/login.py",
+        "project/test/Thing.java",
+    ]:
+        assert is_test_path(path), path
+
+
+def test_is_test_path_does_not_match_substring_lookalikes():
+    # Word-boundary, not bare substring: these contain "test" but are not tests.
+    for path in [
+        "src/contest/leaderboard.py",
+        "lib/latest.py",
+        "util/fastest_path.ts",
+        "web/testimonials.tsx",
+        "src/attestation.py",
+    ]:
+        assert not is_test_path(path), path

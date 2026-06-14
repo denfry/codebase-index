@@ -269,6 +269,99 @@ def test_replace_chunks_with_symbol_ids(tmp_path):
     db.close()
 
 
+def test_chunk_symbol_names_populated_and_searchable(tmp_path):
+    """The chunk's symbol name is denormalized into symbol_names and indexed by FTS,
+    so a query matching only the symbol name (not the body text) still hits."""
+    db = _open(tmp_path)
+    fid = repo.upsert_file(
+        db.conn, path="m.py", lang="python", size_bytes=1, sha256="h", mtime_ns=1,
+        git_status=None, parser="treesitter", indexed_at="t", is_generated=False,
+    )
+    sids = repo.replace_symbols(
+        db.conn, fid,
+        [Symbol(name="refresh_access_token", kind="function",
+                line_start=1, line_end=2, qualified="refresh_access_token")],
+    )
+    # Body text deliberately omits the symbol name, isolating the symbol_names column.
+    repo.replace_chunks(
+        db.conn, fid,
+        [Chunk(line_start=1, line_end=2, content="def f():\n    return 1",
+               token_est=3, kind="symbol_body", symbol_index=0)],
+        symbol_ids=sids,
+    )
+    assert repo.chunks_for_file(db.conn, fid)[0]["symbol_names"] == "refresh_access_token"
+    hit = repo.fts_search(db.conn, "refresh_access_token", limit=10)
+    assert len(hit) == 1 and hit[0]["path"] == "m.py"
+    db.close()
+
+
+def test_chunk_symbol_names_delete_keeps_fts_consistent(tmp_path):
+    """External-content FTS corrupts if a delete replays the wrong indexed value.
+    Replacing chunks (and cascading symbol deletes) must leave a consistent index."""
+    db = _open(tmp_path)
+    fid = repo.upsert_file(
+        db.conn, path="m.py", lang="python", size_bytes=1, sha256="h", mtime_ns=1,
+        git_status=None, parser="treesitter", indexed_at="t", is_generated=False,
+    )
+    sids = repo.replace_symbols(
+        db.conn, fid,
+        [Symbol(name="alpha_symbol", kind="function", line_start=1, line_end=2,
+                qualified="alpha_symbol")],
+    )
+    repo.replace_chunks(
+        db.conn, fid,
+        [Chunk(line_start=1, line_end=2, content="body one", token_est=2,
+               kind="symbol_body", symbol_index=0)],
+        symbol_ids=sids,
+    )
+    assert repo.fts_search(db.conn, "alpha_symbol", limit=10)
+
+    # Re-index the file: deletes the old symbol (cascades chunk.symbol_id -> NULL)
+    # and old chunk, inserts a fresh one with a different symbol name.
+    sids2 = repo.replace_symbols(
+        db.conn, fid,
+        [Symbol(name="beta_symbol", kind="function", line_start=1, line_end=2,
+                qualified="beta_symbol")],
+    )
+    repo.replace_chunks(
+        db.conn, fid,
+        [Chunk(line_start=1, line_end=2, content="body two", token_est=2,
+               kind="symbol_body", symbol_index=0)],
+        symbol_ids=sids2,
+    )
+    assert repo.fts_search(db.conn, "alpha_symbol", limit=10) == []   # old name gone
+    assert repo.fts_search(db.conn, "beta_symbol", limit=10)          # new name present
+    assert db.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    db.close()
+
+
+def test_name_ref_counts(tmp_path):
+    db = _open(tmp_path)
+    fid = repo.upsert_file(
+        db.conn, path="m.py", lang="python", size_bytes=1, sha256="h", mtime_ns=1,
+        git_status=None, parser="treesitter", indexed_at="t", is_generated=False,
+    )
+    sids = repo.replace_symbols(
+        db.conn, fid,
+        [Symbol(name="caller", kind="function", line_start=1, line_end=2, qualified="caller")],
+    )
+    repo.replace_edges(
+        db.conn, fid,
+        [
+            {"edge_type": "call", "src_kind": "symbol", "src_id": sids[0],
+             "dst_kind": None, "dst_id": None, "dst_name": "run", "line": 1, "resolved": 0},
+            {"edge_type": "call", "src_kind": "symbol", "src_id": sids[0],
+             "dst_kind": None, "dst_id": None, "dst_name": "run", "line": 2, "resolved": 0},
+            {"edge_type": "call", "src_kind": "symbol", "src_id": sids[0],
+             "dst_kind": None, "dst_id": None, "dst_name": "once", "line": 3, "resolved": 0},
+        ],
+    )
+    counts = repo.name_ref_counts(db.conn, ["run", "once", "absent"])
+    assert counts == {"run": 2, "once": 1}
+    assert repo.name_ref_counts(db.conn, []) == {}
+    db.close()
+
+
 def test_replace_edges_and_refs_for_name(tmp_path):
     db = _open(tmp_path)
     fid = repo.upsert_file(

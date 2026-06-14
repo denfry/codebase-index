@@ -132,3 +132,20 @@ def is_generated(path: str) -> bool:
         or name.endswith(".min.js")
         or name.endswith(".min.css")
     )
+
+
+# Directory names that mark a test tree, and filename patterns for test modules.
+# Matched on whole path segments / filename stems — NOT a bare substring — so
+# `contest/`, `latest.py`, or `testimonials.ts` are never mistaken for tests.
+_TEST_DIRS = {"test", "tests", "__tests__", "__test__", "testing", "spec", "specs", "e2e"}
+
+
+def is_test_path(path: str) -> bool:
+    pure = PurePosixPath(path.replace("\\", "/"))
+    if any(part.lower() in _TEST_DIRS for part in pure.parts[:-1]):
+        return True
+    name = pure.name.lower()
+    stem = name.split(".", 1)[0]
+    if stem == "test" or stem.startswith("test_") or stem.endswith("_test"):
+        return True
+    return ".test." in name or ".spec." in name
