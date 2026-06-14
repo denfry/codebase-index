@@ -54,6 +54,13 @@ def _ensure_index(ctx: "typer.Context") -> tuple[Path, Any]:
     return db_path, cfg
 
 
+def _remove_db_files(db_path: Path) -> None:
+    """Delete the SQLite db and its WAL/SHM sidecars (used to force a clean rebuild)."""
+    for p in (db_path, *(db_path.with_name(db_path.name + s) for s in ("-wal", "-shm"))):
+        if p.exists():
+            p.unlink()
+
+
 def _open_in_browser(path: Path) -> None:
     uri = path.resolve().as_uri()
     try:
@@ -278,13 +285,15 @@ def index(
 
     from .config import load
     from .indexer.pipeline import build_index
-    from .storage.db import Database
+    from .storage.db import SCHEMA_VERSION, Database, peek_schema_version
 
     root_opt = ctx.obj.get("root") if ctx.obj else None
     cfg = load(root_opt)
     db_path = Path(cfg.root) / ".claude" / "cache" / "codebase-index" / "index.sqlite"
-    if rebuild and db_path.exists():
-        db_path.unlink()
+    # A full build discards an outdated-schema index: schema.sql is applied with
+    # IF NOT EXISTS, so an upgrade can't add columns/triggers in place — recreate.
+    if rebuild or (db_path.exists() and peek_schema_version(db_path) < SCHEMA_VERSION):
+        _remove_db_files(db_path)
 
     with Database(db_path) as db:
         stats = build_index(cfg, db, root=Path(cfg.root))
@@ -321,8 +330,8 @@ def update(
     import json as _json
 
     from .config import load
-    from .indexer.pipeline import update_index
-    from .storage.db import Database
+    from .indexer.pipeline import build_index, update_index
+    from .storage.db import SCHEMA_VERSION, Database, peek_schema_version
 
     is_json = bool(ctx.obj and ctx.obj.get("json"))
     quiet = bool(ctx.obj and ctx.obj.get("quiet"))
@@ -336,8 +345,15 @@ def update(
             typer.echo("No index found. Run `codebase-index index` first.")
         raise typer.Exit(code=0)
 
-    with Database(db_path) as db:
-        stats = update_index(cfg, db, root=Path(cfg.root), since=since, all_files=all_files)
+    if peek_schema_version(db_path) < SCHEMA_VERSION:
+        # Schema changed under the index; an incremental write would target old
+        # tables. Upgrade by rebuilding from scratch (the index is a derived cache).
+        _remove_db_files(db_path)
+        with Database(db_path) as db:
+            stats = build_index(cfg, db, root=Path(cfg.root))
+    else:
+        with Database(db_path) as db:
+            stats = update_index(cfg, db, root=Path(cfg.root), since=since, all_files=all_files)
 
     if is_json:
         typer.echo(

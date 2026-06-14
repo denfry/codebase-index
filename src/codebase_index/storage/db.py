@@ -7,7 +7,8 @@ from importlib import resources
 from pathlib import Path
 from typing import Optional
 
-SCHEMA_VERSION = 1
+# 2: chunks gained a denormalized `symbol_names` column (FTS symbol-name boost).
+SCHEMA_VERSION = 2
 
 
 class Database:
@@ -73,6 +74,33 @@ class Database:
                 f"Index schema_version {current} is newer than supported {SCHEMA_VERSION}; "
                 "rebuild the index with an updated CLI."
             )
+        # current < SCHEMA_VERSION is tolerated on open: queries never read the
+        # added columns, so an older index is still safely *readable*. The build
+        # commands (index/update) detect the mismatch via peek_schema_version and
+        # rebuild from scratch, since there is no in-place migration framework and
+        # schema.sql is applied with IF NOT EXISTS (old tables/triggers persist).
+
+
+def peek_schema_version(path: Path | str) -> int:
+    """Read meta.schema_version without applying schema or running the guard.
+
+    Returns 0 when the file, the meta table, or the key is absent/unreadable, so
+    callers can treat "0 < peek < SCHEMA_VERSION" (or a missing meta) as "rebuild".
+    """
+    p = Path(path)
+    if not p.exists():
+        return 0
+    try:
+        conn = sqlite3.connect(p)
+        try:
+            row = conn.execute(
+                "SELECT value FROM meta WHERE key = 'schema_version'"
+            ).fetchone()
+            return int(row[0]) if row else 0
+        finally:
+            conn.close()
+    except (sqlite3.Error, ValueError, OSError):
+        return 0
 
     def enable_vectors(self) -> None:
         """Load the sqlite-vec extension into this connection (optional extra)."""

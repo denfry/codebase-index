@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 import re
 
+from ..discovery.classify import is_test_path
 from .types import Candidate, Intent
 
 _TERM_RE = re.compile(r"[A-Za-z0-9_]+")
@@ -45,11 +46,19 @@ def rerank(candidates: list[Candidate], *, query: str, intent: Intent) -> list[C
         if c.in_degree:
             bonus += min(_DEGREE_CAP, math.log1p(c.in_degree) * _DEGREE_SCALE)
             reasons.append(f"{c.in_degree} callers")
+        elif c.ref_count:
+            # Precise in_degree is only computed for globally-unique symbol names
+            # (ambiguous names never resolve), so common names like `run`/`handle`
+            # always score 0. Fall back to a damped name-reference count — half the
+            # scale and cap — so centrality still breaks ties without overriding the
+            # precise signal where it exists.
+            bonus += min(_DEGREE_CAP / 2, math.log1p(c.ref_count) * (_DEGREE_SCALE / 2))
+            reasons.append(f"~{c.ref_count} refs by name")
         if intent is Intent.ARCHITECTURE and (c.in_degree + c.out_degree):
             bonus += min(_DEGREE_CAP, math.log1p(c.in_degree + c.out_degree) * (_DEGREE_SCALE / 2))
 
         wants_tests = "test" in terms or "tests" in terms
-        if c.is_generated or (("test" in c.path.lower()) and not wants_tests):
+        if c.is_generated or (is_test_path(c.path) and not wants_tests):
             bonus -= 0.15
             reasons.append("generated/test demoted")
 

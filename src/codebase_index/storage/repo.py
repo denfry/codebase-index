@@ -102,12 +102,15 @@ def replace_chunks(
             return symbol_ids[chunk.symbol_index]
         return None
 
+    # symbol_names is denormalized into the chunk (see schema.sql): resolve the
+    # name from the just-inserted symbol row (replace_symbols runs first). Stored so
+    # the FTS triggers can replay it verbatim on delete/update.
     conn.executemany(
         """
         INSERT INTO chunks
-            (file_id, line_start, line_end, kind, symbol_id, content, token_est)
+            (file_id, line_start, line_end, kind, symbol_id, content, token_est, symbol_names)
         VALUES
-            (?, ?, ?, ?, ?, ?, ?)
+            (?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT name FROM symbols WHERE id = ?), ''))
         """,
         [
             (
@@ -118,6 +121,7 @@ def replace_chunks(
                 _symbol_id(c),
                 c.content,
                 c.token_est,
+                _symbol_id(c),
             )
             for c in chunks
         ],
@@ -369,8 +373,10 @@ def symbol_search(
 
 def unresolved_edges(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
-        "SELECT id, edge_type, dst_name FROM edges "
-        "WHERE resolved = 0 AND dst_name IS NOT NULL ORDER BY id"
+        "SELECT e.id AS id, e.edge_type AS edge_type, e.dst_name AS dst_name, "
+        "       f.lang AS lang "
+        "FROM edges e JOIN files f ON f.id = e.file_id "
+        "WHERE e.resolved = 0 AND e.dst_name IS NOT NULL ORDER BY e.id"
     ).fetchall()
 
 
@@ -389,6 +395,25 @@ def resolve_edges_bulk(
         "UPDATE edges SET dst_kind = ?, dst_id = ?, resolved = 1 WHERE id = ?",
         resolutions,
     )
+
+
+def name_ref_counts(conn: sqlite3.Connection, names: Sequence[str]) -> dict[str, int]:
+    """Count edges targeting each name (any resolution state), keyed by dst_name.
+
+    A damped centrality proxy for symbols whose precise in_degree is 0 because their
+    name is not globally unique (ambiguous edges never resolve). Over-counts across
+    same-named symbols by design — it is only used as a weak tiebreak fallback.
+    """
+    uniq = [n for n in dict.fromkeys(names) if n]
+    if not uniq:
+        return {}
+    placeholders = ",".join("?" * len(uniq))
+    rows = conn.execute(
+        f"SELECT dst_name, COUNT(*) AS c FROM edges "
+        f"WHERE dst_name IN ({placeholders}) GROUP BY dst_name",
+        tuple(uniq),
+    ).fetchall()
+    return {row["dst_name"]: int(row["c"]) for row in rows}
 
 
 def unique_symbol_ids_by_name(conn: sqlite3.Connection) -> dict[str, int]:

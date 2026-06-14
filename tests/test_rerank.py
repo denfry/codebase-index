@@ -40,6 +40,31 @@ def test_in_degree_bonus_is_sublinear_and_capped():
     assert scores[2] < 2 * scores[1]              # 100 callers nowhere near 10x of 10
 
 
+def test_ref_count_is_damped_fallback_when_in_degree_zero():
+    """A symbol with no resolved in_degree (ambiguous name) still gets a small
+    centrality nudge from its name-reference count — but capped below the precise
+    in_degree bonus so it can never override real callers."""
+    no_signal = _c("a.py", "symbol", 0.0)
+    by_name = _c("b.py", "symbol", 0.0, ref_count=50)
+    rerank([no_signal, by_name], query="zzz", intent=Intent.KEYWORD)
+    assert by_name.score > no_signal.score
+    assert by_name.score <= _DEGREE_CAP / 2 + 1e-9          # damped: half the cap
+
+    # Precise in_degree, when present, takes precedence over the name-based proxy.
+    precise = _c("c.py", "symbol", 0.0, in_degree=3)
+    proxy = _c("d.py", "symbol", 0.0, ref_count=3)
+    rerank([precise, proxy], query="zzz", intent=Intent.KEYWORD)
+    assert precise.score > proxy.score
+
+
+def test_contest_path_is_not_demoted_as_test():
+    """The test demotion is word-boundary aware: 'contest' is not a test path."""
+    contest = _c("src/contest/board.py", "fts", 0.5)
+    real_test = _c("tests/test_board.py", "fts", 0.5)
+    rerank([contest, real_test], query="board", intent=Intent.KEYWORD)
+    assert contest.score > real_test.score
+
+
 def test_god_class_does_not_outrank_relevant_match_on_stray_term():
     """A high-in_degree 'god class' that matches only a stray term must not float
     above a genuinely relevant (name/path) match with a slightly lower base score.
