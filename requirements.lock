@@ -1,3 +1,3 @@
-codebase-index @ https://github.com/denfry/codebase-index/archive/refs/tags/v1.3.0.tar.gz
+codebase-index @ https://github.com/denfry/codebase-index/archive/refs/tags/v1.4.0.tar.gz
 tree-sitter==0.25.2
 tree-sitter-language-pack==1.8.1
