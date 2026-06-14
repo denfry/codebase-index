@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-06-14
+
 ### Added
 - **`clean` is now implemented** (it was a documented-but-stubbed `_todo` since M0).
   `codebase-index clean` resets the index database (`index.sqlite` + WAL/SHM
@@ -37,6 +39,9 @@ All notable changes to this project are documented here. The format is based on
   confidence/provenance model, resolver architecture, and a benchmark gate.
 - **"Trust model in 60 seconds"** callout, identical in `README.md` and
   `docs/SECURITY.md`.
+- **`tests/benchmark_public_RESULTS.md`**: a logged run of the public benchmark
+  suite (Recall@k / MRR / nDCG / token economy / freshness / graph tasks) with the
+  raw JSON and honest scope notes, per the `docs/BENCHMARKS.md` no-overclaim rule.
 
 ### Changed
 - **Reranker: dampened the god-class `in_degree` tiebreak** (`retrieval/rerank.py`).
@@ -270,7 +275,9 @@ All notable changes to this project are documented here. The format is based on
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/denfry/codebase-index/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/denfry/codebase-index/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/denfry/codebase-index/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/denfry/codebase-index/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/denfry/codebase-index/compare/v1.0.2...v1.1.0

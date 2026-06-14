@@ -11,7 +11,7 @@ Use this guide if you are new to `codebase-index` and want the fastest path to y
 ## Step 1: Install
 
 ```bash
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.3.0"
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.4.0"
 ```
 
 Or from source:
