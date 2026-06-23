@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — graph visualization upgrade + interop exports
+- **HTML graph is now legible at a glance**: nodes are coloured by module
+  (community), sized by connectivity (god nodes are biggest), and edges are styled
+  by confidence — solid `extracted`, dashed `inferred`, red-dotted `ambiguous` —
+  with a legend. Community/degree are computed on the displayed subgraph.
+- **`codebase-index graph --format graphml|dot|neo4j`** exports the same enriched
+  graph for external tools: **GraphML** (Gephi / yEd / NetworkX), **DOT**
+  (Graphviz, edge style = confidence), and **Cypher** (Neo4j / FalkorDB). All
+  pure-stdlib, zero new dependencies. `--format html` (default) is unchanged.
+
 ### Added — graph navigation: `path` and `describe`
 - **`codebase-index path <A> <B>`** — shortest undirected dependency/call path
   between two symbols or files ("how is X connected to Y"). Renders the node chain

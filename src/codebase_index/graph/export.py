@@ -43,7 +43,7 @@ def _edge_rows(
     params.append(limit)
     return conn.execute(
         f"""
-        SELECT e.edge_type, e.resolved, e.line, e.dst_name,
+        SELECT e.edge_type, e.resolved, e.line, e.dst_name, e.confidence,
                e.src_kind, e.dst_kind,
                src_file.path AS src_file_path,
                src_sym_file.path AS src_symbol_file_path,
@@ -73,8 +73,13 @@ def _node_key(kind: str, path: str, name: str | None = None) -> str:
 
 
 def _graph_data(rows: list[sqlite3.Row]) -> dict[str, Any]:
+    from collections import Counter, defaultdict
+
+    from .analysis import detect_communities, weighted_degree
+
     nodes: dict[str, dict[str, Any]] = {}
     edges: list[dict[str, Any]] = []
+    adj: dict[str, Counter] = defaultdict(Counter)
     for row in rows:
         src_path = row["src_file_path"] or row["src_symbol_file_path"] or ""
         src_name = row["src_symbol_name"]
@@ -101,8 +106,20 @@ def _graph_data(rows: list[sqlite3.Row]) -> dict[str, Any]:
                 "target": dst_key,
                 "type": row["edge_type"],
                 "line": row["line"],
+                "confidence": row["confidence"] if "confidence" in row.keys() else "extracted",
             }
         )
+        if src_key != dst_key:
+            adj[src_key][dst_key] += 1
+            adj[dst_key][src_key] += 1
+
+    # Colour by module and size by centrality, computed on the displayed subgraph.
+    # The analysis functions are generic over the node key type, so string keys work.
+    communities = detect_communities(adj)
+    degree = weighted_degree(adj)
+    for key, node in nodes.items():
+        node["community"] = communities.get(key, -1)
+        node["degree"] = degree.get(key, 0)
     return {"nodes": list(nodes.values()), "edges": edges}
 
 
@@ -149,12 +166,17 @@ table {{ width:100%; border-collapse:collapse; font-size:12px; }}
 th,td {{ text-align:left; padding:8px; border-bottom:1px solid #e5e7eb; vertical-align:top; }}
 th {{ position:sticky; top:0; background:#f1f5f9; z-index:1; }}
 .edge {{ stroke:#94a3b8; stroke-width:1.3; }}
+.edge.inferred {{ stroke-dasharray:5 3; }}            /* heuristic-resolved */
+.edge.ambiguous {{ stroke:#ef4444; stroke-dasharray:2 3; }}  /* unresolved target */
 .node {{ cursor:pointer; }}
-.node circle {{ fill:#fff; stroke:#2563eb; stroke-width:2; }}
-.node.file circle {{ stroke:#059669; }}
+.node circle {{ stroke:#1f2937; stroke-width:1.5; }}
+.node.file circle {{ stroke-width:2.5; }}
 .node text {{ font-size:11px; fill:#111827; }}
 .dim {{ opacity:.12; }}
-.selected circle {{ fill:#dbeafe; }}
+.selected circle {{ stroke:#111827; stroke-width:3; }}
+.legend {{ font-size:11px; color:#475569; display:flex; gap:14px; align-items:center; flex-wrap:wrap; }}
+.legend b {{ color:#1f2937; }}
+.legend svg {{ width:34px; height:8px; vertical-align:middle; }}
 </style>
 </head>
 <body>
@@ -162,6 +184,13 @@ th {{ position:sticky; top:0; background:#f1f5f9; z-index:1; }}
 <h1>codebase-index graph</h1>
 <input id="filter" placeholder="Filter nodes or edges">
 <span id="counts"></span>
+<span class="legend">
+  <span><b>colour</b> = module</span>
+  <span><b>size</b> = connectivity</span>
+  <span><svg><line x1="0" y1="4" x2="34" y2="4" stroke="#94a3b8" stroke-width="1.3"/></svg> extracted</span>
+  <span><svg><line x1="0" y1="4" x2="34" y2="4" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5 3"/></svg> inferred</span>
+  <span><svg><line x1="0" y1="4" x2="34" y2="4" stroke="#ef4444" stroke-width="1.3" stroke-dasharray="2 3"/></svg> ambiguous</span>
+</span>
 </header>
 <main>
 <svg id="graph" viewBox="0 0 1200 760" role="img" aria-label="code graph"></svg>
@@ -179,6 +208,15 @@ const svg = document.getElementById('graph');
 const rows = document.getElementById('edgeRows');
 const counts = document.getElementById('counts');
 const byId = new Map(data.nodes.map(n => [n.id, n]));
+// Stable, readable categorical palette; community id indexes into it.
+const PALETTE = ['#2563eb','#059669','#d97706','#7c3aed','#db2777','#0891b2',
+                 '#65a30d','#dc2626','#4f46e5','#ca8a04','#0d9488','#9333ea'];
+function colorFor(n) {{
+  const c = n.community;
+  if (c === undefined || c < 0) return '#cbd5e1';
+  return PALETTE[c % PALETTE.length];
+}}
+function radiusFor(n) {{ return (n.name ? 8 : 11) + Math.min(14, Math.sqrt(n.degree || 0) * 2); }}
 function label(n) {{ return n.name ? `${{n.name}} (${{n.path}})` : n.path; }}
 function draw(filter = '') {{
   svg.textContent = '';
@@ -194,7 +232,7 @@ function draw(filter = '') {{
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('x1', s.x); line.setAttribute('y1', s.y);
     line.setAttribute('x2', t.x); line.setAttribute('y2', t.y);
-    line.setAttribute('class', 'edge');
+    line.setAttribute('class', 'edge ' + (e.confidence || 'extracted'));
     svg.appendChild(line);
     const tr = document.createElement('tr');
     for (const val of [e.type, label(s), label(t), e.line || '']) {{
@@ -207,7 +245,9 @@ function draw(filter = '') {{
     g.setAttribute('class', `node ${{n.name ? 'symbol' : 'file'}}`);
     g.setAttribute('transform', `translate(${{n.x}},${{n.y}})`);
     const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    c.setAttribute('r', n.name ? 12 : 16);
+    c.setAttribute('r', radiusFor(n));
+    c.setAttribute('fill', colorFor(n));
+    c.setAttribute('fill-opacity', '0.85');
     const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     txt.setAttribute('x', 18); txt.setAttribute('y', 4);
     txt.textContent = n.name || n.path.split('/').pop();
@@ -225,4 +265,117 @@ draw();
 """
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(html, encoding="utf-8")
+    return {"nodes": len(data["nodes"]), "edges": len(data["edges"])}
+
+
+# ---------------------------------------------------------------------------
+# Interop exports — GraphML (Gephi/yEd), DOT (Graphviz), Cypher (Neo4j).
+# All reuse _edge_rows + _graph_data, so they carry the same community/degree/
+# confidence enrichment as the HTML view. Pure-stdlib, zero dependencies.
+# ---------------------------------------------------------------------------
+
+def _collect(conn, *, target, depth, direction, limit) -> dict[str, Any]:
+    return _graph_data(_edge_rows(conn, target=target, depth=depth, direction=direction, limit=limit))
+
+
+def _write(output: Path, text: str) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(text, encoding="utf-8")
+
+
+def export_graph_graphml(
+    conn: sqlite3.Connection, output: Path, *,
+    target: str | None = None, depth: int = 2, direction: str = "both", limit: int = 500,
+) -> dict[str, int]:
+    """GraphML for Gephi / yEd / NetworkX. Node ids are dense (n0, n1, …)."""
+    from xml.sax.saxutils import escape, quoteattr
+
+    data = _collect(conn, target=target, depth=depth, direction=direction, limit=limit)
+    ids = {n["id"]: f"n{i}" for i, n in enumerate(data["nodes"])}
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<graphml xmlns="http://graphml.graphdrawing.org/xmlns">',
+    ]
+    for k, ty in (("kind", "string"), ("name", "string"), ("path", "string"),
+                  ("community", "long"), ("degree", "long")):
+        lines.append(f'  <key id="{k}" for="node" attr.name="{k}" attr.type="{ty}"/>')
+    for k in ("edge_type", "confidence"):
+        lines.append(f'  <key id="{k}" for="edge" attr.name="{k}" attr.type="string"/>')
+    lines.append('  <graph edgedefault="directed">')
+    for n in data["nodes"]:
+        lines.append(f'    <node id={quoteattr(ids[n["id"]])}>')
+        lines.append(f'      <data key="kind">{escape(n.get("kind") or "")}</data>')
+        lines.append(f'      <data key="name">{escape(n.get("name") or "")}</data>')
+        lines.append(f'      <data key="path">{escape(n.get("path") or "")}</data>')
+        lines.append(f'      <data key="community">{int(n.get("community", -1))}</data>')
+        lines.append(f'      <data key="degree">{int(n.get("degree", 0))}</data>')
+        lines.append("    </node>")
+    for i, e in enumerate(data["edges"]):
+        s = ids.get(e["source"])
+        t = ids.get(e["target"])
+        if s is None or t is None:
+            continue
+        lines.append(f'    <edge id="e{i}" source={quoteattr(s)} target={quoteattr(t)}>')
+        lines.append(f'      <data key="edge_type">{escape(e["type"])}</data>')
+        lines.append(f'      <data key="confidence">{escape(e.get("confidence") or "")}</data>')
+        lines.append("    </edge>")
+    lines += ["  </graph>", "</graphml>", ""]
+    _write(output, "\n".join(lines))
+    return {"nodes": len(data["nodes"]), "edges": len(data["edges"])}
+
+
+def export_graph_dot(
+    conn: sqlite3.Connection, output: Path, *,
+    target: str | None = None, depth: int = 2, direction: str = "both", limit: int = 500,
+) -> dict[str, int]:
+    """Graphviz DOT. Edge style encodes confidence (solid/dashed/dotted)."""
+    data = _collect(conn, target=target, depth=depth, direction=direction, limit=limit)
+    ids = {n["id"]: f"n{i}" for i, n in enumerate(data["nodes"])}
+    style = {"extracted": "solid", "inferred": "dashed", "ambiguous": "dotted"}
+
+    def esc(s: str) -> str:
+        return s.replace("\\", "\\\\").replace('"', '\\"')
+
+    lines = ["digraph codebase_index {", "  rankdir=LR;", '  node [shape=box, fontsize=10];']
+    for n in data["nodes"]:
+        lbl = esc(f'{n["name"]}\n{n["path"]}' if n.get("name") else (n.get("path") or ""))
+        lines.append(f'  {ids[n["id"]]} [label="{lbl}"];')
+    for e in data["edges"]:
+        s = ids.get(e["source"])
+        t = ids.get(e["target"])
+        if s is None or t is None:
+            continue
+        st = style.get(e.get("confidence") or "extracted", "solid")
+        lines.append(f'  {s} -> {t} [label="{esc(e["type"])}", style={st}];')
+    lines += ["}", ""]
+    _write(output, "\n".join(lines))
+    return {"nodes": len(data["nodes"]), "edges": len(data["edges"])}
+
+
+def export_graph_neo4j(
+    conn: sqlite3.Connection, output: Path, *,
+    target: str | None = None, depth: int = 2, direction: str = "both", limit: int = 500,
+) -> dict[str, int]:
+    """Cypher script (MERGE statements) to load the graph into Neo4j / FalkorDB."""
+    data = _collect(conn, target=target, depth=depth, direction=direction, limit=limit)
+
+    def lit(s: str) -> str:
+        return "'" + (s or "").replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+    lines = ["// codebase-index graph export for Neo4j / FalkorDB"]
+    for n in data["nodes"]:
+        node_label = "Symbol" if n.get("name") else "File"
+        lines.append(
+            f"MERGE (:{node_label} {{key:{lit(n['id'])}, name:{lit(n.get('name') or '')}, "
+            f"path:{lit(n.get('path') or '')}, community:{int(n.get('community', -1))}, "
+            f"degree:{int(n.get('degree', 0))}}});"
+        )
+    for e in data["edges"]:
+        rel = (e["type"] or "edge").upper()
+        lines.append(
+            f"MATCH (a {{key:{lit(e['source'])}}}), (b {{key:{lit(e['target'])}}}) "
+            f"MERGE (a)-[:{rel} {{confidence:{lit(e.get('confidence') or 'extracted')}}}]->(b);"
+        )
+    lines.append("")
+    _write(output, "\n".join(lines))
     return {"nodes": len(data["nodes"]), "edges": len(data["edges"])}
