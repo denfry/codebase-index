@@ -51,14 +51,14 @@ def _seed_nodes(conn: sqlite3.Connection, target: str) -> list[tuple[str, int]]:
 
 
 def _neighbors(conn, kind, node_id, direction):
-    """Yield (next_kind, next_id, edge_type) for the requested direction(s)."""
+    """Yield (next_kind, next_id, edge_type, confidence) for the requested direction(s)."""
     if direction in ("up", "both"):
         for e in repo.incoming_edges(conn, kind, node_id):
-            yield e["src_kind"], int(e["src_id"]), e["edge_type"]
+            yield e["src_kind"], int(e["src_id"]), e["edge_type"], e["confidence"]
     if direction in ("down", "both"):
         for e in repo.outgoing_edges(conn, kind, node_id):
             if e["dst_id"] is not None:
-                yield e["dst_kind"], int(e["dst_id"]), e["edge_type"]
+                yield e["dst_kind"], int(e["dst_id"]), e["edge_type"], e["confidence"]
 
 
 def _node_meta(conn, kind, node_id) -> Optional[ImpactNode]:
@@ -92,7 +92,7 @@ def walk_impact(
         kind, node_id, dist = queue.popleft()
         if dist >= depth:
             continue
-        for nk, nid, etype in _neighbors(conn, kind, node_id, direction):
+        for nk, nid, etype, conf in _neighbors(conn, kind, node_id, direction):
             if (nk, nid) in visited:
                 continue
             visited.add((nk, nid))
@@ -101,6 +101,7 @@ def walk_impact(
                 continue
             meta.distance = dist + 1
             meta.via_edge = etype
+            meta.via_confidence = conf
             out.append(meta)
             queue.append((nk, nid, dist + 1))
     return out

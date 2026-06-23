@@ -63,7 +63,13 @@ CREATE TABLE IF NOT EXISTS edges (
     dst_name      TEXT,
     file_id       INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
     line          INTEGER,
-    resolved      INTEGER NOT NULL DEFAULT 0
+    resolved      INTEGER NOT NULL DEFAULT 0,
+    -- Honesty audit trail (see docs/SCHEMA.md). How sure are we this edge points
+    -- where it claims? 'extracted' = exact match (same-file symbol or a repo-unique
+    -- name); 'inferred' = a heuristic resolved it (import path-suffix); 'ambiguous'
+    -- = a name/import we could not pin to a unique target. Set at build time by the
+    -- global graph pass; never guessed by an LLM (the index is fully local).
+    confidence    TEXT NOT NULL DEFAULT 'extracted'
 );
 CREATE INDEX IF NOT EXISTS idx_edges_src  ON edges(src_kind, src_id);
 CREATE INDEX IF NOT EXISTS idx_edges_dst  ON edges(dst_kind, dst_id);

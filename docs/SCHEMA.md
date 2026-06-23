@@ -75,7 +75,13 @@ CREATE TABLE edges (
     dst_name      TEXT,                         -- raw target text (for unresolved edges)
     file_id       INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
     line          INTEGER,
-    resolved      INTEGER NOT NULL DEFAULT 0
+    resolved      INTEGER NOT NULL DEFAULT 0,
+    -- Honesty audit trail: how the edge's target was determined.
+    --   extracted = exact (same-file symbol, or a repo-unique name)
+    --   inferred  = a heuristic resolved it (import path-suffix match)
+    --   ambiguous = a named target we could not pin to a unique node
+    -- Set by the global graph pass; never inferred by an LLM (the index is local).
+    confidence    TEXT NOT NULL DEFAULT 'extracted'
 );
 CREATE INDEX idx_edges_src ON edges(src_kind, src_id);
 CREATE INDEX idx_edges_dst ON edges(dst_kind, dst_id);

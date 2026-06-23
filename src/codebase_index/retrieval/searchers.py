@@ -234,11 +234,17 @@ def symbol_lookup(
 def refs_lookup(conn: sqlite3.Connection, name: str, *, kind: str) -> RefsResponse:
     defs = repo.symbols_by_name(conn, name, exact=True)
     sites = [
-        RefSite(path=row["path"], line=row["line"], kind="call")
+        RefSite(
+            path=row["path"],
+            line=row["line"],
+            kind="call",
+            confidence=row["confidence"] if "confidence" in row.keys() else "extracted",
+        )
         for row in repo.refs_for_name(conn, name)
     ]
     if kind == "all":
         sites.extend(
+            # A definition is the symbol itself — exact by construction.
             RefSite(path=row["path"], line=row["line_start"], kind="definition")
             for row in defs
         )

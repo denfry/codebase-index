@@ -26,7 +26,20 @@ _SYMBOL_EDGE_TYPES = {"call", "reference", "extends", "implements"}
 def build_graph(conn: sqlite3.Connection) -> dict[str, int]:
     resolved = resolve_edges(conn)
     repo.recompute_degrees(conn)
+    # Everything still unresolved that names a target is, by definition, a target we
+    # could not pin to a unique node — record it as 'ambiguous' for the honesty trail.
+    repo.mark_ambiguous_edges(conn)
     total_unresolved = len(repo.unresolved_edges(conn))
+    # Architecture analytics (communities / god nodes / surprising bridges) are a
+    # derived view of the graph. Compute once per build and cache the JSON in meta so
+    # the `architecture` command and the HTML export read it instantly. Never let an
+    # analysis failure fail the build — the graph itself is already written.
+    try:
+        from . import analysis
+
+        analysis.refresh_analysis(conn)
+    except Exception:  # pragma: no cover - defensive; analytics are best-effort
+        pass
     return {"resolved": resolved, "unresolved": total_unresolved}
 
 
@@ -38,17 +51,20 @@ def resolve_edges(conn: sqlite3.Connection) -> int:
     unique_symbols = repo.unique_symbol_ids_by_name(conn)
     suffix_map = _path_suffix_map(repo.all_file_ids_with_paths(conn))
 
-    resolutions: list[tuple[str, int, int]] = []
+    # (dst_kind, dst_id, edge_id, confidence). A repo-unique symbol name is an exact
+    # hit -> 'extracted'; an import resolved only by path-suffix matching is a best-
+    # effort heuristic -> 'inferred'.
+    resolutions: list[tuple[str, int, int, str]] = []
     for edge in edges:
         name = edge["dst_name"]
         if edge["edge_type"] == "import":
             file_id = _module_to_file_id(suffix_map, name, lang=edge["lang"])
             if file_id is not None:
-                resolutions.append(("file", file_id, edge["id"]))
+                resolutions.append(("file", file_id, edge["id"], "inferred"))
         elif edge["edge_type"] in _SYMBOL_EDGE_TYPES:
             sym_id = unique_symbols.get(name)
             if sym_id is not None:
-                resolutions.append(("symbol", sym_id, edge["id"]))
+                resolutions.append(("symbol", sym_id, edge["id"], "extracted"))
 
     repo.resolve_edges_bulk(conn, resolutions)
     return len(resolutions)

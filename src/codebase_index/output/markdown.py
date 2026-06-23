@@ -130,6 +130,15 @@ def _coverage_line(coverage) -> Optional[str]:
     return None
 
 
+# Audit-trail glyphs: an exact edge needs no annotation; inferred/ambiguous ones
+# warn the reader that the link is a heuristic or could not be pinned down.
+_CONF_MARK = {"extracted": "", "inferred": "~ inferred", "ambiguous": "? ambiguous"}
+
+
+def _conf_mark(confidence: Optional[str]) -> str:
+    return _CONF_MARK.get(confidence or "extracted", confidence or "")
+
+
 def render_refs(resp: RefsResponse) -> str:
     lines = [_header(resp.query, resp.index.exists, resp.index.stale)]
     lines.append("")
@@ -140,10 +149,12 @@ def render_refs(resp: RefsResponse) -> str:
             lines.append(note)
         return "\n".join(lines).rstrip() + "\n"
 
-    lines.append("| kind | path | line |")
-    lines.append("|------|------|------|")
+    lines.append("| kind | path | line | confidence |")
+    lines.append("|------|------|------|------------|")
     for site in resp.sites:
-        lines.append(f"| {site.kind} | `{site.path}` | {site.line} |")
+        lines.append(
+            f"| {site.kind} | `{site.path}` | {site.line} | {_conf_mark(site.confidence) or 'exact'} |"
+        )
     if note:
         lines.append(note)
     return "\n".join(lines).rstrip() + "\n"
@@ -171,7 +182,9 @@ def render_impact(resp: ImpactResponse) -> str:
     for n in sorted(resp.nodes, key=lambda x: (x.distance, x.path, x.line_start or 0)):
         loc = f"{n.path}:{n.line_start}" if n.line_start else n.path
         node_name = f"`{n.name}`" if n.name else "—"
-        lines.append(f"| {n.distance} | {n.via_edge or ''} | {n.kind} | {node_name} | `{loc}` |")
+        mark = _conf_mark(n.via_confidence)
+        via = f"{n.via_edge or ''} {mark}".strip()
+        lines.append(f"| {n.distance} | {via} | {n.kind} | {node_name} | `{loc}` |")
     if note:
         lines.append(note)
     return "\n".join(lines).rstrip() + "\n"
