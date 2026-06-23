@@ -38,6 +38,8 @@ The MCP server exposes the same retrieval contract as the CLI.
 | `impact_of` | Return affected files/symbols from graph expansion | `impact` |
 | `explain_code` | Intent-aware retrieval packet for a natural-language question | `explain` |
 | `architecture_overview` | Modules, god nodes, surprising connections, suggested questions | `architecture` |
+| `path_between` | Shortest dependency/call path between two symbols or files | `path` |
+| `describe_symbol` | Node card: definition, callers, callees, centrality, module | `describe` |
 | `index_stats` | Return counts, language coverage, graph stats, freshness | `stats` |
 
 ## Output contract
@@ -66,7 +68,7 @@ branch on the contract without sniffing the shape:
   version. The current version is **1**.
 - `tool` (string) — the emitting tool name (`search_code`, `find_symbol`,
   `find_refs`, `impact_of`, `explain_code`, `architecture_overview`,
-  `index_stats`, `healthcheck`).
+  `path_between`, `describe_symbol`, `index_stats`, `healthcheck`).
 - The no-index / error path carries the same envelope plus an `"error"` field.
 
 Rules:
@@ -158,7 +160,7 @@ same trust boundaries:
 - Done: `src/codebase_index/mcp/server.py` thin adapter over retrieval/storage code.
 - Done: `codebase-index mcp --root <path>` CLI entrypoint.
 - Done: `healthcheck`, `search_code`, `find_symbol`, `find_refs`, `impact_of`, `explain_code`,
-  `architecture_overview`, and `index_stats` tools.
+  `architecture_overview`, `path_between`, `describe_symbol`, and `index_stats` tools.
 - Done: focused tests for tool registration, missing-index behavior, config resolution, and run entrypoint.
 - Done: explicit `schema_version` + `tool` envelope on every structured tool payload (including the
   error path), asserted by `tests/test_mcp_server.py` and `tests/test_mcp_golden.py`.

@@ -1,0 +1,44 @@
+{
+  "callees": [],
+  "callers": [
+    {
+      "confidence": "extracted",
+      "line": 11,
+      "path": "src/api/service.py"
+    },
+    {
+      "confidence": "extracted",
+      "line": 11,
+      "path": "src/auth/token.py"
+    }
+  ],
+  "definitions": [
+    {
+      "in_degree": 2,
+      "kind": "function",
+      "line_end": 6,
+      "line_start": 4,
+      "name": "refresh_access_token",
+      "out_degree": 0,
+      "path": "src/auth/token.py",
+      "qualified": "refresh_access_token",
+      "signature": "def refresh_access_token(refresh_token: str) -> str:"
+    }
+  ],
+  "found": true,
+  "index": {
+    "built_at": "<TS>",
+    "exists": true,
+    "head_commit": "<SHA>",
+    "stale": false
+  },
+  "primary": {
+    "god_rank": 2,
+    "in_degree": 2,
+    "module": "src/auth",
+    "name": "refresh_access_token",
+    "out_degree": 0,
+    "path": "src/auth/token.py"
+  },
+  "query": "refresh_access_token"
+}

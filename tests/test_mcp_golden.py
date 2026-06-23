@@ -69,6 +69,8 @@ CASES = {
     "mcp_impact_of": (lambda: mcp_server.impact_of, {"target": "src/models/user.py", "direction": "up"}),
     "mcp_explain_code": (lambda: mcp_server.explain_code, {"query": "how does authentication work"}),
     "mcp_architecture": (lambda: mcp_server.architecture_overview, {}),
+    "mcp_path_between": (lambda: mcp_server.path_between, {"source": "renew", "target": "refresh_access_token"}),
+    "mcp_describe_symbol": (lambda: mcp_server.describe_symbol, {"symbol": "refresh_access_token"}),
     "mcp_index_stats": (lambda: mcp_server.index_stats, {}),
 }
 
@@ -81,6 +83,8 @@ _EXPECTED_TOOL = {
     "mcp_impact_of": "impact_of",
     "mcp_explain_code": "explain_code",
     "mcp_architecture": "architecture_overview",
+    "mcp_path_between": "path_between",
+    "mcp_describe_symbol": "describe_symbol",
     "mcp_index_stats": "index_stats",
 }
 
