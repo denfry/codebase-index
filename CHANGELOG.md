@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-06-24
+
 ### Added — graph visualization upgrade + interop exports
 - **HTML graph is now legible at a glance**: nodes are coloured by module
   (community), sized by connectivity (god nodes are biggest), and edges are styled
@@ -361,7 +363,8 @@ All notable changes to this project are documented here. The format is based on
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/denfry/codebase-index/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/denfry/codebase-index/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/denfry/codebase-index/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/denfry/codebase-index/compare/v1.2.0...v1.2.1

@@ -64,7 +64,7 @@ If you are opening this repository for the first time, follow this order:
 If you only need the shortest path, run:
 
 ```bash
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.4.0"
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.5.0"
 cd your-project
 codebase-index init            # prompts for Claude Code / Codex CLI / OpenCode
 codebase-index index
@@ -73,18 +73,28 @@ codebase-index search "where is authentication implemented?"
 
 ## Project Status
 
-**`1.4.0` is released.** The current release includes repository discovery,
+**`1.5.0` is released.** The current release includes repository discovery,
 SQLite FTS5 storage, Tree-sitter symbols and references, hybrid ranking, graph
 impact analysis, token-budgeted retrieval packets, optional local embeddings,
 hooks/watch support, multi-CLI installation, MCP server support, and a tested
 GitHub-only `pipx` install path.
 
-The `1.4.0` release hardens the MCP contract (a `schema_version` + `tool`
-envelope on every payload, golden-locked per tool, plus a fix so the server
-loads on current `mcp`/`pydantic`), dampens the god-class `in_degree` rerank
-tiebreak (logarithmic, validated no-regression on the public benchmark), and
-labels config/IaC files (Dockerfile, Terraform, HCL, INI, Makefiles) so infra
-surfaces in `stats` and search.
+The `1.5.0` release turns the dependency graph into a navigable map: every edge
+carries a `confidence` audit trail (`extracted`/`inferred`/`ambiguous`, surfaced
+in `refs`/`impact`); a new zero-dependency analytics pass computes modules
+(communities), god nodes, and surprising cross-module links, exposed via the
+`architecture` command/MCP tool; `path` traces the shortest dependency chain
+between two symbols and `describe` prints a symbol's node card; and the HTML
+graph is coloured by module and sized by connectivity, with `--format
+graphml|dot|neo4j` exports for external tools. Requires a one-time reindex
+(schema 2 → 3).
+
+The earlier `1.4.0` release hardened the MCP contract (a `schema_version` +
+`tool` envelope on every payload, golden-locked per tool, plus a fix so the
+server loads on current `mcp`/`pydantic`), dampened the god-class `in_degree`
+rerank tiebreak (logarithmic, validated no-regression on the public benchmark),
+and labelled config/IaC files (Dockerfile, Terraform, HCL, INI, Makefiles) so
+infra surfaces in `stats` and search.
 
 The earlier `1.3.0` release added a content-addressed embedding cache (rebuilds reuse
 vectors for unchanged content), a batched graph build (7–28× faster edge
@@ -118,7 +128,7 @@ For most users, install the package from the tagged GitHub release and run
 `init` inside the repository you want to index:
 
 ```bash
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.4.0"
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.5.0"
 cd your-project
 codebase-index init            # choose Claude Code, Codex CLI, OpenCode, or all
 codebase-index index
@@ -156,7 +166,7 @@ fetch the package; later sessions are offline. The skill builds its index on
 your first codebase question, so there is no manual `index` step.
 
 **Distribution note:** the plugin bootstrap installs the pinned requirement from
-`requirements.lock`. In `1.4.0`, that lock points at the tagged GitHub release
+`requirements.lock`. In `1.5.0`, that lock points at the tagged GitHub release
 instead of PyPI. You can override it with `CBX_INSTALL_SPEC` when testing a local
 checkout or a different Git ref.
 
@@ -293,7 +303,7 @@ irm https://raw.githubusercontent.com/denfry/codebase-index/main/install.ps1 | i
 
 ```bash
 cd your-project
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.4.0"
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.5.0"
 codebase-index init
 codebase-index index
 ```
@@ -313,13 +323,13 @@ the `pipx` environment was likely created with an older Python version. Reinstal
 ```powershell
 pipx uninstall codebase-index
 py -0p
-pipx install --python "<path-to-python-3.11-or-newer>\python.exe" "git+https://github.com/denfry/codebase-index.git@v1.4.0"
+pipx install --python "<path-to-python-3.11-or-newer>\python.exe" "git+https://github.com/denfry/codebase-index.git@v1.5.0"
 ```
 
 For example:
 
 ```powershell
-pipx install --python "C:\Users\you\AppData\Local\Programs\Python\Python312\python.exe" "git+https://github.com/denfry/codebase-index.git@v1.4.0"
+pipx install --python "C:\Users\you\AppData\Local\Programs\Python\Python312\python.exe" "git+https://github.com/denfry/codebase-index.git@v1.5.0"
 ```
 
 Then run initialization again:
@@ -333,7 +343,7 @@ codebase-index index
 ### Option 2: Install with pipx from GitHub
 
 ```bash
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.4.0"
+pipx install "git+https://github.com/denfry/codebase-index.git@v1.5.0"
 cd your-project
 codebase-index init --target auto
 codebase-index index
@@ -351,7 +361,7 @@ pip install -e ".[dev]"
 
 PyPI, `uvx`, Homebrew, signed release checksums, and SBOMs are important for a
 tool that reads entire repositories, but they are not all verified as shipped in
-`1.4.0`. Target install story:
+`1.5.0`. Target install story:
 
 ```bash
 uvx codebase-index init
