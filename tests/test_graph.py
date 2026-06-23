@@ -63,6 +63,22 @@ def test_build_graph_resolves_symbol_and_import_edges(tmp_path):
     db.close()
 
 
+def test_build_graph_sets_edge_confidence(tmp_path):
+    db = _db(tmp_path)
+    _seed(db)
+    build_graph(db.conn)
+    conf = {
+        (r["edge_type"], r["dst_name"]): r["confidence"]
+        for r in db.conn.execute("SELECT edge_type, dst_name, confidence FROM edges")
+    }
+    # exact unique-name symbol match, import resolved by path-suffix heuristic,
+    # and a callee no symbol defines.
+    assert conf[("call", "refresh_access_token")] == "extracted"
+    assert conf[("import", "auth.token")] == "inferred"
+    assert conf[("call", "does_not_exist")] == "ambiguous"
+    db.close()
+
+
 def _file(db, path, sha="x"):
     return repo.upsert_file(
         db.conn, path=path, lang="python", size_bytes=1, sha256=sha,

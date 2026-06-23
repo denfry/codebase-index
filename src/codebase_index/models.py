@@ -113,6 +113,9 @@ class RefSite(BaseModel):
     path: str
     line: int
     kind: str
+    # Audit trail (see edges.confidence): 'extracted' = exact match, 'inferred' =
+    # heuristic, 'ambiguous' = unresolved/non-unique. Defaults keep older callers valid.
+    confidence: str = "extracted"
 
 
 class RefsResponse(BaseModel):
@@ -129,6 +132,7 @@ class ImpactNode(BaseModel):
     line_start: Optional[int] = None
     distance: int                   # BFS hops from the target (1 = direct)
     via_edge: Optional[str] = None  # edge_type that linked it (import|call|extends|...)
+    via_confidence: Optional[str] = None  # confidence of the linking edge (audit trail)
 
 
 class ImpactResponse(BaseModel):

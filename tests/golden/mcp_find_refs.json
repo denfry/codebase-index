@@ -15,16 +15,19 @@
   "schema_version": 1,
   "sites": [
     {
+      "confidence": "extracted",
       "kind": "call",
       "line": 11,
       "path": "src/api/service.py"
     },
     {
+      "confidence": "extracted",
       "kind": "definition",
       "line": 4,
       "path": "src/auth/token.py"
     },
     {
+      "confidence": "extracted",
       "kind": "call",
       "line": 11,
       "path": "src/auth/token.py"
