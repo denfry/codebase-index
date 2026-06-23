@@ -253,11 +253,15 @@ def replace_edges(
     conn.executemany(
         """
         INSERT INTO edges
-            (edge_type, src_kind, src_id, dst_kind, dst_id, dst_name, file_id, line, resolved)
+            (edge_type, src_kind, src_id, dst_kind, dst_id, dst_name, file_id, line,
+             resolved, confidence)
         VALUES
-            (:edge_type, :src_kind, :src_id, :dst_kind, :dst_id, :dst_name, :file_id, :line, :resolved)
+            (:edge_type, :src_kind, :src_id, :dst_kind, :dst_id, :dst_name, :file_id, :line,
+             :resolved, :confidence)
         """,
-        [{**edge, "file_id": file_id} for edge in edges],
+        # confidence defaults to 'extracted' for callers (and tests) that predate the
+        # audit-trail column; the global graph pass refines it (see graph/builder.py).
+        [{"confidence": "extracted", **edge, "file_id": file_id} for edge in edges],
     )
     return len(edges)
 
@@ -271,6 +275,7 @@ def refs_for_name(conn: sqlite3.Connection, name: str) -> list[sqlite3.Row]:
         """
         SELECT e.line AS line, f.path AS path, e.edge_type AS edge_type,
                e.resolved AS resolved, e.src_id AS src_id, e.src_kind AS src_kind,
+               e.confidence AS confidence,
                src.name AS src_name, src.qualified AS src_qualified
         FROM edges e
         JOIN files f ON f.id = e.file_id
@@ -388,13 +393,57 @@ def resolve_edge(conn: sqlite3.Connection, edge_id: int, dst_kind: str, dst_id: 
 
 
 def resolve_edges_bulk(
-    conn: sqlite3.Connection, resolutions: Sequence[tuple[str, int, int]]
+    conn: sqlite3.Connection, resolutions: Sequence[tuple[str, int, int, str]]
 ) -> None:
-    """Apply (dst_kind, dst_id, edge_id) resolutions in one executemany."""
+    """Apply (dst_kind, dst_id, edge_id, confidence) resolutions in one executemany.
+
+    confidence records *how* the target was found: 'extracted' for an exact match
+    (a repo-unique symbol name), 'inferred' for a heuristic (import path-suffix).
+    """
     conn.executemany(
-        "UPDATE edges SET dst_kind = ?, dst_id = ?, resolved = 1 WHERE id = ?",
-        resolutions,
+        "UPDATE edges SET dst_kind = ?, dst_id = ?, resolved = 1, confidence = ? WHERE id = ?",
+        [(dst_kind, dst_id, confidence, edge_id) for dst_kind, dst_id, edge_id, confidence in resolutions],
     )
+
+
+def mark_ambiguous_edges(conn: sqlite3.Connection) -> int:
+    """Flag every still-unresolved edge that names a target as 'ambiguous'.
+
+    Run after the global resolution pass: an edge with a dst_name that no unique
+    symbol/file claims is one we could not pin down (a non-unique name, or an import
+    of code outside the repo). Marking it keeps refs/impact honest — an empty or
+    short answer over ambiguous edges is inconclusive, not proof of "no callers".
+    """
+    cur = conn.execute(
+        "UPDATE edges SET confidence = 'ambiguous' "
+        "WHERE resolved = 0 AND dst_name IS NOT NULL AND confidence != 'ambiguous'"
+    )
+    return cur.rowcount if cur.rowcount is not None else 0
+
+
+def all_resolved_edges(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Every resolved edge as (src_kind, src_id, dst_kind, dst_id, edge_type, confidence).
+
+    The in-memory adjacency the graph analysis (communities / god nodes / bridges)
+    is built from. Unresolved edges are skipped — they have no concrete endpoint.
+    """
+    return conn.execute(
+        "SELECT src_kind, src_id, dst_kind, dst_id, edge_type, confidence FROM edges "
+        "WHERE resolved = 1 AND dst_id IS NOT NULL"
+    ).fetchall()
+
+
+def all_graph_nodes(conn: sqlite3.Connection) -> dict[str, list[sqlite3.Row]]:
+    """File and symbol rows keyed by kind, for labelling graph-analysis nodes."""
+    return {
+        "file": conn.execute("SELECT id, path FROM files").fetchall(),
+        "symbol": conn.execute(
+            "SELECT s.id AS id, s.name AS name, s.kind AS kind, f.path AS path, "
+            "       s.line_start AS line_start, "
+            "       s.in_degree AS in_degree, s.out_degree AS out_degree "
+            "FROM symbols s JOIN files f ON f.id = s.file_id"
+        ).fetchall(),
+    }
 
 
 def name_ref_counts(conn: sqlite3.Connection, names: Sequence[str]) -> dict[str, int]:
@@ -458,7 +507,7 @@ def symbols_in_file(conn: sqlite3.Connection, file_id: int) -> list[sqlite3.Row]
 
 def incoming_edges(conn: sqlite3.Connection, kind: str, node_id: int) -> list[sqlite3.Row]:
     return conn.execute(
-        "SELECT id, edge_type, src_kind, src_id, file_id, line FROM edges "
+        "SELECT id, edge_type, src_kind, src_id, file_id, line, confidence FROM edges "
         "WHERE resolved = 1 AND dst_kind = ? AND dst_id = ?",
         (kind, node_id),
     ).fetchall()
@@ -466,7 +515,7 @@ def incoming_edges(conn: sqlite3.Connection, kind: str, node_id: int) -> list[sq
 
 def outgoing_edges(conn: sqlite3.Connection, kind: str, node_id: int) -> list[sqlite3.Row]:
     return conn.execute(
-        "SELECT id, edge_type, dst_kind, dst_id, file_id, line FROM edges "
+        "SELECT id, edge_type, dst_kind, dst_id, file_id, line, confidence FROM edges "
         "WHERE resolved = 1 AND src_kind = ? AND src_id = ?",
         (kind, node_id),
     ).fetchall()

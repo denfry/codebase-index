@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — graph foundation: edge confidence + architecture analytics (requires a one-time reindex)
+- **Edge confidence audit trail.** Every graph edge now carries a `confidence`:
+  `extracted` (exact — a same-file symbol or repo-unique name), `inferred` (a
+  heuristic resolved it, e.g. an import path-suffix match), or `ambiguous` (a named
+  target we could not pin to a unique node). `refs` and `impact` surface it so an
+  empty or short answer over `ambiguous`/`inferred` edges reads as inconclusive,
+  not as proof. Confidence is derived from *how* an edge resolved — never guessed by
+  an LLM; the index stays fully local. **Bumps `SCHEMA_VERSION` 2 → 3.** Older
+  indexes stay readable; `index`/`update` detect the mismatch and rebuild.
+- **Architecture analytics (`graph/analysis.py`), zero new dependencies.** A pure,
+  deterministic pass over the resolved edge graph computes communities (greedy
+  modularity / Louvain local-move — does not collapse cliques joined by one bridge),
+  god nodes (most-connected symbols/files), surprising connections (edges bridging
+  weakly-linked communities), auto-labelled modules, and suggested questions. The
+  summary is cached in `meta['graph_analysis']` at build time for instant reads.
+  (Surfaced via the `architecture` command and HTML export in following changes.)
+
 ### Changed — retrieval ranking & fusion (requires a one-time reindex)
 - **RRF fusion rescaled and re-keyed.** Fused scores were ~`w/k` (≈0.017), an order
   of magnitude below the reranker's bounded bonuses, so rerank silently became the

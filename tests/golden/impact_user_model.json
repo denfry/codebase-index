@@ -23,6 +23,7 @@
       "line_start": null,
       "name": null,
       "path": "src/api/service.py",
+      "via_confidence": "inferred",
       "via_edge": "import"
     },
     {
@@ -31,6 +32,7 @@
       "line_start": 7,
       "name": "AdminUser",
       "path": "src/api/service.py",
+      "via_confidence": "extracted",
       "via_edge": "extends"
     }
   ],
