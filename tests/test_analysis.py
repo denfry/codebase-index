@@ -180,6 +180,41 @@ def test_analyze_and_cache_roundtrip(tmp_path):
     db.close()
 
 
+def test_architecture_payload_available(tmp_path):
+    from codebase_index.graph.builder import build_graph
+    from codebase_index.service import architecture_payload
+
+    path = tmp_path / "index.sqlite"
+    db = Database(path).open()
+    _seed_two_modules(db)
+    build_graph(db.conn)
+    db.close()
+
+    cfg = Config()
+    cfg.root = str(tmp_path)
+    payload = architecture_payload(path, cfg)
+    assert payload["available"] is True
+    assert payload["god_nodes"]
+    assert "index" in payload
+
+
+def test_architecture_payload_unavailable_without_analysis(tmp_path):
+    from codebase_index.output import markdown
+    from codebase_index.service import architecture_payload
+
+    # A bare index (schema only, never analysed) reports unavailable, not a crash.
+    path = tmp_path / "index.sqlite"
+    Database(path).open().close()
+
+    cfg = Config()
+    cfg.root = str(tmp_path)
+    payload = architecture_payload(path, cfg)
+    assert payload["available"] is False
+    assert "reason" in payload
+    rendered = markdown.render_architecture(payload)
+    assert "No architecture analysis" in rendered
+
+
 def test_analyze_on_sample_repo(sample_repo, tmp_path):
     cfg = Config()
     cfg.root = str(sample_repo)

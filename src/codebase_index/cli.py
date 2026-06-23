@@ -499,6 +499,28 @@ def explain(
     typer.echo(json_renderer.render(payload) if want_json else md_renderer.render(payload))
 
 
+@app.command("architecture")
+def architecture(
+    ctx: typer.Context,
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+) -> None:
+    """High-level map of the codebase: modules, god nodes, surprising links, questions.
+
+    Reads the analytics cached at index time (no recompute). Rebuild the index if it
+    reports no analysis available.
+    """
+    from .output import json as json_renderer
+    from .output import markdown as md_renderer
+    from .service import architecture_payload
+
+    is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
+    db_path, cfg = _ensure_index(ctx)
+    payload = architecture_payload(db_path, cfg)
+    typer.echo(
+        json_renderer.render(payload) if is_json else md_renderer.render_architecture(payload)
+    )
+
+
 @app.command("graph")
 def graph_view(
     ctx: typer.Context,
