@@ -27,7 +27,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections import Counter, defaultdict
-from typing import Optional
+from typing import Any, Optional
 
 from ..storage import repo
 
@@ -54,23 +54,29 @@ Node = tuple[str, int]  # (kind, id)
 # Graph construction
 # ---------------------------------------------------------------------------
 
-def _node_key(kind: str, node_id: int) -> str:
-    return f"{kind}:{node_id}"
-
-
 def build_adjacency(
     edges: list[sqlite3.Row],
-) -> tuple[dict[Node, Counter], dict[tuple[Node, Node], int]]:
+    key_fn=None,
+) -> tuple[dict[Any, Counter], dict[tuple[Any, Any], int]]:
     """Undirected weighted adjacency + per-edge multiplicity, from resolved edges.
 
     Self-loops are dropped (they distort degree and never bridge communities).
+
+    ``key_fn(kind, id) -> hashable | None`` maps an edge endpoint to a node key
+    (returning None drops the edge). analyze() passes a *content* key
+    (kind:path:name:line) so the partition is identical across platforms — symbol
+    ids depend on file-walk order, which differs between OSes. The default keys by
+    (kind, id), used by the algorithm unit tests.
     """
-    adj: dict[Node, Counter] = defaultdict(Counter)
-    edge_weight: dict[tuple[Node, Node], int] = defaultdict(int)
+    def kf(kind: str, nid: int):
+        return key_fn(kind, nid) if key_fn is not None else (kind, nid)
+
+    adj: dict[Any, Counter] = defaultdict(Counter)
+    edge_weight: dict[tuple[Any, Any], int] = defaultdict(int)
     for e in edges:
-        src: Node = (e["src_kind"], int(e["src_id"]))
-        dst: Node = (e["dst_kind"], int(e["dst_id"]))
-        if src == dst:
+        src = kf(e["src_kind"], int(e["src_id"]))
+        dst = kf(e["dst_kind"], int(e["dst_id"]))
+        if src is None or dst is None or src == dst:
             continue
         adj[src][dst] += 1
         adj[dst][src] += 1
@@ -78,11 +84,14 @@ def build_adjacency(
     return adj, edge_weight
 
 
-def _canonical_pair(a: Node, b: Node) -> tuple[Node, Node]:
+def _canonical_pair(a: Any, b: Any) -> tuple[Any, Any]:
     return (a, b) if a <= b else (b, a)
 
 
-def weighted_degree(adj: dict[Node, Counter]) -> dict[Node, int]:
+# The graph algorithms below are generic over the node-key type: analyze() calls
+# them with (kind, id) tuples; the HTML/interop export reuses them with string
+# keys. Typing the key as Any keeps both call sites valid.
+def weighted_degree(adj: dict[Any, Counter]) -> dict[Any, int]:
     return {node: sum(neighbors.values()) for node, neighbors in adj.items()}
 
 
@@ -90,7 +99,7 @@ def weighted_degree(adj: dict[Node, Counter]) -> dict[Node, int]:
 # Community detection — deterministic label propagation
 # ---------------------------------------------------------------------------
 
-def detect_communities(adj: dict[Node, Counter]) -> dict[Node, int]:
+def detect_communities(adj: dict[Any, Counter]) -> dict[Any, int]:
     """Partition nodes into communities by greedy modularity. Returns {node: id}.
 
     This is the local-moving phase of the Louvain method, made deterministic:
@@ -110,7 +119,7 @@ def detect_communities(adj: dict[Node, Counter]) -> dict[Node, int]:
     if two_m == 0:
         return _renumber_by_size({node: idx for idx, node in enumerate(nodes)})
 
-    comm: dict[Node, int] = {node: idx for idx, node in enumerate(nodes)}
+    comm: dict[Any, int] = {node: idx for idx, node in enumerate(nodes)}
     # Σ_tot per community: total weighted degree of its members.
     sigma_tot: dict[int, int] = {idx: deg[node] for idx, node in enumerate(nodes)}
 
@@ -147,10 +156,10 @@ def detect_communities(adj: dict[Node, Counter]) -> dict[Node, int]:
     return _renumber_by_size(comm)
 
 
-def _renumber_by_size(label: dict[Node, int]) -> dict[Node, int]:
+def _renumber_by_size(label: dict[Any, int]) -> dict[Any, int]:
     """Renumber raw labels to dense ids ordered by community size (desc), then by
     smallest member key — so the mapping is stable run to run."""
-    members: dict[int, list[Node]] = defaultdict(list)
+    members: dict[int, list[Any]] = defaultdict(list)
     for node, lbl in label.items():
         members[lbl].append(node)
     order = sorted(members, key=lambda lbl: (-len(members[lbl]), min(members[lbl])))
@@ -158,7 +167,7 @@ def _renumber_by_size(label: dict[Node, int]) -> dict[Node, int]:
     return {node: remap[lbl] for node, lbl in label.items()}
 
 
-def modularity(adj: dict[Node, Counter], communities: dict[Node, int]) -> float:
+def modularity(adj: dict[Any, Counter], communities: dict[Any, int]) -> float:
     """Newman modularity Q of the partition — a quality score in roughly [-0.5, 1].
 
     Higher means the communities capture more edge density than chance. Reported
@@ -197,10 +206,23 @@ def _node_index(conn: sqlite3.Connection) -> dict[Node, dict]:
             "name": s["name"],
             "symbol_kind": s["kind"],
             "path": s["path"],
+            "line_start": s["line_start"],
             "in_degree": int(s["in_degree"]),
             "out_degree": int(s["out_degree"]),
         }
     return index
+
+
+def _stable_key(meta: dict) -> str:
+    """A platform-stable node key from content, not from the volatile symbol id.
+
+    Symbol ids are assigned in file-walk order, which differs across OSes; keying
+    the graph by path/name/line keeps communities and god-node ranking identical
+    everywhere (so the golden snapshots hold on Linux/macOS/Windows alike).
+    """
+    if meta["kind"] == "file":
+        return f"file::{meta['path']}"
+    return f"symbol::{meta['path']}::{meta['name']}::{meta.get('line_start', '')}"
 
 
 def _dir_of(path: str) -> str:
@@ -217,7 +239,7 @@ def _is_test_path(path: str) -> bool:
     return base.startswith("test_") or base.startswith("test.") or "_test." in base or ".test." in base
 
 
-def label_community(members: list[Node], node_index: dict[Node, dict]) -> str:
+def label_community(members: list[Any], node_index: dict[Any, dict]) -> str:
     """Name a community by the directory most of its (non-test) nodes live in.
 
     A 2-5 word, plain-language module name is what graphify asks an LLM for; here
@@ -249,15 +271,15 @@ def label_community(members: list[Node], node_index: dict[Node, dict]) -> str:
 # ---------------------------------------------------------------------------
 
 def god_nodes(
-    adj: dict[Node, Counter],
-    communities: dict[Node, int],
-    node_index: dict[Node, dict],
+    adj: dict[Any, Counter],
+    communities: dict[Any, int],
+    node_index: dict[Any, dict],
     *,
     limit: int = MAX_GOD_NODES,
 ) -> list[dict]:
     """Most-connected nodes by weighted degree (the load-bearing ones)."""
     deg = weighted_degree(adj)
-    ranked = sorted(deg, key=lambda n: (-deg[n], _node_key(*n)))
+    ranked = sorted(deg, key=lambda n: (-deg[n], str(n)))
     out: list[dict] = []
     for node in ranked[:limit]:
         meta = node_index.get(node)
@@ -276,9 +298,9 @@ def god_nodes(
 
 
 def surprising_connections(
-    edge_weight: dict[tuple[Node, Node], int],
-    communities: dict[Node, int],
-    node_index: dict[Node, dict],
+    edge_weight: dict[tuple[Any, Any], int],
+    communities: dict[Any, int],
+    node_index: dict[Any, dict],
     *,
     limit: int = MAX_SURPRISING,
 ) -> list[dict]:
@@ -288,7 +310,7 @@ def surprising_connections(
     a pair joined by only a handful of edges is a surprising structural link. We
     surface the actual endpoint pair for each such bridge.
     """
-    pair_edges: dict[tuple[int, int], list[tuple[Node, Node]]] = defaultdict(list)
+    pair_edges: dict[tuple[int, int], list[tuple[Any, Any]]] = defaultdict(list)
     for (a, b), _w in edge_weight.items():
         ca, cb = communities.get(a, -1), communities.get(b, -1)
         if ca == cb or ca < 0 or cb < 0:
@@ -360,11 +382,25 @@ def suggest_questions(
 def analyze(conn: sqlite3.Connection) -> dict:
     """Compute the full architecture-analytics summary (does not persist it)."""
     edges = repo.all_resolved_edges(conn)
-    adj, edge_weight = build_adjacency(edges)
-    node_index = _node_index(conn)
+    id_index = _node_index(conn)  # (kind, id) -> meta
+
+    # Key the graph by stable content keys, not by volatile symbol ids, so the
+    # result is identical across platforms. node_index then maps that stable key
+    # back to display metadata.
+    node_index: dict[str, dict] = {}
+
+    def key_fn(kind: str, nid: int):
+        meta = id_index.get((kind, nid))
+        if meta is None:
+            return None
+        k = _stable_key(meta)
+        node_index.setdefault(k, meta)
+        return k
+
+    adj, edge_weight = build_adjacency(edges, key_fn)
 
     communities = detect_communities(adj)
-    members: dict[int, list[Node]] = defaultdict(list)
+    members: dict[int, list[str]] = defaultdict(list)
     for node, cid in communities.items():
         members[cid].append(node)
 
@@ -377,7 +413,7 @@ def analyze(conn: sqlite3.Connection) -> dict:
         nodes = members[cid]
         if len(nodes) < MIN_REPORTED_COMMUNITY:
             continue
-        top = sorted(nodes, key=lambda n: (-deg.get(n, 0), _node_key(*n)))[:TOP_NODES_PER_COMMUNITY]
+        top = sorted(nodes, key=lambda n: (-deg.get(n, 0), str(n)))[:TOP_NODES_PER_COMMUNITY]
         community_summaries.append(
             {
                 "id": cid,
