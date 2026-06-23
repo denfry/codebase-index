@@ -521,6 +521,45 @@ def architecture(
     )
 
 
+@app.command("path")
+def path_between(
+    ctx: typer.Context,
+    source: str = typer.Argument(..., help="File path or symbol name to start from."),
+    target: str = typer.Argument(..., help="File path or symbol name to reach."),
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+) -> None:
+    """Shortest dependency/call path between two symbols or files (how are they connected)."""
+    from .graph.navigate import path_payload
+    from .output import json as json_renderer
+    from .output import markdown as md_renderer
+    from .storage.db import Database
+
+    is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
+    db_path, _cfg = _ensure_index(ctx)
+    with Database(db_path) as db:
+        payload = path_payload(db.conn, source, target)
+    typer.echo(json_renderer.render(payload) if is_json else md_renderer.render_path(payload))
+
+
+@app.command("describe")
+def describe(
+    ctx: typer.Context,
+    symbol: str = typer.Argument(..., help="Symbol name to describe."),
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+) -> None:
+    """Node card for a symbol: definition, callers, callees, centrality, module."""
+    from .graph.navigate import describe_payload
+    from .output import json as json_renderer
+    from .output import markdown as md_renderer
+    from .storage.db import Database
+
+    is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
+    db_path, _cfg = _ensure_index(ctx)
+    with Database(db_path) as db:
+        payload = describe_payload(db.conn, symbol)
+    typer.echo(json_renderer.render(payload) if is_json else md_renderer.render_describe(payload))
+
+
 @app.command("graph")
 def graph_view(
     ctx: typer.Context,

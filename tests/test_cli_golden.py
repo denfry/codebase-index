@@ -65,6 +65,8 @@ CASES = [
     ("impact_user_model", ["impact", "src/models/user.py", "--direction", "up"]),
     ("explain_auth", ["explain", "how does authentication work"]),
     ("architecture", ["architecture"]),
+    ("path_renew_to_token", ["path", "renew", "refresh_access_token"]),
+    ("describe_refresh", ["describe", "refresh_access_token"]),
     ("stats", ["stats"]),
 ]
 
