@@ -1,0 +1,151 @@
+{
+  "available": true,
+  "communities": [
+    {
+      "id": 0,
+      "label": "src/api",
+      "size": 3,
+      "top_nodes": [
+        {
+          "degree": 2,
+          "kind": "file",
+          "name": "service.py",
+          "path": "src/api/service.py"
+        },
+        {
+          "degree": 1,
+          "kind": "file",
+          "name": "token.py",
+          "path": "src/auth/token.py"
+        },
+        {
+          "degree": 1,
+          "kind": "file",
+          "name": "user.py",
+          "path": "src/models/user.py"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "label": "src/auth",
+      "size": 3,
+      "top_nodes": [
+        {
+          "degree": 2,
+          "kind": "symbol",
+          "name": "refresh_access_token",
+          "path": "src/auth/token.py"
+        },
+        {
+          "degree": 1,
+          "kind": "symbol",
+          "name": "renew",
+          "path": "src/api/service.py"
+        },
+        {
+          "degree": 1,
+          "kind": "symbol",
+          "name": "login",
+          "path": "src/auth/token.py"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "label": "src/api",
+      "size": 2,
+      "top_nodes": [
+        {
+          "degree": 1,
+          "kind": "symbol",
+          "name": "AdminUser",
+          "path": "src/api/service.py"
+        },
+        {
+          "degree": 1,
+          "kind": "symbol",
+          "name": "User",
+          "path": "src/models/user.py"
+        }
+      ]
+    }
+  ],
+  "community_count": 3,
+  "edge_count": 5,
+  "exists": true,
+  "god_nodes": [
+    {
+      "community": 0,
+      "degree": 2,
+      "kind": "file",
+      "name": "service.py",
+      "path": "src/api/service.py"
+    },
+    {
+      "community": 1,
+      "degree": 2,
+      "kind": "symbol",
+      "name": "refresh_access_token",
+      "path": "src/auth/token.py"
+    },
+    {
+      "community": 0,
+      "degree": 1,
+      "kind": "file",
+      "name": "token.py",
+      "path": "src/auth/token.py"
+    },
+    {
+      "community": 0,
+      "degree": 1,
+      "kind": "file",
+      "name": "user.py",
+      "path": "src/models/user.py"
+    },
+    {
+      "community": 2,
+      "degree": 1,
+      "kind": "symbol",
+      "name": "AdminUser",
+      "path": "src/api/service.py"
+    },
+    {
+      "community": 1,
+      "degree": 1,
+      "kind": "symbol",
+      "name": "renew",
+      "path": "src/api/service.py"
+    },
+    {
+      "community": 1,
+      "degree": 1,
+      "kind": "symbol",
+      "name": "login",
+      "path": "src/auth/token.py"
+    },
+    {
+      "community": 2,
+      "degree": 1,
+      "kind": "symbol",
+      "name": "User",
+      "path": "src/models/user.py"
+    }
+  ],
+  "index": {
+    "built_at": "<TS>",
+    "exists": true,
+    "files_changed_since_build": 0,
+    "head_commit": "<SHA>",
+    "stale": false
+  },
+  "modularity": 0.82,
+  "node_count": 8,
+  "questions": [
+    "What is the role of `service.py` in the architecture?",
+    "How does `refresh_access_token` work?",
+    "What breaks if `refresh_access_token` changes?",
+    "What is the role of `token.py` in the architecture?"
+  ],
+  "surprising": []
+}

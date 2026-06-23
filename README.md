@@ -100,7 +100,8 @@ See [CHANGELOG.md](CHANGELOG.md) and
 
 MCP is now available as a stdio server via `codebase-index mcp --root <repo>`.
 It exposes `healthcheck`, `search_code`, `find_symbol`, `find_refs`,
-`impact_of`, `explain_code`, and `index_stats`; see [docs/MCP.md](docs/MCP.md).
+`impact_of`, `explain_code`, `architecture_overview`, and `index_stats`;
+see [docs/MCP.md](docs/MCP.md).
 
 ```
 You:   "Where is user authentication implemented?"
@@ -386,6 +387,9 @@ codebase-index refs "AuthService.login"
 
 # Analyze impact of a change
 codebase-index impact "src/auth/AuthService.ts"
+
+# Map the codebase: modules, god nodes, surprising links, suggested questions
+codebase-index architecture
 
 # View index statistics
 codebase-index stats
