@@ -439,6 +439,7 @@ def all_graph_nodes(conn: sqlite3.Connection) -> dict[str, list[sqlite3.Row]]:
         "file": conn.execute("SELECT id, path FROM files").fetchall(),
         "symbol": conn.execute(
             "SELECT s.id AS id, s.name AS name, s.kind AS kind, f.path AS path, "
+            "       s.line_start AS line_start, "
             "       s.in_degree AS in_degree, s.out_degree AS out_degree "
             "FROM symbols s JOIN files f ON f.id = s.file_id"
         ).fetchall(),
