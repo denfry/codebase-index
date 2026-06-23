@@ -41,7 +41,8 @@ mcp = FastMCP(
     instructions=(
         "Local codebase index. Use search_code for general queries, find_symbol for exact "
         "symbol lookups, find_refs to find callers/usages, impact_of for blast-radius analysis, "
-        "and explain_code for architecture/how-it-works questions."
+        "explain_code for architecture/how-it-works questions, and architecture_overview to map "
+        "the codebase's modules, god nodes, and surprising connections before diving in."
     ),
 )
 
@@ -261,6 +262,25 @@ def explain_code(
         backend=_search_backend(cfg),
     )
     return _emit("explain_code", payload)
+
+
+@_tool()
+def architecture_overview() -> str:
+    """High-level map of the codebase from the cached graph analytics.
+
+    Returns the detected modules (communities), god nodes (most-connected
+    symbols/files), surprising cross-module connections, and suggested starting
+    questions. Use this to orient before diving into specifics. Rebuild the index
+    if it reports ``available: false``.
+    """
+    db_path, cfg = _resolve_db()
+    if not db_path.exists():
+        return _emit("architecture_overview", _no_index_payload())
+
+    from ..service import architecture_payload
+
+    payload = architecture_payload(db_path, cfg)
+    return _emit("architecture_overview", payload)
 
 
 @_tool()

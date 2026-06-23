@@ -98,6 +98,33 @@ def search_payload(
         )
 
 
+def architecture_payload(db_path: Path, cfg: "Config") -> dict[str, Any]:
+    """The cached architecture analytics (communities / god nodes / surprising /
+    questions) plus index freshness — the payload both CLI and MCP serialize.
+
+    Returns ``available: False`` when no analysis is cached (an index built before
+    this feature, or an empty graph); the caller tells the user to reindex.
+    """
+    from .graph import analysis
+    from .indexer.freshness import compute_freshness
+    from .storage.db import Database
+
+    with Database(db_path) as db:
+        fresh = compute_freshness(db.conn, Path(cfg.root), cfg)
+        summary = analysis.load_analysis(db.conn)
+        if summary is None:
+            return {
+                "exists": True,
+                "available": False,
+                "reason": (
+                    "No architecture analysis cached. Rebuild the index "
+                    "(`codebase-index index`) to compute it."
+                ),
+                "index": fresh.model_dump(),
+            }
+        return {"exists": True, "available": True, "index": fresh.model_dump(), **summary}
+
+
 def stats_payload(conn: sqlite3.Connection) -> dict[str, Any]:
     """Index size, freshness, and per-language coverage with the graph tier."""
     from .parsers.languages import has_full_graph
