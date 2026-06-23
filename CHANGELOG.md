@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — `architecture` command + `architecture_overview` MCP tool
+- **`codebase-index architecture`** prints a high-level map of the codebase from
+  the analytics cached at index time: detected modules (with auto-derived labels),
+  god nodes (most-connected symbols/files), surprising cross-module connections,
+  and suggested starting questions. `--json` for the structured payload.
+- **`architecture_overview` MCP tool** exposes the same map to MCP clients, so an
+  agent can orient itself before diving into specifics. Reports
+  `available: false` (rather than crashing) on an index built before the analytics
+  existed; a reindex fixes it.
+
 ### Added — graph foundation: edge confidence + architecture analytics (requires a one-time reindex)
 - **Edge confidence audit trail.** Every graph edge now carries a `confidence`:
   `extracted` (exact — a same-file symbol or repo-unique name), `inferred` (a

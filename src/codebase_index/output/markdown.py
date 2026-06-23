@@ -160,6 +160,62 @@ def render_refs(resp: RefsResponse) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def render_architecture(payload: dict) -> str:
+    """Render the architecture overview: modules, god nodes, surprising links, questions."""
+    if not payload.get("available", False):
+        reason = payload.get("reason", "No architecture analysis available.")
+        return f"_{reason}_\n"
+
+    idx = payload.get("index", {})
+    freshness = "fresh" if not idx.get("stale") else "STALE"
+    lines = [
+        f"**Architecture overview**  |  **index:** {freshness}  |  "
+        f"{payload.get('node_count', 0)} nodes · {payload.get('edge_count', 0)} edges · "
+        f"{payload.get('community_count', 0)} modules · modularity {payload.get('modularity', 0)}",
+        "",
+    ]
+
+    communities = payload.get("communities", [])
+    if communities:
+        lines.append("### Modules")
+        lines.append("| # | module | size | key nodes |")
+        lines.append("|---|--------|------|-----------|")
+        for c in communities:
+            tops = ", ".join(f"`{t['name']}`" for t in c.get("top_nodes", [])[:4])
+            lines.append(f"| {c['id']} | {c['label']} | {c['size']} | {tops} |")
+        lines.append("")
+
+    gods = payload.get("god_nodes", [])
+    if gods:
+        lines.append("### God nodes (most-connected)")
+        lines.append("| node | kind | degree | location |")
+        lines.append("|------|------|--------|----------|")
+        for g in gods:
+            loc = g.get("path") or ""
+            lines.append(f"| `{g['name']}` | {g['kind']} | {g['degree']} | `{loc}` |")
+        lines.append("")
+
+    surprising = payload.get("surprising", [])
+    if surprising:
+        lines.append("### Surprising connections (cross-module bridges)")
+        for s in surprising:
+            fr, to = s["from"], s["to"]
+            lines.append(
+                f"- `{fr['name']}` ({fr.get('path') or '?'}) ↔ "
+                f"`{to['name']}` ({to.get('path') or '?'}) — {s['edge_count']} edge(s)"
+            )
+        lines.append("")
+
+    questions = payload.get("questions", [])
+    if questions:
+        lines.append("### Suggested questions")
+        for q in questions:
+            lines.append(f"- {q}")
+        lines.append("")
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def _header(query: str, exists: bool, stale: bool) -> str:
     freshness = "fresh" if not stale else "STALE"
     if not exists:

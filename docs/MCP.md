@@ -37,6 +37,7 @@ The MCP server exposes the same retrieval contract as the CLI.
 | `find_refs` | Return callers/references for a symbol | `refs` |
 | `impact_of` | Return affected files/symbols from graph expansion | `impact` |
 | `explain_code` | Intent-aware retrieval packet for a natural-language question | `explain` |
+| `architecture_overview` | Modules, god nodes, surprising connections, suggested questions | `architecture` |
 | `index_stats` | Return counts, language coverage, graph stats, freshness | `stats` |
 
 ## Output contract
@@ -64,7 +65,8 @@ branch on the contract without sniffing the shape:
   breaking change (field removal or type change); additive fields keep the same
   version. The current version is **1**.
 - `tool` (string) — the emitting tool name (`search_code`, `find_symbol`,
-  `find_refs`, `impact_of`, `explain_code`, `index_stats`, `healthcheck`).
+  `find_refs`, `impact_of`, `explain_code`, `architecture_overview`,
+  `index_stats`, `healthcheck`).
 - The no-index / error path carries the same envelope plus an `"error"` field.
 
 Rules:
@@ -156,7 +158,7 @@ same trust boundaries:
 - Done: `src/codebase_index/mcp/server.py` thin adapter over retrieval/storage code.
 - Done: `codebase-index mcp --root <path>` CLI entrypoint.
 - Done: `healthcheck`, `search_code`, `find_symbol`, `find_refs`, `impact_of`, `explain_code`,
-  and `index_stats` tools.
+  `architecture_overview`, and `index_stats` tools.
 - Done: focused tests for tool registration, missing-index behavior, config resolution, and run entrypoint.
 - Done: explicit `schema_version` + `tool` envelope on every structured tool payload (including the
   error path), asserted by `tests/test_mcp_server.py` and `tests/test_mcp_golden.py`.

@@ -36,6 +36,7 @@ def test_mcp_server_has_expected_tools():
         "find_refs",
         "impact_of",
         "explain_code",
+        "architecture_overview",
         "index_stats",
     }
 
@@ -69,6 +70,7 @@ _ENVELOPE_CALLS = {
     "find_refs": lambda: _call(mcp_server.find_refs, symbol="foo"),
     "impact_of": lambda: _call(mcp_server.impact_of, target="foo.py"),
     "explain_code": lambda: _call(mcp_server.explain_code, query="how does foo work"),
+    "architecture_overview": lambda: _call(mcp_server.architecture_overview),
     "index_stats": lambda: _call(mcp_server.index_stats),
 }
 
