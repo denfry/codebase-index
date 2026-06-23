@@ -566,35 +566,47 @@ def graph_view(
     target: Optional[str] = typer.Argument(None, help="Optional file path or symbol to center."),
     depth: int = typer.Option(2, "--depth"),
     direction: str = typer.Option("both", "--direction", help="up|down|both"),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="HTML file path."),
+    fmt: str = typer.Option("html", "--format", help="html|graphml|dot|neo4j"),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output file path."),
     open_browser: bool = typer.Option(False, "--open", help="Open the HTML graph in a browser."),
     json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
-    """Export an interactive HTML graph of indexed files, symbols, and edges."""
+    """Export the graph of indexed files, symbols, and edges.
+
+    Default is an interactive HTML view (modules coloured, size by connectivity,
+    edge style by confidence). --format also writes graphml (Gephi/yEd), dot
+    (Graphviz), or neo4j (Cypher) for external graph tools.
+    """
     import json as _json
 
-    from .graph.export import export_graph_html
+    from .graph import export as gexport
     from .service import cache_dir_for
     from .storage.db import Database
 
+    exporters = {
+        "html": (gexport.export_graph_html, "graph.html"),
+        "graphml": (gexport.export_graph_graphml, "graph.graphml"),
+        "dot": (gexport.export_graph_dot, "graph.dot"),
+        "neo4j": (gexport.export_graph_neo4j, "graph.cypher"),
+    }
+    if fmt not in exporters:
+        typer.echo(f"[codebase-index] invalid --format '{fmt}'. Valid: {', '.join(exporters)}.")
+        raise typer.Exit(code=2)
+
     is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
     db_path, cfg = _ensure_index(ctx)
-    out = output or cache_dir_for(cfg) / "graph.html"
+    exporter, default_name = exporters[fmt]
+    out = output or cache_dir_for(cfg) / default_name
 
     with Database(db_path) as db:
-        stats = export_graph_html(
-            db.conn,
-            out,
-            target=target,
-            depth=depth,
-            direction=direction,
-        )
+        stats = exporter(db.conn, out, target=target, depth=depth, direction=direction)
 
-    if open_browser:
+    if open_browser and fmt == "html":
         _open_in_browser(out)
 
     payload = {
         "path": str(out),
+        "format": fmt,
         "target": target,
         "depth": depth,
         "direction": direction,
@@ -603,7 +615,7 @@ def graph_view(
     if is_json:
         typer.echo(_json.dumps(payload))
     else:
-        typer.echo(f"Graph written to {out}")
+        typer.echo(f"Graph ({fmt}) written to {out}")
         typer.echo(f"nodes={stats['nodes']} edges={stats['edges']}")
 
 
