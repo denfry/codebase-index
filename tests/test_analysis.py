@@ -97,6 +97,23 @@ def test_label_community_uses_dominant_directory():
     assert label == "src/auth"
 
 
+def test_label_community_discounts_test_paths():
+    # Two production symbols in src/storage and three test files that exercise them:
+    # tests outnumber prod, but the module should still be named for the prod code.
+    node_index = {
+        ("symbol", 1): {"kind": "symbol", "name": "a", "path": "src/storage/db.py"},
+        ("symbol", 2): {"kind": "symbol", "name": "b", "path": "src/storage/repo.py"},
+        ("symbol", 3): {"kind": "symbol", "name": "t1", "path": "tests/test_db.py"},
+        ("symbol", 4): {"kind": "symbol", "name": "t2", "path": "tests/test_repo.py"},
+        ("symbol", 5): {"kind": "symbol", "name": "t3", "path": "tests/test_x.py"},
+    }
+    members = [("symbol", i) for i in range(1, 6)]
+    assert analysis.label_community(members, node_index) == "src/storage"
+    # A community that is *only* tests still gets named for them.
+    only_tests = [("symbol", i) for i in (3, 4, 5)]
+    assert analysis.label_community(only_tests, node_index) == "tests"
+
+
 def test_suggest_questions_seeds_from_structure():
     gods = [{"kind": "symbol", "name": "Engine", "path": "x", "degree": 9, "community": 0}]
     surprising = [

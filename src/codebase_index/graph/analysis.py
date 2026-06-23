@@ -207,18 +207,36 @@ def _dir_of(path: str) -> str:
     return path.rsplit("/", 1)[0] if "/" in path else "(root)"
 
 
+def _is_test_path(path: str) -> bool:
+    """Test files cluster with the code they exercise; don't let them name the module."""
+    lower = path.lower()
+    parts = lower.split("/")
+    if any(p in ("test", "tests", "__tests__", "spec", "specs") for p in parts):
+        return True
+    base = parts[-1]
+    return base.startswith("test_") or base.startswith("test.") or "_test." in base or ".test." in base
+
+
 def label_community(members: list[Node], node_index: dict[Node, dict]) -> str:
-    """Name a community by the directory most of its nodes live in.
+    """Name a community by the directory most of its (non-test) nodes live in.
 
     A 2-5 word, plain-language module name is what graphify asks an LLM for; here
     we derive it deterministically from the dominant source directory, which for
-    code is a strong proxy for "what this module is".
+    code is a strong proxy for "what this module is". Test paths are discounted so
+    a cluster of production symbols isn't mislabelled "tests" just because its test
+    files outnumber it; a community that is *only* tests still gets named for them.
     """
-    dirs: Counter = Counter()
+    prod: Counter = Counter()
+    allp: Counter = Counter()
     for node in members:
         meta = node_index.get(node)
-        if meta and meta.get("path"):
-            dirs[_dir_of(meta["path"])] += 1
+        if not (meta and meta.get("path")):
+            continue
+        d = _dir_of(meta["path"])
+        allp[d] += 1
+        if not _is_test_path(meta["path"]):
+            prod[d] += 1
+    dirs = prod or allp
     if not dirs:
         return "module"
     # Most common dir; tie -> shortest then lexicographically smallest (stable).
