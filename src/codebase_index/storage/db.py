@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Optional
 
 # 2: chunks gained a denormalized `symbol_names` column (FTS symbol-name boost).
-SCHEMA_VERSION = 2
+# 3: edges gained a `confidence` column (extracted/inferred/ambiguous audit trail).
+SCHEMA_VERSION = 3
 
 
 class Database:
