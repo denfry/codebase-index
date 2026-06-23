@@ -284,6 +284,52 @@ def architecture_overview() -> str:
 
 
 @_tool()
+def path_between(source: str, target: str) -> str:
+    """Shortest dependency/call path between two symbols or files.
+
+    Answers "how is X connected to Y" — returns the chain of nodes and the edge
+    types (with confidence) linking them. Useful for tracing how a request reaches
+    the database, or how two modules touch.
+
+    Args:
+        source: File path (relative) or symbol name to start from.
+        target: File path (relative) or symbol name to reach.
+    """
+    db_path, _ = _resolve_db()
+    if not db_path.exists():
+        return _emit("path_between", _no_index_payload())
+
+    from ..graph.navigate import path_payload
+    from ..storage.db import Database
+
+    with Database(db_path) as db:
+        payload = path_payload(db.conn, source, target)
+    return _emit("path_between", payload)
+
+
+@_tool()
+def describe_symbol(symbol: str) -> str:
+    """Node card for a symbol: definition(s), callers, callees, centrality, module.
+
+    A compact "what is this and how does it sit in the graph" view — the in/out
+    degree, its module, whether it's a god node, and its direct callers/callees.
+
+    Args:
+        symbol: Symbol name to describe (e.g. "Database", "build_index").
+    """
+    db_path, _ = _resolve_db()
+    if not db_path.exists():
+        return _emit("describe_symbol", _no_index_payload())
+
+    from ..graph.navigate import describe_payload
+    from ..storage.db import Database
+
+    with Database(db_path) as db:
+        payload = describe_payload(db.conn, symbol)
+    return _emit("describe_symbol", payload)
+
+
+@_tool()
 def index_stats() -> str:
     """Return index freshness, file count, symbol count, and per-language coverage."""
     db_path, _ = _resolve_db()

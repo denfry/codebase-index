@@ -160,6 +160,76 @@ def render_refs(resp: RefsResponse) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _node_label(ref: dict) -> str:
+    name = ref.get("name")
+    path = ref.get("path") or ""
+    return f"`{name}` ({path})" if name and ref.get("kind") == "symbol" else f"`{path}`"
+
+
+def render_path(payload: dict) -> str:
+    """Render a path between two nodes as an arrow chain annotated with edge types."""
+    head = f"**path:** `{payload['src']}` → `{payload['dst']}`"
+    if not payload.get("found"):
+        return f"{head}\n\n_{payload.get('reason', 'No path found.')}_\n"
+
+    lines = [f"{head}  ·  **{payload.get('hops', 0)} hop(s)**", ""]
+    nodes = payload.get("nodes", [])
+    steps = payload.get("steps", [])
+    # Render as: A  --edge(conf)-->  B  --edge-->  C
+    if nodes:
+        lines.append(_node_label(nodes[0]))
+        for step, nxt in zip(steps, nodes[1:]):
+            mark = _conf_mark(step.get("confidence"))
+            edge = f"{step['edge_type']}{' ' + mark if mark else ''}"
+            arrow = "→" if step.get("direction") == "out" else "←"
+            lines.append(f"  {arrow} _{edge}_ {arrow}")
+            lines.append(_node_label(nxt))
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_describe(payload: dict) -> str:
+    """Render a symbol node card: definition, centrality, callers, callees."""
+    head = f"**describe:** `{payload['query']}`"
+    if not payload.get("found"):
+        return f"{head}\n\n_{payload.get('reason', 'Not found.')}_\n"
+
+    p = payload.get("primary", {})
+    god = f" · god node #{p['god_rank']}" if p.get("god_rank") else ""
+    lines = [
+        f"{head}  ·  module `{p.get('module', '?')}`  ·  "
+        f"in {p.get('in_degree', 0)} / out {p.get('out_degree', 0)}{god}",
+        "",
+    ]
+
+    defs = payload.get("definitions", [])
+    if defs:
+        lines.append("**definition(s):**")
+        for d in defs:
+            sig = f" — `{d['signature']}`" if d.get("signature") else ""
+            lines.append(f"- {d['kind']} `{d.get('qualified') or d['name']}` "
+                         f"at `{d['path']}:{d['line_start']}`{sig}")
+        lines.append("")
+
+    callers = payload.get("callers", [])
+    if callers:
+        lines.append(f"**callers ({len(callers)}):**")
+        for c in callers[:20]:
+            mark = _conf_mark(c.get("confidence"))
+            lines.append(f"- `{c['path']}:{c['line']}`{' · ' + mark if mark else ''}")
+        lines.append("")
+
+    callees = payload.get("callees", [])
+    if callees:
+        lines.append(f"**callees ({len(callees)}):**")
+        for c in callees[:20]:
+            mark = _conf_mark(c.get("confidence"))
+            lines.append(f"- {_node_label(c)} _{c.get('edge_type', '')}_"
+                         f"{' · ' + mark if mark else ''}")
+        lines.append("")
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def render_architecture(payload: dict) -> str:
     """Render the architecture overview: modules, god nodes, surprising links, questions."""
     if not payload.get("available", False):

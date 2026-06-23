@@ -37,6 +37,8 @@ def test_mcp_server_has_expected_tools():
         "impact_of",
         "explain_code",
         "architecture_overview",
+        "path_between",
+        "describe_symbol",
         "index_stats",
     }
 
@@ -71,6 +73,8 @@ _ENVELOPE_CALLS = {
     "impact_of": lambda: _call(mcp_server.impact_of, target="foo.py"),
     "explain_code": lambda: _call(mcp_server.explain_code, query="how does foo work"),
     "architecture_overview": lambda: _call(mcp_server.architecture_overview),
+    "path_between": lambda: _call(mcp_server.path_between, source="a", target="b"),
+    "describe_symbol": lambda: _call(mcp_server.describe_symbol, symbol="foo"),
     "index_stats": lambda: _call(mcp_server.index_stats),
 }
 
