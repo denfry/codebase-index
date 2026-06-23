@@ -38,18 +38,32 @@ Pick the subcommand by intent:
 | User intent | Command |
 |---|---|
 | "how does X work" / "explain X" / "walk me through" | `codebase-index explain "$QUERY" --json` |
-| overview / architecture | `codebase-index explain "architecture overview" --token-budget 3000 --json` |
+| overview / architecture / "map the codebase" | `codebase-index architecture --json` |
 | general / unsure | `codebase-index search "$QUERY" --json` |
 | keyword / "where is" | `codebase-index search "$QUERY" --json` |
 | a specific symbol name | `codebase-index symbol "<name>" --json` |
 | "who calls / references" | `codebase-index refs "<name>" --json` |
 | "what breaks if I change" | `codebase-index impact "<file-or-symbol>" --json` |
+| "how is X connected to Y" / dependency path | `codebase-index path "<A>" "<B>" --json` |
+| "what is X" / describe a symbol's role | `codebase-index describe "<name>" --json` |
 | visual graph / "open graph" (for the human, not for you to read) | `codebase-index graph "<file-or-symbol>" --open` |
+
+`architecture` returns the codebase map computed at index time — detected modules
+(communities), god nodes (most-connected symbols), surprising cross-module links,
+and suggested questions. Reach for it on "give me an overview" / "where do I
+start" questions instead of a broad `explain`.
+
+`path "A" "B"` returns the shortest dependency/call chain between two symbols or
+files; `describe "X"` returns a node card (definition, callers, callees,
+in/out degree, module, god-node rank). Both annotate edges with a `confidence`
+(`extracted` exact, `inferred` heuristic, `ambiguous` unresolved) — treat a path
+or callee list that leans on `inferred`/`ambiguous` edges as less certain.
 
 The `graph` command renders an HTML dependency graph for a person to look at —
 it is not a retrieval packet. Use it only when the user explicitly wants a visual
 graph; for "what depends on X" answer from `impact`/`refs` instead. In a headless
-session prefer `--out <path>` over `--open`.
+session prefer `--output <path>` over `--open`. `--format graphml|dot|neo4j`
+exports the graph for external tools (Gephi/yEd, Graphviz, Neo4j) instead of HTML.
 
 `explain` has a higher default token budget (2200) and HOW_IT_WORKS intent weights — use it whenever the question is about understanding behavior or flow.
 
@@ -150,8 +164,8 @@ Never start with a full-repo scan when the index exists and is fresh.
 # "how does the auth flow work?"
 codebase-index explain "auth flow" --json
 
-# "explain the overall architecture"
-codebase-index explain "architecture overview" --token-budget 3000 --json
+# "explain the overall architecture" / "where do I start" — modules, god nodes
+codebase-index architecture --json
 
 # "where is auth token refresh implemented?"
 codebase-index search "auth token refresh" --json
@@ -167,6 +181,12 @@ codebase-index symbol "AuthService" --json
 
 # precise symbol search (faster, no FTS noise)
 codebase-index search "AuthService" --mode symbol --json
+
+# "how is the API layer connected to the database?"
+codebase-index path "ApiController" "Database" --json
+
+# "what is the Database class and how is it used?"
+codebase-index describe "Database" --json
 
 # generate and open an HTML graph around a file or symbol
 codebase-index graph "User" --direction both --depth 2 --open

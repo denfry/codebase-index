@@ -397,6 +397,11 @@ codebase-index path "renew" "refresh_access_token"
 # Node card: definition, callers, callees, centrality, module
 codebase-index describe "Database"
 
+# Visualize the graph (modules coloured, size = connectivity, edge style = confidence)
+codebase-index graph --open
+# …or export for external tools: graphml (Gephi/yEd), dot (Graphviz), neo4j (Cypher)
+codebase-index graph --format graphml -o graph.graphml
+
 # View index statistics
 codebase-index stats
 
