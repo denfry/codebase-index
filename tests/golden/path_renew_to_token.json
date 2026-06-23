@@ -1,0 +1,49 @@
+{
+  "dst": "refresh_access_token",
+  "found": true,
+  "hops": 1,
+  "index": {
+    "built_at": "<TS>",
+    "exists": true,
+    "head_commit": "<SHA>",
+    "stale": false
+  },
+  "nodes": [
+    {
+      "kind": "symbol",
+      "line_start": 10,
+      "name": "renew",
+      "path": "src/api/service.py",
+      "symbol_kind": "method"
+    },
+    {
+      "kind": "symbol",
+      "line_start": 4,
+      "name": "refresh_access_token",
+      "path": "src/auth/token.py",
+      "symbol_kind": "function"
+    }
+  ],
+  "src": "renew",
+  "steps": [
+    {
+      "confidence": "extracted",
+      "direction": "out",
+      "edge_type": "call",
+      "from": {
+        "kind": "symbol",
+        "line_start": 10,
+        "name": "renew",
+        "path": "src/api/service.py",
+        "symbol_kind": "method"
+      },
+      "to": {
+        "kind": "symbol",
+        "line_start": 4,
+        "name": "refresh_access_token",
+        "path": "src/auth/token.py",
+        "symbol_kind": "function"
+      }
+    }
+  ]
+}

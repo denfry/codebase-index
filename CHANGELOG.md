@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — graph navigation: `path` and `describe`
+- **`codebase-index path <A> <B>`** — shortest undirected dependency/call path
+  between two symbols or files ("how is X connected to Y"). Renders the node chain
+  annotated with each link's edge type and confidence; `inferred`/`ambiguous` hops
+  are marked, so a path is only as trustworthy as its weakest edge.
+- **`codebase-index describe <symbol>`** — a node card: definition(s), direct
+  callers and callees (with confidence), in/out degree, the symbol's module, and
+  its god-node rank if it has one. The graphify `explain Symbol` idea, named
+  `describe` so it doesn't collide with the existing how-it-works `explain`.
+- **`path_between` and `describe_symbol` MCP tools** expose both to agents.
+
 ### Added — `architecture` command + `architecture_overview` MCP tool
 - **`codebase-index architecture`** prints a high-level map of the codebase from
   the analytics cached at index time: detected modules (with auto-derived labels),
