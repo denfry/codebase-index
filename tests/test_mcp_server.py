@@ -194,3 +194,15 @@ def test_search_code_pagination_with_real_index(tmp_path):
 
 def test_run_function_exists():
     assert callable(mcp_server.run)
+
+
+def test_search_code_accepts_raw_parameter():
+    """search_code accepts raw without raising TypeError."""
+    result = _with_missing_db(lambda: _call(mcp_server.search_code, query="foo", raw=True))
+    assert "error" in result
+
+
+def test_explain_code_accepts_raw_parameter():
+    """explain_code accepts raw without raising TypeError."""
+    result = _with_missing_db(lambda: _call(mcp_server.explain_code, query="foo", raw=True))
+    assert "error" in result

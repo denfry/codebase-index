@@ -75,12 +75,17 @@ def search_payload(
     token_budget: int = 1500,
     no_fallback: bool = False,
     backend: Any = None,
+    raw: bool = False,
 ) -> dict:
     """One search session: open the DB (vector-enabled when the backend is
-    live), run retrieval, return the payload dict both surfaces serialize."""
+    live), run retrieval, return the payload dict both surfaces serialize.
+
+    ``raw`` forces full snippets; otherwise snippets are skeletonized when
+    ``cfg.retrieval.compact_snippets`` is on (the default)."""
     from .retrieval.pipeline import search as run_search
     from .storage.db import Database
 
+    compact = cfg.retrieval.compact_snippets and not raw
     with Database(db_path) as db:
         if backend is not None and getattr(backend, "enabled", False):
             db.enable_vectors()
@@ -95,6 +100,8 @@ def search_payload(
             backend=backend,
             root=Path(cfg.root),
             config=cfg,
+            compact=compact,
+            compact_min_reduction=cfg.retrieval.compact_min_reduction,
         )
 
 
