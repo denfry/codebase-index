@@ -24,7 +24,7 @@ def test_render_merges_adjacent_runs_but_keeps_separated_ones():
     assert elided == 3
 
 
-from codebase_index.retrieval.skeleton import Compacted, compact  # noqa: E402
+from codebase_index.retrieval.skeleton import compact  # noqa: E402
 
 
 PY_SAMPLE = (
