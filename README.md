@@ -64,7 +64,7 @@ If you are opening this repository for the first time, follow this order:
 If you only need the shortest path, run:
 
 ```bash
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.6.0"
+pip install codebase-index     # from PyPI
 cd your-project
 codebase-index init            # prompts for Claude Code / Codex CLI / OpenCode
 codebase-index index
@@ -76,8 +76,8 @@ codebase-index search "where is authentication implemented?"
 **`1.6.0` is released.** The current release includes repository discovery,
 SQLite FTS5 storage, Tree-sitter symbols and references, hybrid ranking, graph
 impact analysis, token-budgeted retrieval packets, optional local embeddings,
-hooks/watch support, multi-CLI installation, MCP server support, and a tested
-GitHub-only `pipx` install path.
+hooks/watch support, multi-CLI installation, MCP server support, and PyPI +
+`pipx` install paths (`pip install codebase-index`).
 
 The `1.6.0` release turns the dependency graph into a navigable map: every edge
 carries a `confidence` audit trail (`extracted`/`inferred`/`ambiguous`, surfaced
@@ -124,11 +124,11 @@ Agent: searches local index (symbols + FTS5 + graph)
 
 ## How Do I Install codebase-index?
 
-For most users, install the package from the tagged GitHub release and run
-`init` inside the repository you want to index:
+For most users, install the package from PyPI and run `init` inside the
+repository you want to index:
 
 ```bash
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.6.0"
+pip install codebase-index     # or: pipx install codebase-index
 cd your-project
 codebase-index init            # choose Claude Code, Codex CLI, OpenCode, or all
 codebase-index index
@@ -299,7 +299,18 @@ curl -fsSL https://raw.githubusercontent.com/denfry/codebase-index/main/install.
 irm https://raw.githubusercontent.com/denfry/codebase-index/main/install.ps1 | iex
 ```
 
-### Option 1: Install from a tagged GitHub release
+### Option 1: Install from PyPI (recommended)
+
+```bash
+pip install codebase-index        # or: pipx install codebase-index
+cd your-project
+codebase-index init
+codebase-index index
+```
+
+### Option 2: Pin to a tagged GitHub release
+
+Pin to an exact version for reproducible installs, or grab an unreleased commit:
 
 ```bash
 cd your-project
@@ -323,13 +334,13 @@ the `pipx` environment was likely created with an older Python version. Reinstal
 ```powershell
 pipx uninstall codebase-index
 py -0p
-pipx install --python "<path-to-python-3.11-or-newer>\python.exe" "git+https://github.com/denfry/codebase-index.git@v1.6.0"
+pipx install --python "<path-to-python-3.11-or-newer>\python.exe" codebase-index
 ```
 
 For example:
 
 ```powershell
-pipx install --python "C:\Users\you\AppData\Local\Programs\Python\Python312\python.exe" "git+https://github.com/denfry/codebase-index.git@v1.6.0"
+pipx install --python "C:\Users\you\AppData\Local\Programs\Python\Python312\python.exe" codebase-index
 ```
 
 Then run initialization again:
@@ -340,7 +351,7 @@ codebase-index index
 ```
 
 
-### Option 2: Install with pipx from GitHub
+### Option 3: Install with pipx from a pinned GitHub tag
 
 ```bash
 pipx install "git+https://github.com/denfry/codebase-index.git@v1.6.0"
@@ -349,7 +360,7 @@ codebase-index init --target auto
 codebase-index index
 ```
 
-### Option 3: Install from source
+### Option 4: Install from source
 
 ```bash
 git clone https://github.com/denfry/codebase-index.git
@@ -359,14 +370,13 @@ pip install -e ".[dev]"
 
 ### Distribution roadmap
 
-PyPI, `uvx`, Homebrew, signed release checksums, and SBOMs are important for a
-tool that reads entire repositories, but they are not all verified as shipped in
-`1.6.0`. Target install story:
+As of `1.6.0`, **PyPI is shipped** — `pip install codebase-index` and
+`pipx install codebase-index` work today. `uvx`, Homebrew, signed release
+checksums, and SBOMs remain on the roadmap:
 
 ```bash
-uvx codebase-index init
-pipx install codebase-index
-brew install denfry/tap/codebase-index
+uvx codebase-index init                  # planned
+brew install denfry/tap/codebase-index   # planned
 ```
 
 ### Verify the install
