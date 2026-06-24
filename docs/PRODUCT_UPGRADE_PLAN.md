@@ -90,7 +90,7 @@ transparent Python implementation, a strict privacy model, and honest benchmarks
 |---|---|---|
 | No large-scale real-repo benchmark | Can't claim 100k/1M LOC quality | Benchmark tasks §8; recruit public repos |
 | Graph is import/call/ref only | `impact` misses framework wiring | ARCHITECTURE §9 + design doc `specs/2026-06-14-typed-framework-edges-design.md`; implementation behind §8 benchmark |
-| GitHub-only distribution | No `pip install codebase-index` / `uvx` | Distribution tasks §9 |
+| ~~GitHub-only distribution~~ | **PyPI shipped in 1.6.0** — `pip install codebase-index` / `pipx` work; `uvx`/Homebrew still pending | Distribution tasks §9 (uvx/Homebrew) |
 | MCP client docs unverified | Templates may be wrong per client version | Verify against each client, add per-client docs |
 | Single-repo only | No monorepo/fleet context | Out of scope near-term; documented as non-goal |
 | `clean` was a stub vs documented | Doc/reality gap | **Shipped in this pass** — real cache reset + test |
