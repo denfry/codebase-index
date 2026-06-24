@@ -134,6 +134,8 @@ def search(
     root: Optional[Path] = None,
     config: Optional[Config] = None,
     offset: int = 0,
+    compact: bool = True,
+    compact_min_reduction: float = 0.25,
 ) -> dict:
     plan = detect_intent(query)
     if token_budget <= 0:
@@ -148,7 +150,15 @@ def search(
     confidence = _confidence(ranked)
     # Scale budget proportionally so later pages receive snippet coverage.
     scaled_budget = token_budget * fetch_limit // max(limit, 1) if offset > 0 else token_budget
-    all_results, all_recommended = apply_budget(ranked, token_budget=scaled_budget)
+    from .skeleton import make_compactor
+
+    compactor = make_compactor(
+        intent=plan.intent, query=query,
+        enabled=compact, min_reduction=compact_min_reduction,
+    )
+    all_results, all_recommended = apply_budget(
+        ranked, token_budget=scaled_budget, compactor=compactor
+    )
 
     # Paginate: slice results and filter recommended_reads to the current page.
     paginated = all_results[offset:offset + limit]

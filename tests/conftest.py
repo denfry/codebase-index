@@ -97,6 +97,30 @@ def seeded_index(tmp_path) -> Database:
     _insert_symbol(conn, gen, name="Token", kind="type", line_start=1, line_end=2,
                    signature="type Token")
 
+    # A large, parseable Python body so skeletonization has something to elide
+    # (the other fixtures are too small to cross the savings guard). Queried by
+    # its unique name in tests so it never collides with the auth/token queries.
+    api = _insert_file(conn, path="src/api/ratelimit.py", lang="python", mtime_ns=7000)
+    _rl_body = (
+        "def ratelimit_bucket_refill(bucket, moment):\n"
+        "    elapsed = moment - bucket.last\n"
+        "    gained = elapsed * bucket.rate\n"
+        "    bucket.level = min(bucket.cap, bucket.level + gained)\n"
+        "    bucket.last = moment\n"
+        "    if bucket.level < 1:\n"
+        "        bucket.denied = True\n"
+        "        emit_denied(bucket)\n"
+        "        return False\n"
+        "    bucket.level -= 1\n"
+        "    bucket.denied = False\n"
+        "    emit_allowed(bucket)\n"
+        "    return True\n"
+    )
+    _insert_chunk(conn, api, line_start=1, line_end=13, content=_rl_body, kind="symbol_body")
+    _insert_symbol(conn, api, name="ratelimit_bucket_refill", kind="function",
+                   line_start=1, line_end=13,
+                   signature="def ratelimit_bucket_refill(bucket, moment)", in_degree=1)
+
     conn.commit()
     yield db
     db.close()
