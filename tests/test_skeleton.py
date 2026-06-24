@@ -94,3 +94,41 @@ def test_compact_is_deterministic():
                 ctx_lines=0, query_terms=[], min_reduction=0.25)
     assert (a.text, a.token_est, a.elided_lines, a.skeletonized) == \
            (b.text, b.token_est, b.elided_lines, b.skeletonized)
+
+
+MD_SAMPLE = (
+    "# Title\n"
+    "Intro line one.\n"
+    "More prose that is not structural and should be dropped.\n"
+    "Even more prose.\n"
+    "## Section\n"
+    "Section body line.\n"
+    "Trailing prose to elide here too.\n"
+)
+
+JSON_SAMPLE = (
+    '{\n'
+    '  "name": "demo",\n'
+    '  "description": "a long value that is mostly prose and can be elided away",\n'
+    '  "nested": {\n'
+    '    "key": "value"\n'
+    '  }\n'
+    '}\n'
+)
+
+
+def test_markdown_keeps_headings_and_first_section_line():
+    r = compact(MD_SAMPLE, path="README.md", line_start=1,
+                ctx_lines=0, query_terms=[], min_reduction=0.25)
+    assert r.skeletonized is True
+    assert "# Title" in r.text
+    assert "## Section" in r.text
+    assert "Intro line one." in r.text          # first line after heading kept
+    assert "Even more prose." not in r.text
+
+
+def test_structured_keeps_key_lines():
+    r = compact(JSON_SAMPLE, path="pkg.json", line_start=1,
+                ctx_lines=0, query_terms=["nested"], min_reduction=0.10)
+    assert '"name": "demo"' in r.text
+    assert '"nested"' in r.text                 # focus term line kept

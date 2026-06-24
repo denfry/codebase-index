@@ -10,6 +10,7 @@ extension, and the transform never makes output worse than the raw snippet.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from ..parsers.line_chunker import estimate_tokens
@@ -144,12 +145,45 @@ def _apply_focus(lines: list[str], keep: list[bool],
                 keep[j] = True
 
 
+_STRUCT_LANGS = frozenset({"json", "yaml", "toml", "ini"})
+_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s")
+_SECTION_RE = re.compile(r"^\s*\[.*\]\s*$")        # toml/ini section header
+_KEY_RE = re.compile(r"[:=]")                       # key/value introducer
+_BRACKET = {"{", "}", "[", "]", "{}", "[]", "},", "],"}
+
+
+def _classify_markdown(lines: list[str]) -> list[bool]:
+    keep = [False] * len(lines)
+    for i, line in enumerate(lines):
+        if _HEADING_RE.match(line):
+            keep[i] = True
+            # keep the first non-blank line of the section
+            for j in range(i + 1, len(lines)):
+                if lines[j].strip():
+                    keep[j] = True
+                    break
+    return keep
+
+
+def _classify_structured(lines: list[str]) -> list[bool]:
+    keep = [False] * len(lines)
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if not s or s in _BRACKET or _SECTION_RE.match(s) or _KEY_RE.search(s):
+            keep[i] = True
+    return keep
+
+
 def classify_lines(content: str, *, lang: str | None,
                    query_terms: list[str], ctx_lines: int) -> list[bool]:
     lines = content.split("\n")
     keep: list[bool] | None = None
     if lang in _CODE_LANGS:
         keep = _classify_code(content, lines, lang)
+    elif lang == "markdown":
+        keep = _classify_markdown(lines)
+    elif lang in _STRUCT_LANGS:
+        keep = _classify_structured(lines)
     if keep is None:
         keep = [True] * len(lines)        # unknown / parse miss -> keep all (raw)
     _apply_focus(lines, keep, query_terms, ctx_lines)
