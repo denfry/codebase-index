@@ -2,9 +2,9 @@
 
 This page explains how to install `codebase-index` and make it available in Claude Code, Codex CLI, or OpenCode.
 
-> **Distribution:** `codebase-index` is **not on PyPI**. It is installed directly
-> from GitHub via `git+https://...@<tag>`. Pin to a release tag (e.g. `@v1.6.0`)
-> for reproducible installs; use `@main` to track the latest.
+> **Distribution:** `codebase-index` is published on **PyPI** —
+> `pip install codebase-index`. You can also install straight from a GitHub tag
+> (`git+https://...@<tag>`) to pin an exact version, or `@main` to track the latest.
 
 ## Choose Your Path
 
@@ -24,11 +24,11 @@ This page explains how to install `codebase-index` and make it available in Clau
 
 ### Option 1: Install via `init` command (recommended)
 
-Install the tagged GitHub release and scaffold the skill into your project:
+Install from PyPI and scaffold the skill into your project:
 
 ```bash
 cd your-project
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.6.0"
+pip install codebase-index
 codebase-index init
 codebase-index index
 ```
@@ -61,14 +61,13 @@ ln -s ~/codebase-index/skill ~/.claude/skills/codebase-index
 ### Option 3: Install as a Python package
 
 ```bash
-# Using pip from the tagged GitHub release
+# From PyPI (recommended)
+pip install codebase-index
+pipx install codebase-index            # isolated environment
+uv tool install codebase-index         # uv-managed tool
+
+# Pin to a GitHub tag for an exact or unreleased version
 pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.6.0"
-
-# Using pipx from GitHub (isolated environment)
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.6.0"
-
-# Using uv from GitHub
-uv tool install "git+https://github.com/denfry/codebase-index.git@v1.6.0"
 
 # From source (editable mode)
 git clone https://github.com/denfry/codebase-index.git
@@ -89,18 +88,18 @@ pip install -e ".[watch]"
 pip install -e ".[embeddings-local,watch,dev]"
 ```
 
-### PyPI / uvx / Homebrew status
+### uvx / Homebrew status
 
-As of `1.6.0`, this documentation treats GitHub tag installs as the verified
-path. PyPI, `uvx codebase-index init`, Homebrew tap installation, signed
-checksums, and SBOMs are distribution targets for a more complete release story.
+As of `1.6.0`, **PyPI is shipped** — `pip install codebase-index` and
+`pipx install codebase-index` are the verified paths. `uvx codebase-index init`,
+Homebrew tap installation, signed checksums, and SBOMs remain distribution
+targets for a more complete release story.
 
 Target future commands:
 
 ```bash
-uvx codebase-index init
-pipx install codebase-index
-brew install denfry/tap/codebase-index
+uvx codebase-index init                  # planned
+brew install denfry/tap/codebase-index   # planned
 ```
 
 ### Verify a clean install
@@ -108,7 +107,7 @@ brew install denfry/tap/codebase-index
 On a machine with only Python + pipx:
 
 ```bash
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.6.0"
+pipx install codebase-index
 cd /path/to/your/repo
 codebase-index init           # writes .claude/skills/codebase-index/ + .gitignore rules
 codebase-index index          # builds .claude/cache/codebase-index/index.sqlite
@@ -188,7 +187,7 @@ Use `codebase-index doctor` to verify which hooks are enabled. For heavy editing
 For heavy editing sessions, `watch` mode keeps the index fresh via a debounced filesystem observer. Requires the `[watch]` extra:
 
 ```bash
-pip install "codebase-index[watch] @ git+https://github.com/denfry/codebase-index.git@v1.6.0"
+pip install "codebase-index[watch]"
 codebase-index watch --debounce 500
 ```
 
@@ -278,7 +277,7 @@ Set `allow_external` to `false` to disable external API calls.
 ## Recommended Flow for First-Time Users
 
 ```bash
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.6.0"
+pip install codebase-index
 cd your-project
 codebase-index init
 codebase-index index
