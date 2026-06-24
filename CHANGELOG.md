@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-06-24
+
 ### Added
 - **Snippet skeletonization & content-aware rendering.** `search`/`explain` snippets are now
   focus skeletons — import/signature/class lines and the query-matching line are kept while
