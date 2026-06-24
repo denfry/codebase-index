@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Callable, Optional
 
 from ..output.redact import redact_snippet
+from .skeleton import Compacted
 from .types import Candidate
 
 # Snippets shorter than this threshold are treated as previews only; the result
@@ -38,7 +39,7 @@ def apply_budget(
     candidates: list[Candidate],
     *,
     token_budget: int,
-    compactor: Optional[Callable[[Candidate], "object"]] = None,
+    compactor: Optional[Callable[[Candidate], Compacted]] = None,
 ) -> tuple[list[dict], list[dict]]:
     results: list[dict] = []
     recommended: list[dict] = []
@@ -57,7 +58,7 @@ def apply_budget(
         cost = c.token_est
         if compactor is not None and c.content:
             comp = compactor(c)
-            if getattr(comp, "skeletonized", False):
+            if comp.skeletonized:
                 text = comp.text
                 cost = comp.token_est
                 meta["skeletonized"] = True

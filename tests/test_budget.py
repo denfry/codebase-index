@@ -1,4 +1,5 @@
 from codebase_index.retrieval.budget import apply_budget
+from codebase_index.retrieval.skeleton import Compacted
 from codebase_index.retrieval.types import Candidate
 
 
@@ -28,9 +29,6 @@ def test_metadata_always_present_even_when_budget_zero():
     cands = [_c("a.py", 1, 2, "content", 50)]
     results, recommended = apply_budget(cands, token_budget=0)
     assert results[0]["path"] == "a.py" and results[0]["snippet"] is None
-
-
-from codebase_index.retrieval.skeleton import Compacted
 
 
 def test_compactor_lets_more_results_fit_budget():
