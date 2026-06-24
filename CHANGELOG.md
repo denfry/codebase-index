@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Snippet skeletonization & content-aware rendering.** `search`/`explain` snippets are now
+  focus skeletons — import/signature/class lines and the query-matching line are kept while
+  function bodies collapse to a `... N lines elided (read A-B)` marker — so more ranked results
+  fit the same token budget. Content-aware (code via tree-sitter, markdown headings,
+  structured-config keys), reversible via `recommended_reads`, and safe (raw fallback on any
+  parse miss or non-win). New `skeletonized` / `elided_lines` result fields; new
+  `retrieval.compact_snippets` / `retrieval.compact_min_reduction` config knobs (no reindex);
+  disable per-call with `--raw` (CLI) or `raw: true` (MCP `search_code` / `explain_code`).
+
 ## [1.5.0] - 2026-06-24
 
 ### Added — graph visualization upgrade + interop exports
