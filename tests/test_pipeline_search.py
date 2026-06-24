@@ -90,3 +90,21 @@ def test_recommended_reads_within_page(seeded_index):
     result_keys = {(r["path"], r["line_start"], r["line_end"]) for r in payload["results"]}
     for rec in payload["recommended_reads"]:
         assert (rec["path"], rec["line_start"], rec["line_end"]) in result_keys
+
+
+# ── snippet skeletonization ─────────────────────────────────────────────────
+
+def test_search_skeletonizes_code_by_default(seeded_index):
+    # mode=fts so the fts candidate (full body) is not fused with the
+    # signature-only symbol candidate; the large ratelimit body is skeletonized.
+    payload = search(seeded_index.conn, "ratelimit_bucket_refill", mode="fts",
+                     limit=5, token_budget=1500, no_fallback=True)
+    assert payload["results"]
+    assert any(r.get("skeletonized") for r in payload["results"])
+
+
+def test_search_compact_false_disables_skeleton(seeded_index):
+    payload = search(seeded_index.conn, "ratelimit_bucket_refill", mode="fts",
+                     limit=5, token_budget=1500, no_fallback=True, compact=False)
+    assert payload["results"]
+    assert all(not r.get("skeletonized") for r in payload["results"])
