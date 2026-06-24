@@ -1,9 +1,11 @@
 # Release Checklist
 
 A repeatable, copy-pasteable checklist for cutting a `codebase-index` release.
-Distribution is **GitHub-only** today (no PyPI publish yet — see "Future
-hardening"). Tagging `v*` triggers `.github/workflows/release.yml`, which builds,
-`twine check`s, runs the clean-machine smoke, and publishes a GitHub release.
+Tagging `v*` triggers `.github/workflows/release.yml`, which builds,
+`twine check`s, runs the clean-machine smoke, publishes a **GitHub release**, and
+publishes to **PyPI** via Trusted Publishing (OIDC — no stored token). A manual
+`workflow_dispatch` run publishes the current `main` build to PyPI without
+recreating a GitHub release (used to publish an already-tagged version).
 
 Work top to bottom. Do not tag until every required box is checked.
 
