@@ -132,3 +132,38 @@ def test_structured_keeps_key_lines():
                 ctx_lines=0, query_terms=["nested"], min_reduction=0.10)
     assert '"name": "demo"' in r.text
     assert '"nested"' in r.text                 # focus term line kept
+
+
+from codebase_index.retrieval.skeleton import make_compactor  # noqa: E402
+from codebase_index.retrieval.types import Candidate, Intent  # noqa: E402
+
+
+def _cand(content):
+    return Candidate(path="store.py", line_start=1, line_end=10,
+                     source="fts", score=1.0, content=content, token_est=99)
+
+
+def test_make_compactor_disabled_returns_none():
+    assert make_compactor(intent=Intent.KEYWORD, query="x",
+                           enabled=False, min_reduction=0.25) is None
+
+
+def test_make_compactor_shape_intent_uses_zero_context():
+    # min_reduction=0.0 isolates the ctx policy from the savings guard: a shape
+    # intent uses ctx 0, so the matched line is kept but its neighbour is not.
+    comp = make_compactor(intent=Intent.ARCHITECTURE, query="blocklist",
+                          enabled=True, min_reduction=0.0)
+    r = comp(_cand(PY_SAMPLE))
+    assert r.skeletonized is True
+    assert "self.blocklist.add(tok)" in r.text       # matched line kept
+    assert "log('revoked')" not in r.text             # neighbour elided (ctx 0)
+
+
+def test_make_compactor_locate_intent_keeps_matched_line_and_context():
+    # A locate intent uses ctx 2, so the matched line AND its neighbour stay.
+    comp = make_compactor(intent=Intent.LOCATE_IMPL, query="blocklist",
+                          enabled=True, min_reduction=0.0)
+    r = comp(_cand(PY_SAMPLE))
+    assert "self.blocklist.add(tok)" in r.text        # matched line kept
+    assert "log('revoked')" in r.text                  # neighbour kept (ctx 2)
+    assert "decoded = decode(tok)" not in r.text       # unrelated body elided

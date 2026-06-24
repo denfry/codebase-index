@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Callable, Optional
 
 from ..parsers.line_chunker import estimate_tokens
+from .types import Candidate, Intent
 
 
 def render_skeleton(
@@ -214,3 +216,36 @@ def compact(content: str, *, path: str, line_start: int, ctx_lines: int,
                          elided_lines=elided, skeletonized=True)
     except Exception:
         return _raw(content)
+
+
+# Shape-first intents want pure signatures (no context around matches).
+_SHAPE_INTENTS = frozenset({Intent.ARCHITECTURE, Intent.HOW_IT_WORKS, Intent.DATA_FLOW})
+_TERM_RE = re.compile(r"[A-Za-z0-9_]+")
+_STOPWORDS = frozenset({
+    "the", "a", "an", "is", "are", "how", "does", "do", "what", "where",
+    "which", "to", "of", "in", "on", "for", "and", "or", "with", "from",
+})
+
+
+def _query_terms(query: str) -> list[str]:
+    out: list[str] = []
+    for t in _TERM_RE.findall(query):
+        tl = t.lower()
+        if len(tl) >= 3 and tl not in _STOPWORDS:
+            out.append(tl)
+    return list(dict.fromkeys(out))
+
+
+def make_compactor(*, intent: Intent, query: str, enabled: bool,
+                   min_reduction: float) -> Optional[Callable[[Candidate], Compacted]]:
+    if not enabled:
+        return None
+    ctx_lines = 0 if intent in _SHAPE_INTENTS else 2
+    terms = _query_terms(query)
+
+    def _compact(c: Candidate) -> Compacted:
+        return compact(c.content or "", path=c.path, line_start=c.line_start,
+                       ctx_lines=ctx_lines, query_terms=terms,
+                       min_reduction=min_reduction)
+
+    return _compact
