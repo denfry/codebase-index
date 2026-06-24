@@ -703,6 +703,10 @@ See [ROADMAP.md](ROADMAP.md) for the full milestone plan.
 | M8 | ✅ Done | Hooks + watch mode |
 | M9 | ✅ Done | Public release |
 
+## Activity
+
+![Repobeats analytics image](https://repobeats.axiom.co/api/embed/37ea3501be4d33c2a0d6c7752adebff7fc36e361.svg "Repobeats analytics image")
+
 ## License
 
 [MIT](LICENSE)
