@@ -12,6 +12,8 @@ A result is added to recommended_reads when:
 
 from __future__ import annotations
 
+from typing import Callable, Optional
+
 from ..output.redact import redact_snippet
 from .types import Candidate
 
@@ -33,7 +35,10 @@ def _meta(c: Candidate) -> dict:
 
 
 def apply_budget(
-    candidates: list[Candidate], *, token_budget: int
+    candidates: list[Candidate],
+    *,
+    token_budget: int,
+    compactor: Optional[Callable[[Candidate], "object"]] = None,
 ) -> tuple[list[dict], list[dict]]:
     results: list[dict] = []
     recommended: list[dict] = []
@@ -42,13 +47,29 @@ def apply_budget(
     for rank, c in enumerate(candidates, start=1):
         meta = _meta(c)
         meta["rank"] = rank
+        meta["skeletonized"] = False
+        meta["elided_lines"] = 0
+
+        # Resolve the snippet text + cost. A compactor only changes anything
+        # when it returns a real skeleton; otherwise we keep today's raw path
+        # byte-for-byte (uses c.content / c.token_est).
+        text = c.content
+        cost = c.token_est
+        if compactor is not None and c.content:
+            comp = compactor(c)
+            if getattr(comp, "skeletonized", False):
+                text = comp.text
+                cost = comp.token_est
+                meta["skeletonized"] = True
+                meta["elided_lines"] = comp.elided_lines
+
         snippet = None
         snippet_is_useful = False
-
-        if c.content and spent + c.token_est <= token_budget:
-            snippet = redact_snippet(c.content)
-            spent += c.token_est
-            snippet_is_useful = c.token_est >= _MIN_USEFUL_TOKENS
+        if text and spent + cost <= token_budget:
+            snippet = redact_snippet(text)
+            spent += cost
+            meta["token_est"] = cost
+            snippet_is_useful = cost >= _MIN_USEFUL_TOKENS
 
         if not snippet_is_useful:
             recommended.append(
