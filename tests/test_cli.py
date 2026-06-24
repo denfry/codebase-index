@@ -35,3 +35,20 @@ def test_stats_and_doctor_accept_command_json(tmp_path):
     doctor = runner.invoke(app, ["--root", str(tmp_path), "doctor", "--json"])
     assert doctor.exit_code == 0, doctor.output
     assert "findings" in json.loads(doctor.output)
+
+
+def _strip_ansi(text: str) -> str:
+    import re
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
+def test_search_has_raw_flag():
+    result = runner.invoke(app, ["search", "--help"])
+    assert result.exit_code == 0
+    assert "--raw" in _strip_ansi(result.stdout)
+
+
+def test_explain_has_raw_flag():
+    result = runner.invoke(app, ["explain", "--help"])
+    assert result.exit_code == 0
+    assert "--raw" in _strip_ansi(result.stdout)
