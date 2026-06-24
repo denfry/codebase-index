@@ -6,12 +6,15 @@ This page answers the most common questions about installing, running, and trust
 
 ## How do I install codebase-index?
 
-`codebase-index` is distributed from **GitHub, not PyPI**. Install it in one command
-with `pipx` (isolated) or `pip`, pinned to a release tag for reproducibility:
+`codebase-index` is published on **PyPI**. Install it in one command with `pip`
+or `pipx` (isolated):
 
 ```bash
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.6.0"
+pip install codebase-index        # or: pipx install codebase-index
 ```
+
+To pin an exact version or grab an unreleased commit, install from a GitHub tag
+instead: `pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.6.0"`.
 
 Then run `codebase-index init` inside your project and `codebase-index index` to build
 the first index. In Claude Code you can instead install the plugin
