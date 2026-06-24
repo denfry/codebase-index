@@ -106,6 +106,8 @@ The index returns a **ranked retrieval packet** with:
 - `score` — relevance score
 - `reason` — why this result ranked (e.g., "exact symbol match, 4 callers")
 - `snippet` — compact code excerpt (may already answer the question); `null` means budget was spent — read via `recommended_reads` instead
+- `skeletonized` — when `true`, the `snippet` is a **focus skeleton**: import/signature/class lines and the line(s) matching your query are kept, while function bodies collapse to a marker like `... 24 lines elided (read 88-134)`. Read that line range (or the result's `line_start`/`line_end`) when you need a full body.
+- `elided_lines` — how many source lines the skeleton folded away (`0` when not skeletonized).
 
 Top-level fields:
 
@@ -136,6 +138,7 @@ Top-level fields:
 - Don't re-run the query with trivially reworded text; refine with a different subcommand instead.
 - For broad questions (`confidence: low`, architecture, data-flow), raise the budget: `--token-budget 3000`.
 - Test files are demoted in ranking by default. Include "test" in the query to surface them.
+- Snippets are skeletonized by default to fit more results in the budget. The matched line is always preserved; pass `--raw` (CLI) or `raw: true` (MCP) on the rare occasion you need full bodies inline instead of reading the cited line range.
 
 ## Fallback behavior
 

@@ -26,6 +26,8 @@ class RetrievalConfig(BaseModel):
     rrf_k: int = 60
     token_budget: int = 1500
     limit: int = 10
+    compact_snippets: bool = True
+    compact_min_reduction: float = 0.25
 
 
 class EmbeddingsConfig(BaseModel):

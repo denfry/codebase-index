@@ -124,6 +124,7 @@ def search_code(
     limit: int = 10,
     token_budget: int = 1500,
     offset: int = 0,
+    raw: bool = False,
 ) -> str:
     """Hybrid search over the codebase index.
 
@@ -140,6 +141,7 @@ def search_code(
         token_budget: Token budget for the response payload.
         offset: Result offset for pagination. Pass ``next_offset`` from a
                 previous response to fetch the next page.
+        raw: If true, return full raw snippets instead of skeletons.
     """
     db_path, cfg = _resolve_db()
     if not db_path.exists():
@@ -150,6 +152,7 @@ def search_code(
     payload = search_payload(
         db_path, cfg, query, mode=mode, limit=limit, offset=offset,
         token_budget=token_budget, no_fallback=False, backend=_search_backend(cfg),
+        raw=raw,
     )
     return _emit("search_code", payload)
 
@@ -238,6 +241,7 @@ def explain_code(
     query: str,
     token_budget: int = 2200,
     offset: int = 0,
+    raw: bool = False,
 ) -> str:
     """Intent-aware retrieval for architecture / how-does-X-work questions.
 
@@ -249,6 +253,7 @@ def explain_code(
         token_budget: Token budget for the response payload.
         offset: Result offset for pagination. Pass ``next_offset`` from a
                 previous response to fetch the next page.
+        raw: If true, return full raw snippets instead of skeletons.
     """
     db_path, cfg = _resolve_db()
     if not db_path.exists():
@@ -259,7 +264,7 @@ def explain_code(
     payload = search_payload(
         db_path, cfg, normalize_explain_query(query), mode="hybrid", limit=10,
         offset=offset, token_budget=token_budget, no_fallback=False,
-        backend=_search_backend(cfg),
+        backend=_search_backend(cfg), raw=raw,
     )
     return _emit("explain_code", payload)
 

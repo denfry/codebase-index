@@ -379,6 +379,10 @@ def search(
     token_budget: int = typer.Option(1500, "--token-budget"),
     mode: str = typer.Option("hybrid", "--mode", help="hybrid|fts|symbol|vector"),
     no_fallback: bool = typer.Option(False, "--no-fallback"),
+    raw: bool = typer.Option(
+        False, "--raw",
+        help="Disable snippet skeletonization; return full raw snippets.",
+    ),
     json_out: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Hybrid ranked search; returns compact results + recommended_reads."""
@@ -403,7 +407,7 @@ def search(
     db_path, cfg = _ensure_index(ctx)
     payload = search_payload(
         db_path, cfg, query, mode=mode, limit=limit, offset=offset,
-        token_budget=token_budget, no_fallback=no_fallback, backend=backend,
+        token_budget=token_budget, no_fallback=no_fallback, backend=backend, raw=raw,
     )
 
     want_json = json_out or (ctx.obj and ctx.obj.get("json"))
@@ -480,6 +484,10 @@ def explain(
     ctx: typer.Context,
     query: str = typer.Argument(...),
     token_budget: int = typer.Option(2200, "--token-budget"),
+    raw: bool = typer.Option(
+        False, "--raw",
+        help="Disable snippet skeletonization; return full raw snippets.",
+    ),
     json_out: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Intent-aware bundle for 'how does X work' / overview questions."""
@@ -492,7 +500,7 @@ def explain(
 
     payload = search_payload(
         db_path, cfg, normalize_explain_query(query), mode="hybrid", limit=10,
-        token_budget=token_budget, no_fallback=False, backend=backend,
+        token_budget=token_budget, no_fallback=False, backend=backend, raw=raw,
     )
 
     want_json = json_out or (ctx.obj and ctx.obj.get("json"))

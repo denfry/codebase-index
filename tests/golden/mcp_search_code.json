@@ -20,12 +20,14 @@
   ],
   "results": [
     {
+      "elided_lines": 0,
       "line_end": 6,
       "line_start": 4,
       "path": "src/auth/token.py",
       "rank": 1,
       "reason": "in src/auth/ · 2 callers",
       "score": 2.233,
+      "skeletonized": false,
       "snippet": "def refresh_access_token(refresh_token: str) -> str:",
       "symbols": [
         "refresh_access_token"
@@ -33,12 +35,14 @@
       "token_est": 13
     },
     {
+      "elided_lines": 0,
       "line_end": 11,
       "line_start": 7,
       "path": "src/api/service.py",
       "rank": 2,
       "reason": "fts",
       "score": 0.9375,
+      "skeletonized": false,
       "snippet": "class AdminUser(User):\n    \"\"\"Subclass of User; imported-from edge target for impact tests.\"\"\"\n\n    def renew(self, refresh_token: str) -> str:\n        return refresh_access_token(refresh_token)",
       "symbols": [],
       "token_est": 48

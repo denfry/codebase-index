@@ -75,3 +75,18 @@ def test_config_hash_ignores_external_endpoint():
     b.embeddings.endpoint = "https://example.test/embed"
     b.embeddings.allow_external = True
     assert a.config_hash() == b.config_hash()
+
+
+def test_retrieval_config_has_compaction_defaults():
+    from codebase_index.config import Config
+    cfg = Config()
+    assert cfg.retrieval.compact_snippets is True
+    assert cfg.retrieval.compact_min_reduction == 0.25
+
+
+def test_compaction_fields_do_not_change_config_hash():
+    from codebase_index.config import Config
+    base = Config()
+    h1 = base.config_hash()
+    base.retrieval.compact_snippets = False          # retrieval-time only
+    assert base.config_hash() == h1                  # no reindex triggered
