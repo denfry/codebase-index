@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "codebase-index"
 dynamic = ["version"]
-description = "Local-first hybrid codebase index for AI coding agents, exposed as CLI, Skill, and MCP tools."
+description = "A precise local codebase map for AI coding agents: find, trace, and predict with file-line evidence."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

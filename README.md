@@ -1,707 +1,322 @@
-# codebase-index: Local Codebase Indexing for AI Coding Agents
-
-`codebase-index` is a local-first codebase indexing tool that helps Claude Code,
-Codex CLI, OpenCode, and other AI coding agents find relevant files, symbols, and
-references without scanning an entire repository.
-
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-[![CI](https://github.com/denfry/codebase-index/actions/workflows/ci.yml/badge.svg)](https://github.com/denfry/codebase-index/actions)
-[![Claude Code Skill](https://img.shields.io/badge/Claude%20Code%20Skill-yes-green.svg)](skill/SKILL.md)
-[![Codex CLI](https://img.shields.io/badge/Codex%20CLI-supported-green.svg)](#which-ai-clis-does-codebase-index-support)
-[![OpenCode](https://img.shields.io/badge/OpenCode-supported-green.svg)](#which-ai-clis-does-codebase-index-support)
-[![MCP](https://img.shields.io/badge/MCP-stdio%20server-green.svg)](docs/MCP.md)
-[![Local First](https://img.shields.io/badge/local--first-yes-green.svg)](#safety-and-privacy)
-[![No Telemetry](https://img.shields.io/badge/no%20telemetry-yes-green.svg)](#safety-and-privacy)
-[![No Network By Default](https://img.shields.io/badge/no%20network%20by%20default-yes-green.svg)](#safety-and-privacy)
-[![SQLite](https://img.shields.io/badge/database-SQLite-blue.svg)](docs/DATABASE_SCHEMA.md)
-[![Tree-sitter](https://img.shields.io/badge/parsing-Tree--sitter-orange.svg)](docs/ARCHITECTURE.md)
-
 <p align="center">
-  <img src="assets/demo.png" width="820"
-       alt="codebase-index ranking a local search for 'where is user authentication implemented?' into scored files with recommended file:line ranges to read">
+  <img src="assets/mark.png" width="88" alt="codebase-index logo">
 </p>
 
-## What Is codebase-index?
+<h1 align="center">codebase-index</h1>
 
-**codebase-index is a private, offline retrieval layer for AI code search.** It
-builds a SQLite index of your repository, extracts symbols with Tree-sitter,
-ranks matches with hybrid retrieval, and returns compact file:line ranges that
-an AI coding agent can read instead of opening broad file sets.
+<p align="center">
+  <strong>Give AI coding agents a precise map of your codebase — locally,
+  privately, and with evidence.</strong>
+</p>
 
-Use it when you want Cursor-like codebase awareness in terminal-based AI tools
-while keeping source code, snippets, and search metadata on your machine.
+<p align="center">
+  Find implementations. Trace behavior. Predict change impact.
+</p>
 
-> **codebase-index is not an IDE and not a coding agent.** It is the local
-> retrieval/index layer that gives terminal and MCP-based AI agents precise
-> codebase context. The agent stays your interface; this gives it better aim.
+<p align="center">
+  <a href="docs/QUICKSTART.md">Quick start</a> ·
+  <a href="docs/INSTALLATION.md">Install</a> ·
+  <a href="docs/BENCHMARKS.md">Benchmarks</a> ·
+  <a href="docs/SECURITY.md">Security</a> ·
+  <a href="docs/MCP.md">MCP</a>
+</p>
 
-## Who Is It For?
+<p align="center">
+  <a href="https://pypi.org/project/codebase-index/"><img src="https://img.shields.io/pypi/v/codebase-index?color=58a6ff" alt="PyPI version"></a>
+  <a href="https://github.com/denfry/codebase-index/actions"><img src="https://github.com/denfry/codebase-index/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/Python-3.11%2B-58a6ff" alt="Python 3.11+">
+  <img src="https://img.shields.io/badge/MCP-ready-3fb950" alt="MCP ready">
+  <img src="https://img.shields.io/badge/network-default%20off-3fb950" alt="No network by default">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b949e" alt="MIT license"></a>
+</p>
 
-- **Claude Code / Codex CLI / OpenCode users** on medium-to-large repos who want
-  the agent to read 3 ranked files instead of grepping and scanning 60.
-- **Privacy-constrained teams** (proprietary or regulated code) who cannot send
-  source to a cloud code-intelligence service.
-- **MCP power users** who want a stable, queryable code index as a tool, not a
-  black box baked into one agent's prompt.
-- **Tooling authors** who need scriptable retrieval (`--json`, SQLite, MCP) that
-  other tools can build on.
+<p align="center">
+  <img src="assets/demo.png" width="960"
+       alt="codebase-index showing a Find, Trace, Predict workflow with precise file and line evidence">
+</p>
 
-Not for you if you want a full IDE, org-scale multi-repo search, or a hosted
-platform — use Cursor or Sourcegraph for those.
+## The short version
 
-## Start Here
+`codebase-index` is a local retrieval and code-graph layer for Claude Code,
+Codex CLI, OpenCode, and MCP clients. It indexes a repository into SQLite,
+extracts symbols and relationships with Tree-sitter, and gives agents ranked
+`file:line` evidence instead of making them scan broad sets of files.
 
-If you are opening this repository for the first time, follow this order:
+```text
+Question → ranked retrieval → dependency evidence → precise answer
+```
 
-1. [Quick Start (5 minutes)](docs/QUICKSTART.md)
-2. [Installation Guide](docs/INSTALLATION.md)
-3. [Benchmarks](docs/BENCHMARKS.md)
-4. [How the skill works](skill/SKILL.md)
-5. [MCP server](docs/MCP.md)
-6. [FAQ](docs/FAQ.md)
+It is not an IDE and not another coding agent. Your existing agent remains the
+interface; `codebase-index` gives it better aim.
 
-If you only need the shortest path, run:
+## Find. Trace. Predict.
+
+| Job | Question | Command |
+|---|---|---|
+| **Find** | Where is authentication implemented? | `codebase-index search "authentication"` |
+| **Trace** | How does checkout reach the database? | `codebase-index explain "checkout flow"` |
+| **Trace** | How are two components connected? | `codebase-index path ApiController Database` |
+| **Predict** | What breaks if `User` changes? | `codebase-index impact User` |
+| **Predict** | What does my current diff affect? | `codebase-index diff-impact` |
+
+Every retrieval packet carries:
+
+- ranked matches and the reason each match scored;
+- exact line ranges to read next;
+- index freshness;
+- answer confidence and targeted fallbacks;
+- graph coverage and edge confidence where relevant.
+
+That evidence contract lets an agent distinguish “nothing references this” from
+“the graph is partial, so verify with a targeted search.”
+
+## Install in five minutes
 
 ```bash
-pip install codebase-index     # from PyPI
+pip install codebase-index
 cd your-project
-codebase-index init            # prompts for Claude Code / Codex CLI / OpenCode
+codebase-index init
 codebase-index index
 codebase-index search "where is authentication implemented?"
 ```
 
-## Project Status
-
-**`1.6.0` is released.** The current release includes repository discovery,
-SQLite FTS5 storage, Tree-sitter symbols and references, hybrid ranking, graph
-impact analysis, token-budgeted retrieval packets, optional local embeddings,
-hooks/watch support, multi-CLI installation, MCP server support, and PyPI +
-`pipx` install paths (`pip install codebase-index`).
-
-The `1.6.0` release turns the dependency graph into a navigable map: every edge
-carries a `confidence` audit trail (`extracted`/`inferred`/`ambiguous`, surfaced
-in `refs`/`impact`); a new zero-dependency analytics pass computes modules
-(communities), god nodes, and surprising cross-module links, exposed via the
-`architecture` command/MCP tool; `path` traces the shortest dependency chain
-between two symbols and `describe` prints a symbol's node card; and the HTML
-graph is coloured by module and sized by connectivity, with `--format
-graphml|dot|neo4j` exports for external tools. Requires a one-time reindex
-(schema 2 → 3).
-
-The earlier `1.4.0` release hardened the MCP contract (a `schema_version` +
-`tool` envelope on every payload, golden-locked per tool, plus a fix so the
-server loads on current `mcp`/`pydantic`), dampened the god-class `in_degree`
-rerank tiebreak (logarithmic, validated no-regression on the public benchmark),
-and labelled config/IaC files (Dockerfile, Terraform, HCL, INI, Makefiles) so
-infra surfaces in `stats` and search.
-
-The earlier `1.3.0` release added a content-addressed embedding cache (rebuilds reuse
-vectors for unchanged content), a batched graph build (7–28× faster edge
-resolution plus a new `edges(file_id)` index), a shared CLI/MCP service layer
-(MCP hybrid search now uses the vector channel; `index_stats` reports the
-per-language graph tier), graph-coverage signals in `stats`/`refs`/`impact`,
-CLI pagination via `search --offset`, and single-source versioning with a CI
-gate that keeps every committed skill copy in sync.
-The `1.2.1` release added skill auto-update/rollback commands and version
-stamps so installed skills stay in sync with the package automatically.
-See [CHANGELOG.md](CHANGELOG.md) and
-[docs/ROADMAP.md](docs/ROADMAP.md).
-
-MCP is now available as a stdio server via `codebase-index mcp --root <repo>`.
-It exposes `healthcheck`, `search_code`, `find_symbol`, `find_refs`,
-`impact_of`, `explain_code`, `architecture_overview`, `path_between`,
-`describe_symbol`, and `index_stats`; see [docs/MCP.md](docs/MCP.md).
-
-```
-You:   "Where is user authentication implemented?"
-Agent: searches local index (symbols + FTS5 + graph)
-       reads only 3 ranked files instead of scanning 60
-       answers with citations: src/auth/AuthService.ts:12-148
-```
-
----
-
-## How Do I Install codebase-index?
-
-For most users, install the package from PyPI and run `init` inside the
-repository you want to index:
+`init` can install resources for Claude Code, Codex CLI, OpenCode, and detected
+MCP clients:
 
 ```bash
-pip install codebase-index     # or: pipx install codebase-index
-cd your-project
-codebase-index init            # choose Claude Code, Codex CLI, OpenCode, or all
-codebase-index index
+codebase-index init --target auto
+codebase-index init --target codex
+codebase-index init --target claude
+codebase-index init --target opencode
 ```
 
-In a non-interactive script, pass a target explicitly:
+`pipx install codebase-index` is supported as an isolated alternative. See the
+[installation guide](docs/INSTALLATION.md) for pinned releases, editable
+installs, hooks, Windows details, and troubleshooting.
 
-```bash
-codebase-index init --target auto      # install into detected AI CLIs
-codebase-index init --target codex     # write AGENTS.md + Codex resources
-codebase-index init --target claude    # write .claude/skills/codebase-index
-codebase-index init --target opencode  # write OpenCode command + agent files
-```
+### Claude Code plugin
 
-### Install as a Claude Code plugin
-
-One command in Claude Code:
-
-```
+```text
 /plugin marketplace add denfry/codebase-index
 /plugin install codebase-index@codebase-index
 ```
 
-Or just ask: "install the codebase-index plugin".
+The plugin provisions a private environment on first use. Later sessions run
+offline, and the first codebase question builds the index automatically.
 
-**What happens on first run:** when a session starts, a `SessionStart` hook
-(`scripts/bootstrap.sh` / `.ps1`) creates a private Python virtual environment under
-`~/.claude/plugins/data/codebase-index-*/venv` and installs the pinned
-`codebase-index` package (from `requirements.lock`) into it — using `uv` if present,
-otherwise `python -m venv` + `pip`. It reinstalls only when the lock file changes.
-Nothing is installed globally; uninstalling the plugin removes the data directory.
+## What the agent receives
 
-**Prerequisite:** Python 3.11+ on your PATH. The first install needs network access to
-fetch the package; later sessions are offline. The skill builds its index on
-your first codebase question, so there is no manual `index` step.
+```json
+{
+  "query": "where is authentication implemented?",
+  "confidence": "high",
+  "results": [
+    {
+      "path": "src/auth/AuthService.ts",
+      "line_start": 12,
+      "line_end": 148,
+      "score": 0.92,
+      "reason": "exact symbol match, 4 callers"
+    }
+  ],
+  "recommended_reads": [
+    {
+      "path": "src/auth/AuthService.ts",
+      "line_start": 12,
+      "line_end": 148
+    }
+  ],
+  "index": {
+    "exists": true,
+    "stale": false
+  }
+}
+```
 
-**Distribution note:** the plugin bootstrap installs the pinned requirement from
-`requirements.lock`. In `1.6.0`, that lock points at the tagged GitHub release
-instead of PyPI. You can override it with `CBX_INSTALL_SPEC` when testing a local
-checkout or a different Git ref.
+Snippets are skeletonized when that preserves evidence while saving tokens.
+Unrelated bodies collapse, but imports, signatures, matched lines, and exact
+read ranges remain.
 
-## What Problem Does codebase-index Solve?
-
-AI coding agents struggle with large repositories when they rely on broad file
-reads, grep output, or user-provided context. `codebase-index` gives those agents
-a ranked local retrieval packet before they read source files.
-
-- **Token waste** — Scanning entire files or running broad grep/glob queries burns through the context window on irrelevant content.
-- **No symbol awareness** — Standard search can't distinguish a function definition from a call, or a class from a variable.
-- **No ranking** — Grep returns all matches with no relevance ordering. The agent must read everything.
-- **No context** — Grep doesn't know which files are related or what to read next.
-- **Cloud dependency** — External code indexing services send your proprietary code to remote servers.
-
-Developers get Cursor-like codebase awareness in Claude Code, Codex CLI, and
-OpenCode without leaving the terminal or sending code to a remote indexing
-service.
-
-## How Is This Different?
-
-Short answers to the questions people actually ask. The full, honest matrix —
-including when you should pick the other tool — is in
-[docs/COMPARISON.md](docs/COMPARISON.md).
-
-- **Why not just `grep`/`rg`?** Grep returns every match with no ranking, no
-  symbol awareness, and no idea which files relate. codebase-index ranks results,
-  knows a definition from a call, expands along the dependency graph, and returns
-  specific line ranges under a token budget — so the agent reads less and answers
-  with citations.
-- **Why not Cursor?** Cursor is a great AI IDE with strong codebase awareness, but
-  it is proprietary and IDE-centric. codebase-index is a local, open retrieval
-  layer for **terminal and MCP** agents, offline by default, with no IDE lock-in.
-  If you live inside Cursor, keep using Cursor.
-- **Why not Aider repo-map?** Aider's repo-map is a good graph-ranked,
-  token-budgeted context map — but it is optimized to feed Aider's own chat.
-  codebase-index is a **reusable, queryable index**: CLI/JSON/MCP commands return
-  ranked `file:line` ranges, symbols, references, and impact that *any*
-  shell-capable agent can consume, with freshness and security gates.
-- **Why not Sourcegraph / Cody / Amp?** They are excellent enterprise-grade,
-  cross-repo code intelligence platforms. They are also heavier and
-  account/platform-oriented. codebase-index is single-repo, local, and
-  lightweight — no server, no account, no code leaving the machine by default.
-- **Why not Codebase-Memory MCP?** It is the closest direct alternative — a
-  broader graph engine with a static binary and wide language/agent coverage. We
-  do **not** claim to beat it globally. We differentiate on simplicity, a strict
-  privacy model, token-budgeted retrieval packets, a transparent Python
-  implementation, the Claude/Codex/OpenCode workflow, and honest benchmarks. If
-  you need its broader graph and language reach today, choose it.
-
-**What makes it trustworthy?** No telemetry, no network by default, a multi-gate
-exclusion pipeline (secrets/binaries/generated/dependencies never indexed),
-output-time secret redaction, a `doctor --strict` safety self-check, and a
-public benchmark suite wired as a CI regression gate. Claims that aren't proven
-in this repo are marked as roadmap, not done.
-
-### Proven today vs. roadmap
-
-| Capability | Status |
-|---|---|
-| Hybrid retrieval (path + symbol + FTS5 + graph), token-budgeted packets | ✅ Shipped |
-| Tree-sitter symbols for 12 Tier-A languages + Tier-B generic path | ✅ Shipped |
-| Import/call/reference/inheritance graph, `refs`/`impact` | ✅ Shipped |
-| Optional local embeddings; external embeddings gated 3 ways | ✅ Shipped |
-| stdio MCP server; CLI/skill/MCP share one service layer | ✅ Shipped |
-| Honest 55k LOC Java benchmark (recall@3 70% vs 40% `rg`, ~13× fewer tokens) | ✅ Shipped |
-| 10k/100k/1M LOC public-repo benchmarks | 🚧 Roadmap |
-| Framework-aware typed edges (route→handler→service→model) | 🚧 Roadmap |
-| PyPI / `uvx` / Homebrew, signed checksums, SBOM | 🚧 Roadmap |
-| Verified per-client MCP docs, paged/progressive results | 🚧 Roadmap |
-
-See [docs/PRODUCT_UPGRADE_PLAN.md](docs/PRODUCT_UPGRADE_PLAN.md) for the full
-upgrade plan and ranked roadmap.
-
-## How Does codebase-index Work?
-
-`codebase-index` builds a local hybrid index that combines:
-
-- **Symbol search** — Tree-sitter AST parsing extracts classes, functions, methods, and variables across the supported code-language set.
-- **Full-text search** — SQLite FTS5 for fast lexical search across code chunks.
-- **Path search** — File path matching for location-aware queries.
-- **Optional semantic search** — Vector embeddings for similarity-based retrieval (opt-in, local by default).
-- **Dependency graph** — Import, call, and reference edges for impact analysis and graph expansion.
-- **Token-budgeted output** — Ranked retrieval packets with specific line ranges, not whole files.
-
-The AI agent reads only the recommended files and line ranges, not the entire
-repository.
-
-## Quick Demo
+## Core commands
 
 ```bash
-/codebase-index "where is user authentication implemented?"
-```
+# Find
+codebase-index search "auth token refresh"
+codebase-index symbol AuthService
 
-Expected output:
-
-```
-Top matches:
-┌──────┬──────────────────────────┬──────────────────────────┬───────┬──────────────────────────────┐
-│ Rank │ Path                     │ Symbols                  │ Score │ Reason                       │
-├──────┼──────────────────────────┼──────────────────────────┼───────┼──────────────────────────────┤
-│    1 │ src/auth/AuthService.ts  │ AuthService, login       │  0.92 │ exact symbol match           │
-│    2 │ src/routes/auth.ts       │ loginHandler, logout     │  0.78 │ FTS match · 4 callers        │
-│    3 │ src/middleware/auth.ts   │ requireAuth              │  0.65 │ path match · FTS match       │
-└──────┴──────────────────────────┴──────────────────────────┴───────┴──────────────────────────────┘
-
-Recommended reads:
-  1. src/auth/AuthService.ts:12-148
-     reason: matched AuthService, login(), validatePassword()
-  2. src/routes/auth.ts:20-91
-     reason: /login route calls AuthService.login()
-  3. src/middleware/auth.ts:5-42
-     reason: auth middleware validates sessions
-```
-
-## Installation Options
-
-If you are new to this repo, start with [docs/QUICKSTART.md](docs/QUICKSTART.md).  
-If you want all install options and troubleshooting, use [docs/INSTALLATION.md](docs/INSTALLATION.md).
-
-**Multi-CLI installer (Claude Code + Codex CLI + OpenCode):** one command via
-`install.sh` / `install.ps1` — see [docs/installer.md](docs/installer.md).
-
-```bash
-# macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/denfry/codebase-index/main/install.sh | sh
-```
-```powershell
-# Windows PowerShell
-irm https://raw.githubusercontent.com/denfry/codebase-index/main/install.ps1 | iex
-```
-
-### Option 1: Install from PyPI (recommended)
-
-```bash
-pip install codebase-index        # or: pipx install codebase-index
-cd your-project
-codebase-index init
-codebase-index index
-```
-
-### Option 2: Pin to a tagged GitHub release
-
-Pin to an exact version for reproducible installs, or grab an unreleased commit:
-
-```bash
-cd your-project
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.6.0"
-codebase-index init
-codebase-index index
-```
-
-### Python version compatibility
-
-`codebase-index` requires Python 3.11 or newer.
-
-If `codebase-index init --target opencode` fails with:
-
-```text
-ModuleNotFoundError: No module named 'importlib.resources.abc'; 'importlib.resources' is not a package
-```
-
-the `pipx` environment was likely created with an older Python version. Reinstall `codebase-index` using Python 3.11+ explicitly:
-
-```powershell
-pipx uninstall codebase-index
-py -0p
-pipx install --python "<path-to-python-3.11-or-newer>\python.exe" codebase-index
-```
-
-For example:
-
-```powershell
-pipx install --python "C:\Users\you\AppData\Local\Programs\Python\Python312\python.exe" codebase-index
-```
-
-Then run initialization again:
-
-```powershell
-codebase-index init --target opencode
-codebase-index index
-```
-
-
-### Option 3: Install with pipx from a pinned GitHub tag
-
-```bash
-pipx install "git+https://github.com/denfry/codebase-index.git@v1.6.0"
-cd your-project
-codebase-index init --target auto
-codebase-index index
-```
-
-### Option 4: Install from source
-
-```bash
-git clone https://github.com/denfry/codebase-index.git
-cd codebase-index
-pip install -e ".[dev]"
-```
-
-### Distribution roadmap
-
-As of `1.6.0`, **PyPI is shipped** — `pip install codebase-index` and
-`pipx install codebase-index` work today. `uvx`, Homebrew, signed release
-checksums, and SBOMs remain on the roadmap:
-
-```bash
-uvx codebase-index init                  # planned
-brew install denfry/tap/codebase-index   # planned
-```
-
-### Verify the install
-
-```bash
-codebase-index doctor
-```
-
-See [docs/INSTALLATION.md](docs/INSTALLATION.md) for the full guide, including optional extras (embeddings, watch mode) and troubleshooting.
-
-## Usage
-
-```bash
-# Initialize the index for your project
-codebase-index init
-
-# Build the index
-codebase-index index
-
-# Search for something
-codebase-index search "where is authentication implemented?"
-
-# Look up a specific symbol
-codebase-index symbol "AuthService"
-
-# Find callers and references
-codebase-index refs "AuthService.login"
-
-# Analyze impact of a change
-codebase-index impact "src/auth/AuthService.ts"
-
-# Map the codebase: modules, god nodes, surprising links, suggested questions
+# Trace
+codebase-index explain "authentication flow"
+codebase-index refs send_email
+codebase-index path ApiController Database
+codebase-index describe Database
 codebase-index architecture
 
-# How are two symbols/files connected? Shortest dependency/call path
-codebase-index path "renew" "refresh_access_token"
+# Predict
+codebase-index impact User --direction up --depth 2
+codebase-index diff-impact --base HEAD --direction up --depth 2
 
-# Node card: definition, callers, callees, centrality, module
-codebase-index describe "Database"
-
-# Visualize the graph (modules coloured, size = connectivity, edge style = confidence)
-codebase-index graph --open
-# …or export for external tools: graphml (Gephi/yEd), dot (Graphviz), neo4j (Cypher)
-codebase-index graph --format graphml -o graph.graphml
-
-# View index statistics
+# Inspect and visualize
+codebase-index graph User --direction both --depth 2 --output graph.html
 codebase-index stats
-
-# Run diagnostics
 codebase-index doctor
 ```
 
-Add `--json` to any command for machine-readable output.
+Add `--json` for agents and automation. Search supports `hybrid`, `fts`,
+`symbol`, and opt-in `vector` modes.
 
-## How Does Retrieval Flow Through codebase-index?
+## Why not just grep?
 
-```
-User question
-    ↓
-CLI instructions or skill
-    ↓
-Hybrid retrieval
-    ├─ Path search
-    ├─ Symbol search (Tree-sitter AST)
-    ├─ SQLite FTS5 full-text search
-    ├─ Optional embeddings (vector search)
-    └─ Graph expansion (callers, imports, references)
-    ↓
-Ranked retrieval packet
-    ↓
-Agent reads only the recommended line ranges
-    ↓
-Answer with precise file:line citations
-```
+Grep is excellent when you know the exact text. Repository questions often
+need more:
 
-## Features
+| Capability | `rg` / grep | codebase-index |
+|---|---:|---:|
+| Exact text matching | Yes | Yes |
+| Ranked results | No | Yes |
+| Symbol definitions vs calls | No | Yes |
+| Dependency and impact graph | No | Yes |
+| Token-budgeted read plan | No | Yes |
+| Freshness and coverage signals | No | Yes |
+| Local and scriptable | Yes | Yes |
 
-- [x] **Local-first indexing** — All data stays on your machine
-- [x] **No network by default** — Zero external API calls out of the box
-- [x] **Respects ignore files** — `.gitignore`, `.claudeignore`, `.codeindexignore`
-- [x] **SQLite storage** — Fast, reliable, single-file database
-- [x] **FTS5 lexical search** — Full-text search with code-aware tokenization
-- [x] **Tree-sitter AST parsing** — Tier-A symbol extraction for Python, JavaScript, TypeScript, Java, Go, Rust, C, C++, C#, Ruby, PHP, and Kotlin; Tier-B generic extraction for code languages with a loadable grammar such as Lua
-- [x] **Symbol extraction** — Classes, functions, methods, variables with line ranges
-- [x] **Incremental indexing** — Only changed files are re-indexed
-- [x] **Token-budgeted output** — Configurable max output size
-- [x] **Secret redaction** — Masks keys, tokens, and credentials in snippets
-- [x] **Optional embeddings** — Local or remote vector search (opt-in)
-- [x] **Optional hooks/watch** — Auto-update index after file edits
-- [x] **Multi-CLI setup** — Claude Code, Codex CLI, and OpenCode instructions
-- [x] **MCP server** — stdio MCP tools for search, symbols, refs, impact, explain, health, and stats
+Use grep for one known string. Use `codebase-index` when the agent must locate,
+understand, or assess a change across a repository.
 
-## Safety and Privacy
+The [comparison guide](docs/COMPARISON.md) also covers Cursor, Aider repo-map,
+Sourcegraph, Continue, Amp, and Codebase-Memory MCP—including when those tools
+are the better choice.
 
-> **Trust model in 60 seconds**
-> 1. **Offline by default** — the base install has zero network dependencies; nothing leaves your machine.
-> 2. **One opt-in exit, triple-gated** — external embeddings require `allow_external` **and** an env API key **and** a printed endpoint warning, or they are refused.
-> 3. **Secrets never get in** — `.env`, keys, certs, and credential files are excluded before parsing (multi-gate ignore pipeline).
-> 4. **Secrets never get out** — every snippet is redacted (AWS keys, private keys, JWTs, bearer tokens, connection strings) before it reaches the agent.
-> 5. **No telemetry, ever** — no analytics, no phone-home, no usage data.
-> 6. **Verify it yourself** — `codebase-index doctor --strict` audits all of the above and exits non-zero in CI on any high-severity finding.
+## Measured results
 
-`codebase-index` is designed with privacy as a first principle:
+On the published 55k LOC Java benchmark:
 
-- **No telemetry** — No usage data, analytics, or crash reports are collected or transmitted.
-- **No external API calls by default** — All indexing, storage, and search happen locally.
-- **Does not index sensitive files** — `.env`, private keys, certificates, tokens, and credential files are excluded before parsing.
-- **Respects ignore files** — `.gitignore`, `.claudeignore`, `.codeindexignore`, and `.cursorignore` are all honored.
-- **Index stored locally** — SQLite database in `.claude/cache/codebase-index/` (gitignored by default).
-- **Optional embeddings are local by default** — External embedding APIs require explicit opt-in with warnings.
-- **Secret redaction** — Snippets are scrubbed for AWS keys, private keys, JWTs, bearer tokens, and connection strings before output.
+- Recall@3: **70%** for `codebase-index` versus **40%** for the `rg` baseline;
+- answer-context tokens: approximately **13× fewer**;
+- raw results and methodology are checked into the repository.
 
-See [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) for the full security model and threat analysis.
+These results are evidence for that benchmark, not a claim of universal
+superiority. Large public-repository and framework-graph evaluations remain on
+the [roadmap](docs/ROADMAP.md). Read the complete methodology and limitations in
+[BENCHMARKS.md](docs/BENCHMARKS.md).
 
+## Local by default
 
-## Benchmark Results
+The base install:
 
-There are three benchmark surfaces today:
+- makes no network requests;
+- sends no telemetry;
+- stores the derived index inside the project cache;
+- excludes dependency, build, binary, oversized, generated, and secret-like
+  files before indexing;
+- redacts secret patterns again at output time;
+- exposes `doctor --strict` for CI and security checks.
 
-1. **Public benchmark suite** in `tests/benchmark_public.py`: reproducible
-   multi-language fixture with Recall@1/3/5, MRR, nDCG, answer-correctness proxy,
-   token economy, language breakdown, freshness latency, graph tasks, and scale counters.
-2. **Smoke benchmark** on `sample_repo`: validates the CLI is fast and stable on
-   a tiny fixture, but it is not evidence of production retrieval quality.
-3. **Honest benchmark** on a real Java repository: `tests/benchmark_honest.py`
-   compares codebase-index against a disciplined `rg` + read-window baseline on
-   10 realistic questions. Results are documented in
-   [tests/benchmark_honest_RESULTS.md](tests/benchmark_honest_RESULTS.md).
+Embeddings are optional. Local embeddings stay on the machine; external
+embeddings require explicit configuration, an API key, and an endpoint
+acknowledgement.
 
-Run the public suite:
+See the [security model](docs/SECURITY_MODEL.md) for trust boundaries, gates,
+failure modes, and residual risks.
 
-```bash
-python tests/benchmark_public.py --workdir .tmp-public-benchmark
+## How it works
+
+```text
+Repository
+   │
+   ├─ discovery + ignore and secret gates
+   ├─ Tree-sitter symbols and relationships
+   ├─ line and symbol-aligned chunks
+   └─ optional embeddings
+          │
+          ▼
+      local SQLite
+   FTS5 + symbols + graph
+          │
+          ▼
+ intent routing → hybrid retrieval → rerank → token budget
+          │
+          ▼
+ ranked file:line evidence for CLI, Skill, and MCP
 ```
 
-Current honest benchmark headline:
+The three product surfaces share one service layer, so retrieval behavior does
+not drift between the CLI, installed agent skills, and MCP tools.
 
-| Metric | Result |
+Detailed internals:
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Retrieval pipeline](docs/RETRIEVAL_PIPELINE.md)
+- [Database schema](docs/DATABASE_SCHEMA.md)
+- [Language and graph coverage](docs/LANGUAGES.md)
+
+## Supported surfaces
+
+| Surface | Integration |
 |---|---|
-| Repo | 303 Java files, ~55k LOC |
-| Retrieval quality | recall@3: 70% index vs 40% `rg` baseline |
-| Token economy | ~13x fewer answer tokens than `rg` + 80-line windows |
-| Verified language impact | Java symbols fixed from 0 to 3,543 symbols |
+| Claude Code | Skill, plugin, optional hooks |
+| Codex CLI | `AGENTS.md` plus project skill |
+| OpenCode | Command, agent, and skill resources |
+| MCP clients | stdio server with versioned JSON envelopes |
+| Shell and automation | CLI, `--json`, and local SQLite |
 
-The public suite now has the metric framework. It still needs larger public or
-documented external repos for 10k/100k/1M LOC scale claims and deeper framework
-graph tasks. See [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
-
-## Repository Layout
-
-```
-├── skill/              # Source instruction package (SKILL.md, scripts, examples)
-├── skills/             # Plugin skill copy
-├── src/codebase_index/ # Python package (CLI, indexer, retrieval, storage)
-├── docs/               # Documentation (architecture, schema, security, FAQ)
-├── examples/           # Sample queries, retrieval output, demo project
-├── tests/              # Test suite with fixture repositories
-├── bin/                # Plugin CLI wrappers (cbx, codebase-index)
-├── scripts/            # Bootstrap scripts (bootstrap.sh, bootstrap.ps1)
-├── hooks/              # Plugin hooks (hooks.json)
-├── .claude-plugin/     # Plugin manifest + marketplace catalog
-├── .github/            # Issue templates, CI workflows, PR template
-├── README.md           # This file
-├── LICENSE             # MIT License
-├── CHANGELOG.md        # Release history
-├── CONTRIBUTING.md     # Contributor guide
-├── SECURITY.md         # Security policy
-├── ROADMAP.md          # Development milestones
-├── requirements.lock   # Pinned install spec for bootstrap
-└── pyproject.toml      # Package configuration
-```
-
-## Configuration
-
-Create `.codeindex.json` in your project root:
-
-```json
-{
-  "index": {
-    "max_file_bytes": 1048576,
-    "chunk_size": 500,
-    "chunk_overlap": 50
-  },
-  "embeddings": {
-    "backend": "noop",
-    "allow_external": false
-  }
-}
-```
-
-### Ignore Files
-
-- `.codeindexignore` — Tool-specific ignore patterns (highest priority)
-- `.gitignore` — Standard git ignore patterns
-- `.claudeignore` — Claude-specific ignore patterns
-
-### Cache Location
-
-```
-.claude/cache/codebase-index/
-├── index.sqlite   # SQLite database with FTS5
-└── config.json    # Resolved configuration
-```
-
-## Which AI CLIs Does codebase-index Support?
-
-`codebase-index init` can install instructions for three AI coding CLIs:
-
-| CLI | Files written by `init` | Best command |
-|---|---|---|
-| Claude Code | `.claude/skills/codebase-index/` | `codebase-index init --target claude` |
-| Codex CLI | `AGENTS.md` + `.codex/skills/codebase-index/` | `codebase-index init --target codex` |
-| OpenCode | `.opencode/commands/` + `.opencode/agents/` + resources | `codebase-index init --target opencode` |
-
-Use `codebase-index init --target auto` to install into detected CLIs, or
-`codebase-index init --target all` to write every supported integration.
-
-### Claude Code Integration
-
-The Claude Code skill is defined in [`skill/SKILL.md`](skill/SKILL.md) with
-YAML frontmatter for automatic selection.
-
-Example `.claude/CLAUDE.md`:
-
-```markdown
-## Codebase Questions
-
-Before answering any question about this project's code:
-1. Use the codebase-index skill to search the local index first.
-2. Read only the recommended line ranges — do not scan entire files.
-3. Answer with file:line citations.
-```
-
-### Optional Hooks
-
-Configure automatic index updates in `.codeindex.json`:
-
-```json
-{
-  "hooks": {
-    "post_tool_use": {
-      "enabled": true,
-      "events": ["Write", "Edit"],
-      "command": "codebase-index update --quiet"
-    }
-  }
-}
-```
-
-See [skill/examples/](skill/examples/) for full examples.
-
-## FAQ
-
-### Is this a Cursor replacement?
-
-No. `codebase-index` is not a replacement for Cursor or any IDE. It is a
-local retrieval layer for terminal AI coding agents. You still use Claude Code,
-Codex CLI, OpenCode, or another agent as your primary interface.
-
-### Does it send my code anywhere?
-
-No. By default, `codebase-index` is completely local-first and offline. All indexing, storage, and search happen on your machine. External embeddings are opt-in only and require explicit configuration.
-
-### Does it work without embeddings?
-
-Yes. The default configuration disables embeddings entirely (`backend = "noop"`). Search uses SQLite FTS5, Tree-sitter symbol extraction, path matching, and graph expansion. Embeddings are an optional enhancement.
-
-### Does it support large repositories?
-
-Yes. The index is incremental — only changed files are re-indexed. SQLite with FTS5 handles large datasets efficiently. Generated files, dependencies, and binaries are excluded automatically.
-
-### Why not just use Grep?
-
-Grep returns all matches with no ranking, no symbol awareness, and no context about related files. `codebase-index` combines lexical search with symbol extraction and graph expansion to return **ranked, contextual results** with specific line ranges to read.
-
-### Does it support MCP?
-
-Yes. Run `codebase-index mcp --root <repo>` to expose the local index over stdio
-MCP. See [docs/MCP.md](docs/MCP.md) for tools and client config templates.
-
-### Can I use it with other agents?
-
-Yes. The CLI is agent-agnostic. Any agent that can run shell commands can use
-`codebase-index`, and JSON output (`--json`) is parseable by other tools.
-
-### How do I reset the index?
+Run the MCP server with:
 
 ```bash
-codebase-index clean          # reset the index DB (keeps the skill)
-codebase-index clean --all    # wipe the whole .claude/cache/codebase-index/ dir
-# Or manually: rm -rf .claude/cache/codebase-index/
-codebase-index index
+codebase-index mcp --root /path/to/repository
 ```
+
+Available MCP tools include search, explain, symbols, references, impact,
+diff impact, architecture, shortest path, node description, health, and index statistics.
+See [MCP.md](docs/MCP.md) for client configuration.
+
+## Project status
+
+The latest released line is **1.7.0**. It includes:
+
+- hybrid and optional vector retrieval;
+- Tree-sitter symbol extraction across the documented language tiers;
+- import, call, reference, and inheritance graphs;
+- architecture communities, central nodes, and surprising cross-module links;
+- shortest dependency paths and node descriptions;
+- token-budgeted and skeletonized retrieval packets;
+- CLI, Skill, plugin, and MCP delivery;
+- incremental updates, watch hooks, diagnostics, skill rollback, and diff-aware
+  impact analysis.
+
+Planned work is deliberately separated from shipped capability. The next
+product priorities are stronger real-repository evaluations, typed framework
+edges, and an even more direct task-context workflow. See the
+[roadmap](docs/ROADMAP.md).
+
+## Documentation
+
+| Start here | Deep dives | Project trust |
+|---|---|---|
+| [Quick start](docs/QUICKSTART.md) | [Retrieval](docs/RETRIEVAL.md) | [Benchmarks](docs/BENCHMARKS.md) |
+| [Installation](docs/INSTALLATION.md) | [Architecture](docs/ARCHITECTURE.md) | [Security](docs/SECURITY.md) |
+| [FAQ](docs/FAQ.md) | [MCP](docs/MCP.md) | [Release checklist](docs/RELEASE_CHECKLIST.md) |
+| [Skill design](docs/SKILL_DESIGN.md) | [Schema](docs/SCHEMA.md) | [Changelog](CHANGELOG.md) |
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
+Contributions should preserve three invariants:
 
-Quick start:
+1. retrieval quality is measured, not asserted;
+2. the default path remains local and fails closed at security boundaries;
+3. machine-readable contracts stay stable across CLI and MCP.
+
+Before opening a pull request:
 
 ```bash
-git clone https://github.com/denfry/codebase-index.git
-cd codebase-index
-pip install -e ".[dev]"
 pytest
-ruff check src/ tests/
+ruff check .
+mypy src
+python scripts/sync_skill_copies.py --check
 ```
 
-## Roadmap
-
-See [ROADMAP.md](ROADMAP.md) for the full milestone plan.
-
-| Milestone | Status | Description |
-|---|---|---|
-| M0 | ✅ Done | Repository packaging |
-| M1 | ✅ Done | SQLite + FTS5 index |
-| M2 | ✅ Done | Tree-sitter symbol extraction |
-| M3 | ✅ Done | Hybrid retrieval |
-| M4 | ✅ Done | Graph expansion |
-| M5 | ✅ Done | Token-budgeted retrieval packets |
-| M6 | ✅ Done | Optional local embeddings |
-| M7 | ✅ Done | Claude Code Skill packaging |
-| M7.5 | ✅ Done | One-command plugin install |
-| M8 | ✅ Done | Hooks + watch mode |
-| M9 | ✅ Done | Public release |
+Add user-visible changes under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) if present and the repository
+instructions for branch and review policy.
 
 ## License
 

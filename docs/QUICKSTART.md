@@ -122,6 +122,7 @@ After this quick start, you should have:
 - Look up a specific symbol: `codebase-index symbol "AuthService"`
 - Find callers: `codebase-index refs "AuthService.login"`
 - Check impact: `codebase-index impact "src/auth/AuthService.ts"`
+- Check the current diff: `codebase-index diff-impact`
 - View stats: `codebase-index stats`
 - Run diagnostics: `codebase-index doctor`
 

@@ -11,6 +11,8 @@ def _template():
 def test_packaged_template_has_skill_and_scripts():
     root = _template()
     assert (root / "SKILL.md").is_file()
+    assert (root / "references" / "commands.md").is_file()
+    assert (root / "references" / "response-contract.md").is_file()
     assert (root / "scripts" / "cbx").is_file()
     assert (root / "scripts" / "cbx.ps1").is_file()
     assert (root / "examples" / "hooks" / "settings.json").is_file()
@@ -25,6 +27,18 @@ def test_packaged_skill_matches_dev_copy():
 
 def test_packaged_cbx_whitelists_safe_subcommands_only():
     cbx = (_template() / "scripts" / "cbx").read_text(encoding="utf-8")
-    assert 'ALLOWED="search explain symbol refs impact graph stats doctor update index"' in cbx
+    assert (
+        'ALLOWED="search explain architecture symbol refs impact diff-impact path describe '
+        'graph stats doctor update index"'
+    ) in cbx
     for forbidden in ("clean", "init", "watch"):
         assert f" {forbidden} " not in f' {cbx.split("ALLOWED=")[1].splitlines()[0]} '
+
+
+def test_packaged_skill_has_no_unscoped_cli_or_python_permission():
+    skill = (_template() / "SKILL.md").read_text(encoding="utf-8")
+    frontmatter = skill.split("---", 2)[1]
+    assert "Bash(codebase-index *)" not in frontmatter
+    assert "Bash(python -m codebase_index *)" not in frontmatter
+    for forbidden in ("clean", "init", "watch"):
+        assert f"Bash(codebase-index {forbidden} *)" not in frontmatter

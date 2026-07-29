@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
@@ -103,6 +104,141 @@ def search_payload(
             compact=compact,
             compact_min_reduction=cfg.retrieval.compact_min_reduction,
         )
+
+
+def diff_impact_payload(
+    db_path: Path,
+    cfg: "Config",
+    *,
+    base_ref: str = "HEAD",
+    depth: int = 2,
+    direction: str = "up",
+    max_files: int = 200,
+) -> dict[str, Any]:
+    """Aggregate graph impact for files changed relative to a Git commit.
+
+    Git is invoked with argument arrays and a verified commit SHA; no shell is
+    involved. The file cap bounds worst-case graph work on very large diffs.
+    """
+    from .graph.expand import impact_lookup
+    from .indexer.freshness import compute_freshness
+    from .storage.db import Database
+
+    if direction not in {"up", "down", "both"}:
+        raise ValueError("direction must be one of: up, down, both")
+    if depth < 1:
+        raise ValueError("depth must be >= 1")
+    if max_files < 1:
+        raise ValueError("max_files must be >= 1")
+    if not base_ref or base_ref.startswith("-") or "\x00" in base_ref:
+        raise ValueError("base_ref must be a non-option Git revision")
+
+    root = Path(cfg.root).resolve()
+    resolved = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "--verify", "--end-of-options",
+         f"{base_ref}^{{commit}}"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    if resolved.returncode != 0:
+        detail = (resolved.stderr or resolved.stdout).strip()
+        raise ValueError(f"cannot resolve Git base {base_ref!r}: {detail or 'unknown revision'}")
+    base_commit = resolved.stdout.strip()
+
+    changed = subprocess.run(
+        ["git", "-C", str(root), "diff", "--name-only", "--diff-filter=ACDMR",
+         base_commit, "--"],
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    if changed.returncode != 0:
+        detail = (changed.stderr or changed.stdout).strip()
+        raise RuntimeError(f"git diff failed: {detail or 'unknown error'}")
+
+    normalized_changed = list(dict.fromkeys(
+        line.strip().replace("\\", "/")
+        for line in changed.stdout.splitlines()
+        if line.strip()
+    ))
+    try:
+        own_cache = cache_dir_for(cfg).resolve().relative_to(root).as_posix()
+    except ValueError:
+        own_cache = ""
+    all_changed = [
+        path for path in normalized_changed
+        if not own_cache
+        or (path != own_cache and not path.startswith(f"{own_cache}/"))
+    ]
+    truncated = len(all_changed) > max_files
+    targets = all_changed[:max_files]
+
+    affected: dict[str, dict[str, Any]] = {}
+    unresolved: list[str] = []
+    coverage_languages: set[str] = set()
+    coverage_reasons: list[str] = []
+
+    with Database(db_path) as db:
+        freshness = compute_freshness(db.conn, root, cfg).model_dump()
+        for target in targets:
+            impact = impact_lookup(
+                db.conn, target, depth=depth, direction=direction
+            )
+            if not impact.nodes and not impact.files:
+                # A tracked file can be new, deleted after the last update, or
+                # excluded by the security/discovery gates.
+                from .storage import repo
+                if repo.file_by_path(db.conn, target) is None:
+                    unresolved.append(target)
+            if impact.coverage.partial:
+                coverage_languages.update(impact.coverage.languages)
+                if impact.coverage.reason:
+                    coverage_reasons.append(impact.coverage.reason)
+            for node in impact.nodes:
+                current = affected.get(node.path)
+                candidate = {
+                    "path": node.path,
+                    "distance": node.distance,
+                    "changed_by": [target],
+                    "via_edge": node.via_edge,
+                    "via_confidence": node.via_confidence,
+                }
+                if current is None:
+                    affected[node.path] = candidate
+                else:
+                    if target not in current["changed_by"]:
+                        current["changed_by"].append(target)
+                    if node.distance < current["distance"]:
+                        current.update({
+                            "distance": node.distance,
+                            "via_edge": node.via_edge,
+                            "via_confidence": node.via_confidence,
+                        })
+
+    ranked = sorted(
+        affected.values(),
+        key=lambda item: (item["distance"], item["path"]),
+    )
+    return {
+        "base_ref": base_ref,
+        "base_commit": base_commit,
+        "direction": direction,
+        "depth": depth,
+        "index": freshness,
+        "changed_files": targets,
+        "changed_files_total": len(all_changed),
+        "truncated": truncated,
+        "unresolved_files": unresolved,
+        "affected_files": ranked,
+        "coverage": {
+            "partial": bool(coverage_languages),
+            "languages": sorted(coverage_languages),
+            "reason": " ".join(dict.fromkeys(coverage_reasons)) or None,
+        },
+    }
 
 
 def architecture_payload(db_path: Path, cfg: "Config") -> dict[str, Any]:

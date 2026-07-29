@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-`codebase-index` is a **local-first** code intelligence layer for AI coding agents. In `1.6.0`
+`codebase-index` is a **local-first** code intelligence layer for AI coding agents. In `1.7.0`
 it has two shipped faces:
 
 1. **A Claude Code Skill** (`.claude/skills/codebase-index/SKILL.md`) that Claude auto-invokes for
@@ -150,13 +150,14 @@ upward to nearest `.git`/`.claude`), and `--quiet`. Search-family commands accep
 | `symbol` | `"<name>"`, `--kind`, `--exact` | 0; empty list allowed | symbol defs |
 | `refs` | `"<symbol>"`, `--kind callers\|all` | 0 | reference sites |
 | `impact` | `"<file-or-symbol>"`, `--depth N`, `--direction up\|down\|both` | 0 | affected files ranked |
+| `diff-impact` | `--base <git-ref>`, `--depth N`, `--direction up\|down\|both` | 0 | aggregate affected files for tracked changes |
 | `explain` | `"<query>"`, `--token-budget` | 0 | intent-aware bundle |
 | `stats` | — | 0 | counts, coverage %, freshness |
 | `doctor` | `--strict` | non-zero if unsafe config found | findings list |
 | `clean` | `--yes`, `--all` | resets index DB (`--all` wipes cache dir) | removed-count |
 | `watch` | `--debounce ms` | long-running | event log |
 
-The skill only ever calls the **read-only** family (`search`, `symbol`, `refs`, `impact`,
+The skill only ever calls the **read-only** family (`search`, `symbol`, `refs`, `impact`, `diff-impact`,
 `explain`, `stats`) plus `update`. It never calls `clean` or `init`. See SECURITY.md.
 
 ### Freshness contract
@@ -191,7 +192,7 @@ If `exists=false` → skill runs `index`. If `stale=true` and cheap → skill ru
 ## 8. MCP server
 
 The same `retrieval` + `storage` layers are wrapped in a stdio MCP server exposing tools like
-`search_code`, `find_symbol`, `find_refs`, `impact_of`, `explain_code`, `index_stats`, and
+`search_code`, `find_symbol`, `find_refs`, `impact_of`, `impact_of_diff`, `explain_code`, `index_stats`, and
 `healthcheck`.
 
 Current implementation:

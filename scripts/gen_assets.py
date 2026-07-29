@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate brand assets for codebase-index (social preview + README demo still).
+"""Generate the reproducible codebase-index brand assets.
 
 Pure-Pillow, no external binaries. Renders at 3x and downsamples with LANCZOS for
 crisp typography. Re-run after changing copy:
@@ -7,8 +7,9 @@ crisp typography. Re-run after changing copy:
     python scripts/gen_assets.py
 
 Outputs:
+    assets/mark.png             256x256   -> logo / avatar source
     assets/social-preview.png   1280x640  -> upload in Settings -> Social preview
-    assets/demo.png             1200x760  -> embed near the top of README.md
+    assets/demo.png             1200x760  -> README product story
 """
 from __future__ import annotations
 
@@ -128,6 +129,44 @@ def downsave(img: Image.Image, w: int, h: int, path: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Mark: 256 x 256
+# --------------------------------------------------------------------------- #
+def build_mark(out: Path) -> None:
+    W = H = 256
+    w, h = W * SS, H * SS
+    img = gradient_bg(w, h)
+    add_glow(img, int(w * 0.78), int(h * 0.18), 150 * SS, BLUE, 60)
+    d = ImageDraw.Draw(img)
+
+    pad = 28 * SS
+    d.rounded_rectangle(
+        [pad, pad, w - pad, h - pad],
+        radius=46 * SS,
+        fill=PANEL,
+        outline=BORDER,
+        width=2 * SS,
+    )
+
+    # A compact dependency route: three evidence nodes connected through a
+    # highlighted path. It stays legible at GitHub-avatar size.
+    points = [(72, 82), (128, 128), (184, 82), (128, 184)]
+    for a, b in ((0, 1), (1, 2), (1, 3)):
+        d.line(
+            [points[a][0] * SS, points[a][1] * SS,
+             points[b][0] * SS, points[b][1] * SS],
+            fill=BLUE if b != 3 else GREEN,
+            width=8 * SS,
+        )
+    for i, (x, y) in enumerate(points):
+        r = (15 if i == 1 else 11) * SS
+        color = GREEN if i == 3 else (FG if i == 1 else CYAN)
+        d.ellipse([x * SS - r, y * SS - r, x * SS + r, y * SS + r],
+                  fill=color, outline=BG_TOP, width=4 * SS)
+
+    downsave(img, W, H, out)
+
+
+# --------------------------------------------------------------------------- #
 # Social preview: 1280 x 640
 # --------------------------------------------------------------------------- #
 def build_social(out: Path) -> None:
@@ -156,7 +195,7 @@ def build_social(out: Path) -> None:
     d.text((LM + seg, wy), "-index", font=wm, fill=BLUE)
 
     # tagline
-    d.text((LM, 214 * SS), "Local codebase indexing for AI coding agents",
+    d.text((LM, 214 * SS), "A precise map of your codebase for AI coding agents",
            font=f_ui(36), fill=FG2)
 
     # terminal
@@ -195,7 +234,7 @@ def build_social(out: Path) -> None:
         ry += 33 * SS
 
     # chips
-    chips = ["Tree-sitter", "SQLite FTS5", "Graph impact", "MCP server"]
+    chips = ["FIND", "TRACE", "PREDICT", "LOCAL BY DEFAULT"]
     cf = f_ui_b(16)
     cx = LM
     cy = 574 * SS
@@ -215,65 +254,105 @@ def build_demo(out: Path) -> None:
     add_glow(img, int(w * 0.5), int(h * -0.05), 460 * SS, BLUE, 26)
     d = ImageDraw.Draw(img)
 
-    # terminal
-    x0, y0, x1, y1 = 48 * SS, 56 * SS, (W - 48) * SS, 660 * SS
-    window_chrome(d, x0, y0, x1, y1, "bash — codebase-index")
+    # Header
+    wm = f_mono_b(34)
+    d.text((48 * SS, 46 * SS), "codebase", font=wm, fill=FG)
+    seg = d.textlength("codebase", font=wm)
+    d.text((48 * SS + seg, 46 * SS), "-index", font=wm, fill=BLUE)
+    d.text((48 * SS, 94 * SS), "One local map. Three engineering jobs.",
+           font=f_ui(23), fill=FG2)
 
-    mono = f_mono(20)
-    mono_b = f_mono_b(20)
-    bx = x0 + 32 * SS
-    cw = d.textlength("0", font=mono)
-    lh = 30 * SS
-    y = y0 + 70 * SS
-
-    def col(n):  # x position at character column n
-        return bx + cw * n
-
-    # command
-    d.text((bx, y), "$", font=mono_b, fill=GREEN)
-    d.text((col(2), y), "codebase-index search ", font=mono, fill=FG)
-    cmdw = d.textlength("codebase-index search ", font=mono)
-    d.text((col(2) + cmdw, y), '"where is user authentication implemented?"', font=mono, fill=CYAN)
-    y += lh * 2
-
-    d.text((bx, y), "Top matches:", font=mono_b, fill=FG); y += lh
-    d.text((bx, y), "Rank   Path                     Symbols              Score  Reason",
-           font=mono, fill=MUTED); y += lh
-
-    table = [
-        ("1", "src/auth/AuthService.ts", "AuthService, login", "0.92", "exact symbol match", GREEN),
-        ("2", "src/routes/auth.ts", "loginHandler, logout", "0.78", "FTS · 4 callers", BLUE),
-        ("3", "src/middleware/auth.ts", "requireAuth", "0.65", "path · FTS match", MUTED),
+    cards = [
+        {
+            "title": "FIND",
+            "color": BLUE,
+            "query": '"where is auth implemented?"',
+            "lines": [
+                ("01", "src/auth/AuthService.ts:12", "0.92"),
+                ("02", "src/routes/auth.ts:20", "0.78"),
+                ("03", "src/middleware/auth.ts:5", "0.65"),
+            ],
+        },
+        {
+            "title": "TRACE",
+            "color": PURPLE,
+            "query": '"checkout → database"',
+            "lines": [
+                ("", "CheckoutRoute", "extracted"),
+                ("→", "CheckoutService", "extracted"),
+                ("→", "OrderRepository", "inferred"),
+            ],
+        },
+        {
+            "title": "PREDICT",
+            "color": GREEN,
+            "query": '"what changes with User?"',
+            "lines": [
+                ("1", "direct dependents", "7"),
+                ("2", "affected tests", "4"),
+                ("!", "inferred edges", "2"),
+            ],
+        },
     ]
-    for rank, path, syms, score, reason, scol in table:
-        d.text((col(2), y), rank, font=mono_b, fill=BLUE)
-        d.text((col(7), y), path, font=mono, fill=CYAN)
-        d.text((col(32), y), syms, font=mono, fill=FG2)
-        d.text((col(53), y), score, font=mono_b, fill=scol)
-        d.text((col(60), y), reason, font=mono, fill=FG2)
-        y += lh
-    y += lh
 
-    d.text((bx, y), "Recommended reads:", font=mono_b, fill=FG); y += lh
-    reads = [
-        ("1.", "src/auth/AuthService.ts:12-148", "matched AuthService, login(), validatePassword()"),
-        ("2.", "src/routes/auth.ts:20-91", "/login route calls AuthService.login()"),
-        ("3.", "src/middleware/auth.ts:5-42", "auth middleware validates sessions"),
-    ]
-    for n, loc, reason in reads:
-        d.text((col(2), y), n, font=mono, fill=MUTED)
-        d.text((col(5), y), loc, font=mono_b, fill=CYAN)
-        y += lh
-        d.text((col(5), y), "reason: " + reason, font=mono, fill=MUTED)
-        y += lh + 4 * SS
+    card_w = 352
+    card_h = 430
+    gap = 24
+    x_start = 48
+    y0 = 162
+    for idx, card in enumerate(cards):
+        x0 = (x_start + idx * (card_w + gap)) * SS
+        y = y0 * SS
+        x1 = x0 + card_w * SS
+        y1 = y + card_h * SS
+        d.rounded_rectangle(
+            [x0, y, x1, y1], radius=18 * SS, fill=PANEL,
+            outline=BORDER, width=SS + SS // 2,
+        )
+        d.rounded_rectangle(
+            [x0 + 20 * SS, y + 20 * SS, x0 + 102 * SS, y + 51 * SS],
+            radius=15 * SS, fill=PANEL_BAR, outline=card["color"], width=SS,
+        )
+        d.text((x0 + 34 * SS, y + 27 * SS), card["title"],
+               font=f_ui_b(15), fill=card["color"])
+        d.text((x0 + 22 * SS, y + 78 * SS), card["query"],
+               font=f_mono(17), fill=CYAN)
+        d.line(
+            [x0 + 22 * SS, y + 122 * SS, x1 - 22 * SS, y + 122 * SS],
+            fill=BORDER, width=SS,
+        )
 
-    # footer wordmark + tagline
-    fy = (H - 64) * SS
-    wm = f_mono_b(26)
-    d.text((48 * SS, fy), "codebase-index", font=wm, fill=FG)
-    seg = d.textlength("codebase-index", font=wm)
-    d.text((48 * SS + seg + 14 * SS, fy + 6 * SS),
-           "local hybrid index · no network by default", font=f_ui(17), fill=MUTED)
+        row_y = y + 150 * SS
+        for lead, label, tail in card["lines"]:
+            d.text((x0 + 24 * SS, row_y), lead, font=f_mono_b(17),
+                   fill=card["color"])
+            d.text((x0 + 58 * SS, row_y), label, font=f_mono(16), fill=FG2)
+            tw = d.textlength(tail, font=f_mono_b(15))
+            d.text((x1 - 24 * SS - tw, row_y + 2 * SS), tail,
+                   font=f_mono_b(15),
+                   fill=YELLOW if tail == "inferred" else card["color"])
+            row_y += 55 * SS
+
+        d.text((x0 + 24 * SS, y1 - 58 * SS),
+               ("precise file:line evidence" if idx == 0 else
+                "auditable dependency chain" if idx == 1 else
+                "ranked blast radius"),
+               font=f_ui(15), fill=MUTED)
+
+    # Evidence strip
+    sy = 626 * SS
+    d.rounded_rectangle(
+        [48 * SS, sy, (W - 48) * SS, 702 * SS],
+        radius=16 * SS, fill=PANEL_BAR, outline=BORDER, width=SS,
+    )
+    d.text((72 * SS, sy + 25 * SS), "EVIDENCE CONTRACT", font=f_ui_b(15), fill=GREEN)
+    d.text((246 * SS, sy + 23 * SS),
+           "freshness  ·  confidence  ·  coverage  ·  recommended reads",
+           font=f_mono(17), fill=FG2)
+
+    d.text((48 * SS, 726 * SS),
+           "local by default  ·  no telemetry  ·  CLI + Skill + MCP",
+           font=f_ui(15), fill=MUTED)
 
     downsave(img, W, H, out)
 
@@ -282,6 +361,7 @@ def main() -> None:
     root = Path(__file__).resolve().parent.parent
     assets = root / "assets"
     print("Generating assets:")
+    build_mark(assets / "mark.png")
     build_social(assets / "social-preview.png")
     build_demo(assets / "demo.png")
     print("Done.")
