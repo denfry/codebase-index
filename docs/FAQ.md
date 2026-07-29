@@ -14,7 +14,7 @@ pip install codebase-index        # or: pipx install codebase-index
 ```
 
 To pin an exact version or grab an unreleased commit, install from a GitHub tag
-instead: `pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.6.0"`.
+instead: `pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.7.0"`.
 
 Then run `codebase-index init` inside your project and `codebase-index index` to build
 the first index. In Claude Code you can instead install the plugin
@@ -81,6 +81,7 @@ The stdio MCP server exposes:
 - `find_symbol`
 - `find_refs`
 - `impact_of`
+- `impact_of_diff`
 - `explain_code`
 - `index_stats`
 
@@ -161,11 +162,12 @@ Yes. Use any of these methods:
 
 ## Is it production-ready?
 
-Yes — `codebase-index` is released as **v1.6.0**. The core indexing and search
-functionality is implemented and tested. The current `1.6.0` package includes:
+Yes — `codebase-index` is released as **v1.7.0**. The core indexing and search
+functionality is implemented and tested. The current `1.7.0` package includes:
 
 - Hybrid FTS/path/symbol/vector retrieval
 - Import/call/reference graph expansion and `impact`
+- Diff-aware blast-radius analysis for tracked working-tree changes
 - Optional local embeddings, with external embeddings gated behind explicit opt-in
 - Hooks and watch mode for freshness
 - Multi-CLI setup for Claude Code, Codex CLI, and OpenCode

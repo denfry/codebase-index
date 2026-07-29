@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-07-29
+
+### Added
+
+- **Diff-aware blast-radius analysis.** `codebase-index diff-impact` and the MCP
+  `impact_of_diff` tool aggregate graph impact for tracked working-tree changes
+  relative to a verified Git commit, with a changed-file safety cap, unresolved
+  file reporting, freshness, graph coverage, edge confidence, and exclusion of
+  the tool's own derived cache.
+- **Progressive skill references.** The installed agent skill now keeps its
+  always-loaded evidence protocol compact and moves detailed commands and
+  response handling into on-demand reference files.
+- **Reproducible product identity.** Added a graph-route mark and redesigned
+  README/social assets around Find / Trace / Predict.
+
+### Changed
+
+- Reworked the README, roadmap, product brief, package metadata, and plugin copy
+  around the evidence-first product promise.
+- Expanded the safe `cbx` wrappers to allow the shipped read-only
+  `architecture`, `path`, `describe`, and `diff-impact` commands.
+- Replaced broad skill shell permissions with an explicit command allowlist so
+  `clean`, `init`, and `watch` cannot bypass the safe wrapper.
+- Hardened the release workflow with least-privilege defaults and immutable
+  commit pins for every GitHub Action that receives release or PyPI credentials.
+
 ## [1.6.0] - 2026-06-24
 
 ### Added
@@ -375,7 +401,9 @@ All notable changes to this project are documented here. The format is based on
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/denfry/codebase-index/compare/v1.6.0...v1.7.0
+[1.6.0]: https://github.com/denfry/codebase-index/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/denfry/codebase-index/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/denfry/codebase-index/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/denfry/codebase-index/compare/v1.2.1...v1.3.0

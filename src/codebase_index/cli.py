@@ -479,6 +479,41 @@ def impact(
     typer.echo(json_out.render(resp) if is_json else md_out.render_impact(resp))
 
 
+@app.command("diff-impact")
+def diff_impact(
+    ctx: typer.Context,
+    base_ref: str = typer.Option("HEAD", "--base", help="Git commit/ref to compare against."),
+    depth: int = typer.Option(2, "--depth", min=1),
+    direction: str = typer.Option("up", "--direction", help="up|down|both"),
+    max_files: int = typer.Option(
+        200, "--max-files", min=1,
+        help="Safety cap for changed files analysed in one run.",
+    ),
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+) -> None:
+    """Predict the graph blast radius of the current Git diff."""
+    from .output import json as json_out
+    from .output import markdown as md_out
+    from .service import diff_impact_payload
+
+    is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
+    db_path, cfg = _ensure_index(ctx)
+    try:
+        payload = diff_impact_payload(
+            db_path, cfg, base_ref=base_ref, depth=depth,
+            direction=direction, max_files=max_files,
+        )
+    except (ValueError, RuntimeError, OSError) as exc:
+        if is_json:
+            typer.echo(json_out.render({"error": str(exc), "base_ref": base_ref}))
+        else:
+            typer.echo(f"[codebase-index] {exc}")
+        raise typer.Exit(code=2)
+    typer.echo(
+        json_out.render(payload) if is_json else md_out.render_diff_impact(payload)
+    )
+
+
 @app.command()
 def explain(
     ctx: typer.Context,

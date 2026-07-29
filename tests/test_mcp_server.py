@@ -35,6 +35,7 @@ def test_mcp_server_has_expected_tools():
         "find_symbol",
         "find_refs",
         "impact_of",
+        "impact_of_diff",
         "explain_code",
         "architecture_overview",
         "path_between",
@@ -71,6 +72,7 @@ _ENVELOPE_CALLS = {
     "find_symbol": lambda: _call(mcp_server.find_symbol, name="Foo"),
     "find_refs": lambda: _call(mcp_server.find_refs, symbol="foo"),
     "impact_of": lambda: _call(mcp_server.impact_of, target="foo.py"),
+    "impact_of_diff": lambda: _call(mcp_server.impact_of_diff),
     "explain_code": lambda: _call(mcp_server.explain_code, query="how does foo work"),
     "architecture_overview": lambda: _call(mcp_server.architecture_overview),
     "path_between": lambda: _call(mcp_server.path_between, source="a", target="b"),
@@ -105,6 +107,11 @@ def test_find_refs_no_index():
 
 def test_impact_of_no_index():
     result = _with_missing_db(lambda: _call(mcp_server.impact_of, target="foo.py"))
+    assert "error" in result
+
+
+def test_impact_of_diff_no_index():
+    result = _with_missing_db(lambda: _call(mcp_server.impact_of_diff))
     assert "error" in result
 
 

@@ -314,3 +314,51 @@ def render_impact(resp: ImpactResponse) -> str:
     if note:
         lines.append(note)
     return "\n".join(lines).rstrip() + "\n"
+
+
+def render_diff_impact(payload: dict) -> str:
+    """Render a concise change-impact report for a human."""
+    lines = [
+        f"**diff impact:** `{payload['base_ref']}` → working tree  ",
+        f"**direction:** `{payload['direction']}` · **depth:** {payload['depth']}",
+        "",
+    ]
+    changed = payload["changed_files"]
+    if not changed:
+        lines.append("_No tracked changes relative to the selected base._")
+        return "\n".join(lines) + "\n"
+
+    lines.append(f"**changed files ({payload['changed_files_total']}):**")
+    lines.extend(f"- `{path}`" for path in changed)
+    if payload.get("truncated"):
+        lines.append(
+            f"- _Analysis capped at {len(changed)} files; raise `--max-files` to inspect more._"
+        )
+
+    affected = payload["affected_files"]
+    lines.append("")
+    if affected:
+        lines.extend([
+            f"**affected files ({len(affected)}):**",
+            "| distance | path | changed by | edge | confidence |",
+            "|---:|---|---|---|---|",
+        ])
+        for item in affected:
+            sources = ", ".join(f"`{p}`" for p in item["changed_by"])
+            lines.append(
+                f"| {item['distance']} | `{item['path']}` | {sources} | "
+                f"{item.get('via_edge') or ''} | {item.get('via_confidence') or ''} |"
+            )
+    else:
+        lines.append("_No graph-backed affected files found._")
+
+    if payload.get("unresolved_files"):
+        lines.append("\n**not represented in the current index:**")
+        lines.extend(f"- `{path}`" for path in payload["unresolved_files"])
+    if payload.get("coverage", {}).get("partial"):
+        lines.append(
+            "\n> Graph coverage is partial for "
+            + ", ".join(payload["coverage"]["languages"])
+            + "; a short result is inconclusive."
+        )
+    return "\n".join(lines).rstrip() + "\n"

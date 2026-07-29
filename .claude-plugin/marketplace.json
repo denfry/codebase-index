@@ -5,7 +5,7 @@
     {
       "name": "codebase-index",
       "source": "./",
-      "description": "Local-first hybrid codebase index skill with auto-provisioned CLI."
+      "description": "Find, trace, and predict across a local codebase with evidence-bearing retrieval."
     }
   ]
 }

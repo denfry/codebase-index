@@ -4,15 +4,18 @@ How the `codebase-index` Claude Code Skill works and how to extend it.
 
 ## Overview
 
-The skill is defined in `skill/SKILL.md` with YAML frontmatter that Claude Code uses for automatic skill selection.
+The skill is defined in `skill/SKILL.md` with YAML frontmatter that agent
+clients use for automatic selection. The primary file is intentionally a short
+operating protocol; detailed command and payload material lives in
+`skill/references/` and is loaded only when needed.
 
 ## Frontmatter
 
 ```yaml
 ---
 name: codebase-index
-description: Use this skill before answering questions about a repository's architecture, implementation locations, symbols, references, dependencies, refactoring impact, data flow, bugs, or where something is implemented.
-allowed-tools: Bash(python *), Bash(python3 *), Bash(codebase-index *), Bash(cbx *), Read, Grep, Glob
+description: Use before answering repository questions about architecture, implementation, symbols, references, dependencies, refactoring impact, data flow, or bugs. Query the local hybrid index first so the agent reads only evidence-bearing file:line ranges instead of scanning the repository.
+allowed-tools: Bash(codebase-index search *), Bash(codebase-index explain *), Bash(codebase-index architecture *), Bash(codebase-index symbol *), Bash(codebase-index refs *), Bash(codebase-index impact *), Bash(codebase-index diff-impact *), Bash(codebase-index path *), Bash(codebase-index describe *), Bash(codebase-index graph *), Bash(codebase-index stats *), Bash(codebase-index doctor *), Bash(codebase-index update *), Bash(codebase-index index *), Bash(cbx *), Read, Grep, Glob
 ---
 ```
 
@@ -39,7 +42,9 @@ Restricts which tools Claude can use while executing this skill:
 | `Grep` | Fallback search when index is weak |
 | `Glob` | Fallback path discovery |
 
-**Explicitly not allowed:** `Write`, `Edit`, `Bash` (unscoped), or any destructive commands.
+**Explicitly not allowed:** `Write`, `Edit`, `Bash` (unscoped),
+`codebase-index *` (unscoped), `python -m codebase_index *`, or destructive
+and scaffolding commands such as `clean`, `init`, and `watch`.
 
 ## Skill Workflow
 
@@ -48,14 +53,14 @@ User asks codebase question
          ↓
 Skill auto-selected by Claude Code
          ↓
-Claude runs: codebase-index search "query" --json
+Route intent: Find / Trace / Predict
          ↓
 Parse JSON response:
   - Check index.exists / index.stale
   - Read recommended_reads line ranges
   - Check confidence level
          ↓
-Answer with citations
+Answer + file:line evidence
          ↓
 If confidence low → fallback to Grep/Glob
 ```
@@ -79,6 +84,31 @@ The skill enforces token-efficient behavior:
 - Use `symbol`/`refs`/`impact` for refinement, not reworded searches
 - Fallback to Grep/Glob only when confidence is low
 
+## Progressive References
+
+`SKILL.md` links two optional resources:
+
+- `references/commands.md` — command options, graph commands, health commands,
+  and query examples.
+- `references/response-contract.md` — payload fields, freshness handling,
+  partial-coverage behavior, and answer examples.
+
+Do not move the core evidence or freshness protocol out of `SKILL.md`; agents
+need those rules on every invocation. Keep detailed option lists and examples in
+references so they do not consume context on routine searches.
+
+## Answer Contract
+
+The skill asks agents to return:
+
+1. the direct answer;
+2. the minimum supporting `file:line` evidence;
+3. confidence only when evidence is partial, inferred, stale, or missing;
+4. a next check only when it materially reduces uncertainty.
+
+This prevents tool narration from displacing the actual engineering answer and
+prevents partial graph coverage from being presented as proof of absence.
+
 ## Extending the Skill
 
 ### Adding New Commands
@@ -86,8 +116,11 @@ The skill enforces token-efficient behavior:
 If you add a new CLI command, update:
 
 1. `skill/SKILL.md` — add the command to the intent table
-2. `skill/SKILL.md` — add to `allowed-tools` if needed
-3. `skill/examples/basic-usage.md` — add usage example
+2. `skill/references/commands.md` — document detailed options and examples
+3. `skill/SKILL.md` — add to `allowed-tools` if needed
+4. Both safe wrappers — add the subcommand only if it is read-only or a
+   freshness operation
+5. Run `python scripts/sync_skill_copies.py`
 
 ### Custom Wrapper Scripts
 

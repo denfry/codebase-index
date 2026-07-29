@@ -7,9 +7,9 @@ Derived copies maintained:
   .claude/skills/codebase-index/    installed copy, committed for this repo
   .codex/skills/codebase-index/     installed copy, committed for this repo
   .opencode/skills/codebase-index/  installed copy, committed for this repo
-  skills/codebase-index/SKILL.md    plugin skill (Claude Code picks up skills/)
-  skill/SKILL.md, skill/scripts/cbx, skill/scripts/cbx.ps1
-                                    installer source package (shared files only;
+  skills/codebase-index/            plugin skill (SKILL.md + references)
+  skill/SKILL.md, skill/references/, skill/scripts/cbx, skill/scripts/cbx.ps1
+                                    installer source package (shared files;
                                     the rest of skill/ is owned by install.sh)
 
 Version stamps maintained:
@@ -39,7 +39,8 @@ INSTALLED_COPIES = (
     Path(".opencode/skills/codebase-index"),
 )
 PLUGIN_SKILL_REL = Path("skills/codebase-index")
-INSTALLER_SHARED = ("SKILL.md", "scripts/cbx", "scripts/cbx.ps1")
+SHARED_PREFIXES = ("SKILL.md", "references/")
+INSTALLER_SHARED = ("scripts/cbx", "scripts/cbx.ps1")
 
 VERSION_RE = re.compile(r'^__version__ = "([^"]+)"$', re.M)
 PLUGIN_VERSION_RE = re.compile(r'("version"\s*:\s*)"[^"]+"')
@@ -70,10 +71,15 @@ def expected_files(repo: Path, version: str) -> dict[Path, bytes]:
             expected[copy / rel] = (template / rel).read_bytes()
         expected[copy / ".skill_version"] = f"{version}\n".encode()
 
-    expected[PLUGIN_SKILL_REL / "SKILL.md"] = (template / "SKILL.md").read_bytes()
+    for rel in rels:
+        if rel.as_posix() == "SKILL.md" or rel.as_posix().startswith("references/"):
+            expected[PLUGIN_SKILL_REL / rel] = (template / rel).read_bytes()
 
     for rel in INSTALLER_SHARED:
         expected[Path("skill") / rel] = (template / rel).read_bytes()
+    for rel in rels:
+        if rel.as_posix() == "SKILL.md" or rel.as_posix().startswith("references/"):
+            expected[Path("skill") / rel] = (template / rel).read_bytes()
 
     return expected
 

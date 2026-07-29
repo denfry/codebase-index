@@ -86,7 +86,7 @@ them by hand and verify:
 
 - [ ] `codebase-index mcp --root .` starts and registers all tools
       (`tests/test_mcp_server.py`): `healthcheck`, `search_code`, `find_symbol`,
-      `find_refs`, `impact_of`, `explain_code`, `index_stats`.
+      `find_refs`, `impact_of`, `impact_of_diff`, `explain_code`, `index_stats`.
 - [ ] MCP and CLI agree (shared `service.py`) — vector channel + graph tier
       surfaced in both.
 - [ ] `docs/MCP.md` client templates still match the shipped tool list.
@@ -110,7 +110,6 @@ them by hand and verify:
 
 ## Future hardening (not yet implemented — do not claim as done)
 
-- [ ] PyPI publish (then `pip install codebase-index`, `uvx`, `pipx` without a Git URL).
 - [ ] Homebrew tap.
 - [ ] Signed release checksums (`cosign` / `minisign`).
 - [ ] Published SBOM (e.g. CycloneDX) attached to each release.

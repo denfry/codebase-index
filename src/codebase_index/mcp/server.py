@@ -237,6 +237,37 @@ def impact_of(
 
 
 @_tool()
+def impact_of_diff(
+    base_ref: str = "HEAD",
+    depth: int = 2,
+    direction: str = "up",
+    max_files: int = 200,
+) -> str:
+    """Predict the graph blast radius of tracked changes in the working tree.
+
+    Args:
+        base_ref: Git commit/ref used as the comparison base.
+        depth: How many graph hops to follow.
+        direction: "up", "down", or "both".
+        max_files: Safety cap for changed files analysed in one call.
+    """
+    db_path, cfg = _resolve_db()
+    if not db_path.exists():
+        return _emit("impact_of_diff", _no_index_payload())
+
+    from ..service import diff_impact_payload
+
+    try:
+        payload = diff_impact_payload(
+            db_path, cfg, base_ref=base_ref, depth=depth,
+            direction=direction, max_files=max_files,
+        )
+    except (ValueError, RuntimeError, OSError) as exc:
+        payload = {"error": str(exc), "base_ref": base_ref}
+    return _emit("impact_of_diff", payload)
+
+
+@_tool()
 def explain_code(
     query: str,
     token_budget: int = 2200,

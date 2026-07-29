@@ -67,7 +67,7 @@ pipx install codebase-index            # isolated environment
 uv tool install codebase-index         # uv-managed tool
 
 # Pin to a GitHub tag for an exact or unreleased version
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.6.0"
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.7.0"
 
 # From source (editable mode)
 git clone https://github.com/denfry/codebase-index.git
@@ -90,7 +90,7 @@ pip install -e ".[embeddings-local,watch,dev]"
 
 ### uvx / Homebrew status
 
-As of `1.6.0`, **PyPI is shipped** — `pip install codebase-index` and
+As of `1.7.0`, **PyPI is shipped** — `pip install codebase-index` and
 `pipx install codebase-index` are the verified paths. `uvx codebase-index init`,
 Homebrew tap installation, signed checksums, and SBOMs remain distribution
 targets for a more complete release story.
@@ -130,7 +130,7 @@ Expected output:
 === codebase-index Doctor ===
 
 [OK] Python 3.12 (requires 3.11+)
-[OK] codebase-index package installed (v1.6.0)
+[OK] codebase-index package installed (v1.7.0)
 [OK] tree-sitter is available
 [INFO] Cache directory not yet created: ...
 [INFO] Skill not installed in .claude/skills/

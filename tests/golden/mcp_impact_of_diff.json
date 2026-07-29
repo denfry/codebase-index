@@ -1,0 +1,25 @@
+{
+  "affected_files": [],
+  "base_commit": "<SHA>",
+  "base_ref": "HEAD",
+  "changed_files": [],
+  "changed_files_total": 0,
+  "coverage": {
+    "languages": [],
+    "partial": false,
+    "reason": null
+  },
+  "depth": 2,
+  "direction": "up",
+  "index": {
+    "built_at": "<TS>",
+    "exists": true,
+    "files_changed_since_build": 0,
+    "head_commit": "<SHA>",
+    "stale": false
+  },
+  "schema_version": 1,
+  "tool": "impact_of_diff",
+  "truncated": false,
+  "unresolved_files": []
+}

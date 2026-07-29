@@ -48,6 +48,12 @@ Returns all callers and references to the symbol.
 codebase-index impact "src/auth/AuthService.ts"
 ```
 
+For all tracked changes in the current working tree:
+
+```bash
+codebase-index diff-impact --base HEAD
+```
+
 Returns files and symbols that depend on the target, ordered by blast radius.
 
 ### Getting project overview
