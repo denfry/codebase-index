@@ -271,7 +271,7 @@ See [MCP.md](docs/MCP.md) for client configuration.
 
 ## Project status
 
-The latest released line is **1.8.0**. It includes:
+The latest released line is **1.9.0**. It includes:
 
 - hybrid and optional vector retrieval;
 - Tree-sitter symbol extraction across the documented language tiers;
@@ -280,15 +280,21 @@ The latest released line is **1.8.0**. It includes:
 - shortest dependency paths and node descriptions;
 - token-budgeted and skeletonized retrieval packets;
 - benchmark-calibrated lexical expansion, fuzzy identifier matching, and source-aware ranking;
+- rank fusion that scores cross-retriever agreement at file level, not just at a locator;
 - bounded, intent-directed graph discovery with optional diversity and duplicate suppression;
 - CLI, Skill, plugin, and MCP delivery;
 - incremental updates, watch hooks, diagnostics, skill rollback, and diff-aware
-  impact analysis.
+  impact analysis;
+- a multi-repository retrieval evaluation with leak-free git-derived ground truth,
+  one-signal ablations, and paired significance tests
+  ([tests/eval](tests/eval/README.md)).
 
-Planned work is deliberately separated from shipped capability. The next
-product priorities are stronger real-repository evaluations, typed framework
-edges, and an even more direct task-context workflow. See the
-[roadmap](docs/ROADMAP.md).
+Every shipped ranking signal has to survive that evaluation: 1.9.0 removed the
+cost of two signals that could not demonstrate a benefit and rejected several
+plausible ones outright (IDF-weighted coverage, stemming, graph propagation, MMR,
+a file-length prior). Planned work is deliberately separated from shipped
+capability. The next product priorities are typed framework edges and an even more
+direct task-context workflow. See the [roadmap](docs/ROADMAP.md).
 
 ## Documentation
 

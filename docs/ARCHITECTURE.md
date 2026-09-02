@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-`codebase-index` is a **local-first** code intelligence layer for AI coding agents. In `1.8.0`
+`codebase-index` is a **local-first** code intelligence layer for AI coding agents. In `1.9.0`
 it has two shipped faces:
 
 1. **A Claude Code Skill** (`.claude/skills/codebase-index/SKILL.md`) that Claude auto-invokes for
@@ -97,8 +97,9 @@ codebase-index/
     ├── graph/                   # builder.py (edge resolution), expand.py (impact),
     │                            #   export.py (HTML graph)
     ├── storage/                 # db.py (pragmas, schema, version guard), schema.sql, repo.py
-    ├── retrieval/               # intent.py, searchers.py, fusion.py, rerank.py,
-    │                            #   budget.py, pipeline.py, types.py
+    ├── retrieval/               # intent.py, searchers.py, fusion.py, rerank.py, priors.py,
+    │                            #   lexical.py, fuzzy.py, diversity.py, skeleton.py,
+    │                            #   tuning.py (ablation contract), budget.py, pipeline.py, types.py
     ├── embeddings/              # backend.py, noop.py (default), local.py, external.py — opt-in
     ├── output/                  # markdown.py, json.py, redact.py
     ├── watch/                   # watcher.py (optional, watchdog-based)

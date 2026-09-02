@@ -6,6 +6,89 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-09-02
+
+### Added
+
+- **Objective ground truth from git history.** `tests/eval/gen_queries.py` mints a
+  retrieval benchmark from any git repository by pairing a human-written commit
+  subject with the files that commit actually changed. Unlike docstring-derived
+  benchmarks the query text is not copied into the document being retrieved, so the
+  set is leak-free by construction; merges, reverts, releases, version bumps,
+  sweeping refactors, changelog-style answers and benchmark scaffolding are all
+  filtered out.
+- **Multi-corpus, multi-language evaluation.** `run_eval.py --corpus REPO:QUERIES`
+  pools several repositories into one benchmark so ranking changes are validated
+  outside this repository and outside Python. The 1.9.0 defaults were measured on
+  305 queries across Python, Java and TypeScript corpora.
+- **Significance testing.** Every non-baseline row now reports a paired bootstrap
+  95% confidence interval and a paired permutation p-value (both seeded, therefore
+  reproducible). Query sets of this size have a noise floor of several MRR points;
+  signals now ship on the strength of that test rather than the sign of a delta.
+- **Context-noise metrics.** The report adds mean emitted snippet tokens, duplicate
+  rate of returned results, and p99 latency alongside the existing IR metrics.
+
+### Changed
+
+- **Fusion now scores cross-retriever agreement.** RRF fuses on
+  `(path, line-bucket)`, so a symbol definition at line 40 and a lexical hit at line
+  120 in the same file fused as two unrelated candidates — two retrievers agreeing
+  on a file produced two weak results instead of one strong one, and cross-source
+  agreement never reached the score. Each candidate now also receives, at
+  `file_agreement_weight` (0.4), the RRF mass of every retriever that found its file
+  at another locator, excluding retrievers already counted at that locator.
+  Ablatable via `RetrievalTuning(file_agreement=False)`.
+- **Documentation demotion deepened** from -0.05 to -0.20. Prose describing a
+  feature matches a natural-language question more literally than the code
+  implementing it, so design notes and plans were displacing the modules they
+  describe. Because this only reorders prose relative to code, documentation-seeking
+  queries improved as well (category MRR 0.579 → 0.612). Generated/vendor paths move
+  to -0.25 so they remain the least-preferred role, and `MAX_ABS_PRIOR` now pins the
+  invariant that priors stay tiebreakers.
+- **Fuzzy identifier matching is now a recall fallback.** It runs only when the
+  precise symbol lookup named no symbol and returned fewer than
+  `fuzzy_fallback_min` (3) rows. It moved no ranking metric across 305 queries while
+  accounting for ~20% of query latency; typo and acronym recall is unchanged because
+  those are exactly the queries where the precise lookup comes up empty.
+- **Candidate over-fetch is explicit.** `candidate_pool_multiplier` (default 2)
+  replaces the implicit widening that happened whenever dedup or MMR was enabled.
+  Making it explicit revealed that the quality previously credited to SimHash dedup
+  was really the wider pool; dedup is retained for what it does measurably do, which
+  is cutting the duplicate rate of returned snippets from ~1.6% to ~0%.
+
+### Fixed
+
+- **Synonym matches were reported as exact symbol matches.** `is_exact` came from
+  SQL and was relative to whichever needle retrieved the row, so a synonym
+  expansion ("config" for "configuration") marked an unrelated symbol as an exact
+  match — worth a +0.20 rerank bonus and an unconditional `high` confidence.
+  Exactness is now judged against the terms the user actually typed.
+- **Duplicate suppression was order-dependent on ties.** Equal-scoring duplicates
+  handed the slot to whichever copy arrived last, contradicting the documented
+  "ties favor input order" and making the retained snippet depend on retriever
+  emission order.
+
+### Performance
+
+- Query latency roughly halves: p50 78.6 ms → 51.2 ms, p95 193.2 ms → 94.9 ms,
+  p99 277.1 ms → 152.2 ms on the pooled three-repository benchmark, from the fuzzy
+  fallback plus a SimHash fingerprint that folds repeated tokens by multiplicity and
+  caches token digests. Fingerprint output is bit-for-bit unchanged.
+- Mean emitted snippet tokens fall 1183 → 1091 per query.
+
+### Retrieval quality
+
+Pooled over 305 queries (Python, Java, TypeScript), v1.8.0 → 1.9.0:
+
+| Metric | v1.8.0 | 1.9.0 | Δ | p |
+|---|---|---|---|---|
+| MRR | 0.564 | 0.591 | +0.027 | <0.001 |
+| MAP | 0.433 | 0.461 | +0.028 | <0.001 |
+| nDCG@10 | 0.503 | 0.527 | +0.024 | <0.001 |
+| recall@5 | 0.529 | 0.560 | +0.031 | <0.001 |
+| P@5 | 0.182 | 0.192 | +0.009 | 0.001 |
+| hit@3 | 0.649 | 0.666 | +0.016 | 0.124 |
+
 ## [1.8.0] - 2026-09-02
 
 ### Added
