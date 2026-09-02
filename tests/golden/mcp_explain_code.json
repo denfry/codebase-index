@@ -1,11 +1,6 @@
 {
-  "confidence": "low",
-  "fallback_suggestions": {
-    "ripgrep": [
-      "rg -n \"authentication\"",
-      "rg -n \"how.*does.*authentication\""
-    ]
-  },
+  "confidence": "high",
+  "fallback_suggestions": {},
   "index": {
     "built_at": "<TS>",
     "exists": true,
@@ -16,8 +11,46 @@
   "intent": "how_it_works",
   "mode": "hybrid",
   "query": "how does authentication work",
-  "recommended_reads": [],
-  "results": [],
+  "recommended_reads": [
+    {
+      "line_end": 5,
+      "line_start": 1,
+      "path": "src/api/service.py"
+    },
+    {
+      "line_end": 1,
+      "line_start": 1,
+      "path": "src/auth/token.py"
+    }
+  ],
+  "results": [
+    {
+      "elided_lines": 0,
+      "line_end": 5,
+      "line_start": 1,
+      "path": "src/api/service.py",
+      "rank": 1,
+      "reason": "source prior +0.08",
+      "score": 1.08,
+      "skeletonized": false,
+      "snippet": "\"\"\"Service layer (fixture) - exercises cross-file edges for impact tests.\"\"\"\n\nfrom auth.token import refresh_access_token\nfrom models.user import User\n",
+      "symbols": [],
+      "token_est": 38
+    },
+    {
+      "elided_lines": 0,
+      "line_end": 1,
+      "line_start": 1,
+      "path": "src/auth/token.py",
+      "rank": 2,
+      "reason": "source prior +0.08",
+      "score": 0.38,
+      "skeletonized": false,
+      "snippet": null,
+      "symbols": [],
+      "token_est": 0
+    }
+  ],
   "schema_version": 1,
   "tool": "explain_code"
 }

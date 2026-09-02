@@ -1,7 +1,7 @@
 """Cheap rule-first intent classifier (regex/keyword heuristics).
 
 Each intent maps to retriever weights over {"path","symbol","fts"}, a default
-token budget, and a graph strategy (consumed later by M5).
+token budget, and an opt-in graph strategy consumed by the retrieval pipeline.
 """
 
 from __future__ import annotations

@@ -1,11 +1,12 @@
 """Three retrievers, each emitting a uniform list[Candidate].
 
-Vector retrieval (RETRIEVAL.md §2) is M6 and intentionally absent here; the
-pipeline degrades to path+symbol+fts.
+Vector retrieval is optional and supplied by the configured embedding backend;
+without it the pipeline degrades cleanly to path, symbol, and FTS retrieval.
 """
 
 from __future__ import annotations
 
+import math
 import re
 import sqlite3
 from pathlib import Path
@@ -22,27 +23,146 @@ from ..models import (
     SymbolResponse,
 )
 from ..storage import repo
+from .fuzzy import identifier_similarity
+from .lexical import (
+    LexicalQuery,
+    build_fts_query,
+    build_lexical_query,
+    escape_fts_term,
+    salient_terms as lexical_salient_terms,
+)
+from .tuning import DEFAULT_TUNING
 from .types import Candidate as M4Candidate
 
 _WORD_RE = re.compile(r"[A-Za-z0-9_]+")
 _CAMEL_RE = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+")
 
 
-def fts_candidates(conn: sqlite3.Connection, query: str, *, limit: int) -> list[M4Candidate]:
-    match = build_match_query(query)
+def _soft_match_query(parsed: LexicalQuery) -> str:
+    """OR lexical groups so Python can rank by group coverage.
+
+    FTS5 cannot express per-term boosts portably. Each original term is grouped
+    with its down-weighted variants, then groups are OR-ed. Candidate scoring
+    below restores coverage and original-term precedence.
+    """
+    by_origin: dict[str, list[str]] = {term: [] for term in parsed.original_terms}
+    for item in parsed.expanded_terms:
+        by_origin.setdefault(item.origin, []).append(item.term)
+    groups: list[str] = []
+    for original in parsed.original_terms:
+        variants = [original, *by_origin.get(original, [])]
+        quoted = [escape_fts_term(term) for term in variants]
+        groups.append(quoted[0] if len(quoted) == 1 else "(" + " OR ".join(quoted) + ")")
+    return " OR ".join(groups)
+
+
+def _fts_coverage(content: str | None, parsed: LexicalQuery) -> tuple[int, float]:
+    text = (content or "").casefold()
+    matched = 0
+    weighted = 0.0
+    weights = parsed.weights
+    for original in parsed.original_terms:
+        variants = [
+            original,
+            *(item.term for item in parsed.expanded_terms if item.origin == original),
+        ]
+        # Longer code terms are safe and much cheaper as substring probes.
+        # Two-character terms need token boundaries to avoid `id` matching
+        # every `grid`/`identifier` occurrence.
+        found = next(
+            (
+                term
+                for term in variants
+                if (
+                    term.casefold() in text
+                    if len(term) > 2
+                    else bool(
+                        re.search(
+                            rf"(?<![A-Za-z0-9_]){re.escape(term.casefold())}"
+                            r"(?![A-Za-z0-9_])",
+                            text,
+                        )
+                    )
+                )
+            ),
+            None,
+        )
+        if found is not None:
+            matched += 1
+            weighted += weights.get(found, 1.0)
+    return matched, weighted
+
+
+def fts_candidates(
+    conn: sqlite3.Connection, query: str, *, limit: int, tuning=DEFAULT_TUNING
+) -> list[M4Candidate]:
+    parsed = build_lexical_query(
+        query,
+        include_synonyms=bool(tuning.query_expansion),
+        include_subtokens=True,
+        tuning=tuning,
+    )
+    match = build_match_query(query, tuning=tuning)
     if not match:
         return []
+    # Soft OR queries need a wider first-stage pool; ranking by coverage happens
+    # locally after FTS. The multiplier is bounded so long natural-language
+    # questions do not turn into an unbounded scan.
+    fetch_limit = max(limit, limit * min(5, max(2, len(parsed.original_terms))))
+    rows = repo.fts_search(conn, match, limit=fetch_limit)
+    if not rows:
+        return []
+
+    scored_rows: list[tuple[float, int, float, sqlite3.Row]] = []
+    for row in rows:
+        if tuning.soft_lexical and parsed.original_terms:
+            matched, weighted = _fts_coverage(row["content"], parsed)
+            required = max(1, math.ceil(len(parsed.original_terms) * tuning.min_term_coverage))
+            if matched < required:
+                continue
+            coverage = matched / len(parsed.original_terms)
+            score = coverage * 2.0 + weighted / len(parsed.original_terms) * 0.35
+        else:
+            score = 0.0
+            matched = 0
+            weighted = 0.0
+        # BM25 is an additional tie-break, never the dominant signal in soft mode.
+        bm25 = max(0.0, -float(row["bm25"]))
+        score += min(bm25, 4.0) * (0.08 if tuning.soft_lexical else 1.0)
+        scored_rows.append((score, matched, bm25, row))
+
+    # If coverage threshold was too strict for an unusual query, retain FTS
+    # recall rather than returning an empty list.
+    if tuning.soft_lexical and not scored_rows:
+        scored_rows = [
+            (
+                max(0.0, -float(row["bm25"])),
+                0,
+                max(0.0, -float(row["bm25"])),
+                row,
+            )
+            for row in rows
+        ]
+    scored_rows.sort(
+        key=lambda item: (-item[0], -item[1], -item[2], item[3]["path"], item[3]["line_start"])
+    )
     out: list[M4Candidate] = []
-    for row in repo.fts_search(conn, match, limit=limit):
+    for score, matched, _, row in scored_rows[:limit]:
+        reason = (
+            f"lexical coverage {matched}/{len(parsed.original_terms)}"
+            if tuning.soft_lexical and parsed.original_terms
+            else "fts bm25"
+        )
         out.append(
             M4Candidate(
                 path=row["path"],
                 line_start=row["line_start"],
                 line_end=row["line_end"],
                 source="fts",
-                score=-float(row["bm25"]),
+                score=score,
                 content=row["content"],
                 token_est=int(row["token_est"]),
+                reason=reason,
             )
         )
     return out
@@ -51,10 +171,56 @@ def fts_candidates(conn: sqlite3.Connection, query: str, *, limit: int) -> list[
 # Natural-language filler that is never a useful symbol query term. Kept deliberately small:
 # anything that could plausibly be an identifier (get/set/run/...) is NOT a stopword.
 _SYMBOL_STOPWORDS = {
-    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "how", "does",
-    "do", "did", "what", "where", "which", "who", "whom", "when", "why", "to", "of", "in",
-    "on", "for", "and", "or", "with", "from", "it", "this", "that", "these", "those",
-    "into", "during", "if", "via", "across", "between", "about", "their", "its",
+    "the",
+    "a",
+    "an",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "how",
+    "does",
+    "do",
+    "did",
+    "what",
+    "where",
+    "which",
+    "who",
+    "whom",
+    "when",
+    "why",
+    "to",
+    "of",
+    "in",
+    "on",
+    "for",
+    "and",
+    "or",
+    "with",
+    "from",
+    "it",
+    "this",
+    "that",
+    "these",
+    "those",
+    "into",
+    "during",
+    "if",
+    "via",
+    "across",
+    "between",
+    "about",
+    "their",
+    "its",
+    "find",
+    "locate",
+    "show",
+    "me",
+    "implemented",
+    "implementation",
 }
 
 
@@ -75,49 +241,116 @@ def _name_subtokens(name: str) -> set[str]:
     return {s.lower() for s in _subtokens(name)}
 
 
-def symbol_candidates(
-    conn: sqlite3.Connection, query: str, *, limit: int, kind: str | None = None
-) -> list[M4Candidate]:
-    """Symbol retriever that scores by how many query terms a symbol's name covers.
+def _fuzzy_symbol_rows(
+    conn: sqlite3.Connection, query: str, *, limit: int, kind: str | None
+) -> list[sqlite3.Row]:
+    """Fetch a small lexical neighborhood for fuzzy symbol scoring.
 
-    The old behaviour searched only the single longest term, so "religion manager" matched
-    the bare `Religion` class (exact) and never reached `ReligionManager`. Now every salient
-    term is searched and candidates are ranked by camelCase/underscore-split *coverage* of the
-    query, so the multi-word concept lands on the multi-word symbol.
+    The symbol table has a name index but no trigram index. Query terms, their
+    four-character prefixes, and acronym initials provide a bounded candidate
+    pool without scanning every symbol; identifier_similarity does the precise
+    comparison locally.
     """
-    terms = _salient_terms(query)
+    raw_terms = [t for t in _WORD_RE.findall(query) if len(t) >= 2]
+    needles: set[str] = set()
+    for term in raw_terms:
+        needles.add(term)
+        if len(term) >= 4:
+            needles.add(term[:4])
+        if len(term) >= 2 and term.isupper():
+            needles.add(term[:1])
+    rows_by_key: dict[tuple, sqlite3.Row] = {}
+    per_query = max(limit, min(limit * 2, 40))
+    for needle in sorted(needles, key=lambda item: (len(item), item.casefold())):
+        for row in repo.symbol_search(conn, needle, limit=per_query, kind=kind):
+            rows_by_key.setdefault((row["path"], row["line_start"], row["name"]), row)
+    return list(rows_by_key.values())
+
+
+def symbol_candidates(
+    conn: sqlite3.Connection,
+    query: str,
+    *,
+    limit: int,
+    kind: str | None = None,
+    tuning=DEFAULT_TUNING,
+) -> list[M4Candidate]:
+    """Return symbols ranked by name coverage, exactness, and optional fuzziness."""
+    terms = (
+        [term for term in lexical_salient_terms(query) if term not in _SYMBOL_STOPWORDS]
+        if tuning.query_expansion
+        else _salient_terms(query)
+    )
+    expanded_terms = []
+    if tuning.query_expansion:
+        parsed = build_lexical_query(query, tuning=tuning)
+        expanded_terms = [
+            item.term
+            for item in parsed.expanded_terms
+            if item.kind == "synonym" and item.term not in terms
+        ]
+    symbol_terms = list(dict.fromkeys((*terms, *expanded_terms)))
     if not terms:
         return []
+    fuzzy_enabled = tuning.fuzzy_symbols and (
+        len(terms) <= 3 or any(char.isupper() for char in query)
+    )
 
     term_set = set(terms)
     joined = "".join(terms)
     rows_by_key: dict[tuple, sqlite3.Row] = {}
-    for term in terms:
-        for row in repo.symbol_search(conn, term, limit=limit, kind=kind):
-            key = (row["path"], row["line_start"], row["name"])
-            rows_by_key.setdefault(key, row)
+    if fuzzy_enabled:
+        for row in _fuzzy_symbol_rows(conn, query, limit=limit, kind=kind):
+            rows_by_key.setdefault((row["path"], row["line_start"], row["name"]), row)
+    for needle in symbol_terms:
+        for row in repo.symbol_search(conn, needle, limit=limit, kind=kind):
+            rows_by_key.setdefault((row["path"], row["line_start"], row["name"]), row)
 
     scored: list[tuple] = []
     for row in rows_by_key.values():
         subs = _name_subtokens(row["name"])
-        name_l = (row["name"] or "").lower()
-        covered = sum(1 for t in terms if t in subs or t in name_l)
+        name_l = (row["name"] or "").casefold()
+        covered = sum(1 for t in terms if t in subs or t.casefold() in name_l)
+        expanded_covered = sum(1 for t in expanded_terms if t in subs or t.casefold() in name_l)
         tightness = len(subs & term_set) / len(subs) if subs else 0.0
-        # Exact-match precedence is for *precise* lookups only. With one salient term it's a
-        # real identifier query; with many it must match the whole camelCase-joined name
-        # (e.g. "religion manager" -> ReligionManager). A single shared term ("token" hitting
-        # a generated `Token` type) must NOT count as exact.
-        exact = (len(terms) == 1 and bool(row["is_exact"])) or (bool(joined) and name_l == joined)
-        # Ranking: most query terms covered, then exact-name match, then a tighter name
-        # (fewer junk subtokens), then more-referenced (in_degree), then a shorter name.
-        sort_key = (covered, int(exact), tightness, int(row["in_degree"]), -len(name_l))
-        score = covered + tightness + (2.0 if exact else 0.0)
+        exact = (len(terms) == 1 and bool(row["is_exact"])) or (
+            bool(joined) and name_l == joined.casefold()
+        )
+        fuzzy = 0.0
+        if fuzzy_enabled:
+            fuzzy = max(
+                identifier_similarity(term, row["name"]) for term in (*terms, joined) if term
+            )
+            if (
+                not exact
+                and covered == 0
+                and expanded_covered == 0
+                and fuzzy < tuning.fuzzy_threshold
+            ):
+                continue
+        sort_key = (
+            int(exact),
+            covered,
+            expanded_covered,
+            tightness,
+            int(row["in_degree"]),
+            -len(name_l),
+            name_l,
+            row["path"],
+            int(row["line_start"]),
+        )
+        score = (
+            covered
+            + 0.35 * expanded_covered
+            + tightness
+            + (2.0 if exact else 0.0)
+            + fuzzy * (0.65 if fuzzy_enabled else 0.0)
+        )
         scored.append((sort_key, score, exact, row))
 
-    scored.sort(key=lambda x: x[0], reverse=True)
-
+    scored.sort(key=lambda item: item[0], reverse=True)
     out: list[M4Candidate] = []
-    for sort_key, score, exact, row in scored[:limit]:
+    for _, score, exact, row in scored[:limit]:
         out.append(
             M4Candidate(
                 path=row["path"],
@@ -136,8 +369,6 @@ def symbol_candidates(
             )
         )
 
-    # Damped centrality fallback: symbols whose name is not globally unique never
-    # get a resolved in_degree, so back-fill a name-reference count for the zero ones.
     zero_deg = [c.symbol for c in out if not c.in_degree and c.symbol]
     if zero_deg:
         counts = repo.name_ref_counts(conn, zero_deg)
@@ -147,9 +378,29 @@ def symbol_candidates(
     return out
 
 
-def path_candidates(conn: sqlite3.Connection, query: str, *, limit: int) -> list[M4Candidate]:
+def path_candidates(
+    conn: sqlite3.Connection,
+    query: str,
+    *,
+    limit: int,
+    tuning=DEFAULT_TUNING,
+) -> list[M4Candidate]:
+    if tuning.query_expansion:
+        parsed = build_lexical_query(
+            query,
+            include_synonyms=True,
+            include_subtokens=False,
+            tuning=tuning,
+        )
+        variants = [
+            *parsed.original_terms,
+            *(item.term for item in parsed.expanded_terms if item.kind == "synonym"),
+        ]
+        path_query = " ".join(dict.fromkeys(variants))
+    else:
+        path_query = query
     out: list[M4Candidate] = []
-    for rank, row in enumerate(repo.path_search(conn, query, limit=limit)):
+    for rank, row in enumerate(repo.path_search(conn, path_query, limit=limit)):
         out.append(
             M4Candidate(
                 path=row["path"],
@@ -170,31 +421,40 @@ def _subtokens(term: str) -> list[str]:
     return [p for p in parts if len(p) >= 2]
 
 
-def build_match_query(query: str) -> str:
-    """Build the FTS5 MATCH expression for `query`.
+def build_match_query(query: str, *, tuning=None) -> str:
+    """Build a safe FTS5 MATCH expression.
 
-    Each whitespace term expands to an OR group over the term and its
-    camelCase/snake_case subtokens; groups are AND-ed. Natural-language filler
-    ("how does X work") is dropped first: otherwise FTS would AND-in stopwords
-    that code chunks never contain, collapsing recall to zero on the very intents
-    (HOW_IT_WORKS / DEBUG_ERROR) that weight FTS highest. If *every* term is a
-    stopword we fall back to the full set rather than emit an empty match.
+    Calls without ``tuning`` preserve the 1.7 public helper exactly (including
+    its deliberate retention of identifier-like words such as ``work``).
+    Tuned retrieval uses the lexical parser: soft mode ORs term groups so
+    coverage can be ranked in Python; hard mode keeps groups AND-ed.
     """
-    groups: list[str] = []
-    salient: list[str] = []
-    for term in _WORD_RE.findall(query):
-        variants = {term, *_subtokens(term)}
-        variants = {v for v in variants if len(v) >= 2}
-        if not variants:
-            continue
-        ored = " OR ".join(f'"{v}"' for v in sorted(variants, key=str.lower))
-        # FTS5 rejects implicit AND (space) when a group contains parenthesised OR
-        # expressions; explicit AND is required between all groups.
-        group = f"({ored})" if len(variants) > 1 else ored
-        groups.append(group)
-        if term.lower() not in _SYMBOL_STOPWORDS:
-            salient.append(group)
-    return " AND ".join(salient or groups)
+    if tuning is None:
+        groups: list[str] = []
+        salient: list[str] = []
+        for term in _WORD_RE.findall(query):
+            variants = {term, *_subtokens(term)}
+            variants = {v for v in variants if len(v) >= 2}
+            if not variants:
+                continue
+            ored = " OR ".join(f'"{v}"' for v in sorted(variants, key=str.lower))
+            group = f"({ored})" if len(variants) > 1 else ored
+            groups.append(group)
+            if term.lower() not in _SYMBOL_STOPWORDS:
+                salient.append(group)
+        return " AND ".join(salient or groups)
+
+    parsed = build_lexical_query(
+        query,
+        include_synonyms=bool(tuning.query_expansion),
+        include_subtokens=True,
+        tuning=tuning,
+    )
+    if not parsed.original_terms:
+        return ""
+    if tuning.soft_lexical:
+        return _soft_match_query(parsed)
+    return build_fts_query(parsed, include_expansions=bool(tuning.query_expansion))
 
 
 def _freshness(

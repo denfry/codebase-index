@@ -1,7 +1,7 @@
 """Orchestrate the hybrid retrieval pipeline (RETRIEVAL.md §1–§7).
 
 query -> intent -> retrievers -> RRF fuse -> rerank -> budget -> payload.
-Graph expansion (§5) and vector retrieval (§2 vector) are deferred to M5/M6.
+Graph expansion is bounded and opt-in; vector retrieval remains optional.
 """
 
 from __future__ import annotations
@@ -15,17 +15,16 @@ from ..config import Config
 from ..indexer.freshness import compute_freshness
 from . import searchers
 from .budget import apply_budget
+from .diversity import deduplicate, mmr_select
 from .fusion import fuse
 from .intent import detect_intent
 from .rerank import rerank
+from .tuning import DEFAULT_TUNING, RetrievalTuning
 from .types import Confidence
+from ..graph.retrieval import graph_candidates
 
 _TERM_RE = re.compile(r"[A-Za-z0-9_]+")
-_RRF_K = 60
-# Max results kept per file before extras are pushed to the tail. Bucketed fusion
-# already collapses co-located hits; this caps the long tail of one big file
-# dominating the page so distinct files get surfaced.
-_MAX_PER_FILE = 3
+# rrf_k / max_per_file now live on RetrievalTuning so they are ablatable.
 _KIND_ALIASES = {
     "method": "method",
     "methods": "method",
@@ -51,21 +50,44 @@ def _requested_symbol_kind(query: str) -> str | None:
     return next(iter(kinds)) if len(kinds) == 1 else None
 
 
-def _run_retrievers(conn, query, *, mode, limit, weights, backend=None):
+def _run_retrievers(
+    conn, query, *, mode, limit, weights, backend=None, tuning=DEFAULT_TUNING,
+    graph_depth: int = 2, graph_node_cap: int = 40, graph_strategy: str = "none",
+):
     lists = {}
     symbol_kind = _requested_symbol_kind(query)
     if mode in ("hybrid", "fts"):
-        lists["fts"] = searchers.fts_candidates(conn, query, limit=limit)
+        lists["fts"] = searchers.fts_candidates(conn, query, limit=limit, tuning=tuning)
     if mode in ("hybrid", "symbol"):
-        lists["symbol"] = searchers.symbol_candidates(conn, query, limit=limit, kind=symbol_kind)
+        lists["symbol"] = searchers.symbol_candidates(
+            conn, query, limit=limit, kind=symbol_kind, tuning=tuning
+        )
     if mode == "hybrid":
-        lists["path"] = searchers.path_candidates(conn, query, limit=limit)
+        lists["path"] = searchers.path_candidates(
+            conn, query, limit=limit, tuning=tuning
+        )
     if mode in ("hybrid", "vector") and backend is not None and getattr(backend, "enabled", False):
         lists["vector"] = searchers.vector_candidates(conn, query, backend, limit=limit)
+
     if mode != "hybrid":
         weights = {mode: 1.0}
+    elif tuning.graph_source and graph_strategy != "none":
+        seeds = [candidate for candidates in lists.values() for candidate in candidates]
+        related = graph_candidates(
+            conn,
+            seeds,
+            depth=graph_depth,
+            node_cap=graph_node_cap,
+            damping=tuning.graph_damping,
+            iterations=tuning.graph_iterations,
+            direction={"up": "up", "down": "down", "refs": "up", "both": "both"}.get(
+                graph_strategy, "both"
+            ),
+        )
+        if related:
+            lists["graph"] = related
+            weights = {**weights, "graph": tuning.graph_weight}
     return lists, weights
-
 
 def _confidence(ranked) -> Confidence:
     if not ranked:
@@ -73,6 +95,10 @@ def _confidence(ranked) -> Confidence:
     top = ranked[0]
     if top.score <= 0:
         return Confidence.LOW
+    exact = getattr(top, "exact_symbol", False)
+    # Exact symbol matches are high confidence even when they are the sole hit.
+    if exact:
+        return Confidence.HIGH
     if len(ranked) == 1:
         return Confidence.MEDIUM
     # Relative gap, not absolute: scale-invariant, so it stays meaningful regardless
@@ -80,11 +106,7 @@ def _confidence(ranked) -> Confidence:
     # surfaced the winning file at all), the signal RRF agreement is meant to capture.
     rel_gap = (top.score - ranked[1].score) / top.score
     agree = getattr(top, "agreeing_sources", 1)
-    exact = getattr(top, "exact_symbol", False)
     n = len(ranked)
-    # Exact symbol match always high confidence
-    if exact:
-        return Confidence.HIGH
     # Strong multi-source agreement with a clear score gap
     if agree >= 3 and rel_gap > 0.15:
         return Confidence.HIGH
@@ -131,21 +153,43 @@ def search(
     token_budget: int,
     no_fallback: bool,
     backend=None,
+    tuning: Optional[RetrievalTuning] = None,
     root: Optional[Path] = None,
     config: Optional[Config] = None,
     offset: int = 0,
     compact: bool = True,
     compact_min_reduction: float = 0.25,
 ) -> dict:
+    tuning = tuning or DEFAULT_TUNING
     plan = detect_intent(query)
     if token_budget <= 0:
         token_budget = plan.token_budget
     fetch_limit = limit + offset
-    lists, weights = _run_retrievers(
-        conn, query, mode=mode, limit=fetch_limit, weights=plan.weights, backend=backend
+    pool_limit = (
+        max(fetch_limit * 2, 20)
+        if (tuning.mmr or tuning.dedup)
+        else fetch_limit
     )
-    fused = fuse(lists, weights=weights, k=_RRF_K)
-    ranked = _diversify(rerank(fused, query=query, intent=plan.intent), per_file=_MAX_PER_FILE)
+    lists, weights = _run_retrievers(
+        conn,
+        query,
+        mode=mode,
+        limit=pool_limit,
+        weights=plan.weights,
+        backend=backend,
+        tuning=tuning,
+        graph_depth=tuning.graph_depth,
+        graph_node_cap=tuning.graph_node_cap,
+        graph_strategy=plan.graph_strategy,
+    )
+    fused = fuse(lists, weights=weights, k=tuning.rrf_k)
+    ranked = rerank(fused, query=query, intent=plan.intent, tuning=tuning)
+    if tuning.dedup:
+        ranked = deduplicate(ranked, hamming_distance=tuning.dedup_hamming)
+    if tuning.mmr:
+        ranked = mmr_select(ranked, fetch_limit, tuning.mmr_lambda)
+    else:
+        ranked = _diversify(ranked, per_file=tuning.max_per_file)
     ranked = ranked[:fetch_limit]
     confidence = _confidence(ranked)
     # Scale budget proportionally so later pages receive snippet coverage.

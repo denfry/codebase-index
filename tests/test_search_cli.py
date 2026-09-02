@@ -35,6 +35,19 @@ def test_search_json_runs(tmp_path, monkeypatch):
     assert "results" in payload
 
 
+def test_exact_symbol_search_reports_high_confidence(tmp_path, monkeypatch):
+    db_path = _build(tmp_path, monkeypatch)
+    monkeypatch.setenv("CBX_DB_PATH", str(db_path))
+    result = runner.invoke(
+        app,
+        ["search", "refresh_access_token", "--mode", "symbol", "--json"],
+    )
+    assert result.exit_code == 0, result.output
+    payload = _json.loads(result.stdout)
+    assert payload["confidence"] == "high"
+    assert payload["results"][0]["symbols"] == ["refresh_access_token"]
+
+
 def test_search_auto_indexes_when_missing(sample_repo, tmp_path):
     root = tmp_path / "copy"
     shutil.copytree(sample_repo, root)
