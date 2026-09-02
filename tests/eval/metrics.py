@@ -14,6 +14,7 @@ instead of crashing the sweep.
 from __future__ import annotations
 
 import math
+import random
 from collections.abc import Iterable, Sequence
 
 
@@ -127,3 +128,80 @@ def percentile(values: Sequence[float], pct: float) -> float:
     ordered = sorted(values)
     idx = math.ceil(pct / 100.0 * len(ordered)) - 1
     return ordered[min(max(idx, 0), len(ordered) - 1)]
+
+
+# --- significance -----------------------------------------------------------
+#
+# A 36-query set cannot distinguish a +0.03 MRR improvement from noise, and eyeballing
+# a delta column is how ranking systems accumulate changes that never actually helped.
+# Both routines below are paired (same queries, two systems) and seeded, so a reported
+# interval is reproducible rather than a different number on every run.
+
+_BOOTSTRAP_SEED = 20260902
+
+
+def paired_bootstrap_ci(
+    deltas: Sequence[float],
+    *,
+    resamples: int = 5000,
+    confidence: float = 0.95,
+    seed: int = _BOOTSTRAP_SEED,
+) -> tuple[float, float, float]:
+    """Return (mean delta, lower, upper) for a per-query difference vector.
+
+    Resampling queries — not scores — is what makes the interval answer the
+    question we care about: would this improvement survive a different, equally
+    plausible sample of user questions?
+    """
+    values = list(deltas)
+    n = len(values)
+    if n == 0:
+        return 0.0, 0.0, 0.0
+    observed = math.fsum(values) / n
+    if n == 1:
+        return observed, observed, observed
+
+    rng = random.Random(seed)
+    means = []
+    for _ in range(max(1, resamples)):
+        total = 0.0
+        for _ in range(n):
+            total += values[rng.randrange(n)]
+        means.append(total / n)
+    means.sort()
+    tail = (1.0 - confidence) / 2.0
+    lo = means[min(len(means) - 1, int(tail * len(means)))]
+    hi = means[min(len(means) - 1, int((1.0 - tail) * len(means)))]
+    return observed, lo, hi
+
+
+def paired_permutation_p(
+    deltas: Sequence[float],
+    *,
+    resamples: int = 5000,
+    seed: int = _BOOTSTRAP_SEED,
+) -> float:
+    """Two-sided paired permutation test on a per-query difference vector.
+
+    Under the null the two systems are interchangeable on each query, so flipping
+    the sign of any subset of deltas is equally likely. Reports the fraction of
+    sign-flipped resamples at least as extreme as what we measured.
+    """
+    values = list(deltas)
+    n = len(values)
+    if n == 0:
+        return 1.0
+    observed = abs(math.fsum(values) / n)
+    if observed == 0.0:
+        return 1.0
+
+    rng = random.Random(seed + 1)
+    extreme = 0
+    trials = max(1, resamples)
+    for _ in range(trials):
+        total = 0.0
+        for value in values:
+            total += value if rng.getrandbits(1) else -value
+        if abs(total / n) >= observed - 1e-12:
+            extreme += 1
+    return extreme / trials

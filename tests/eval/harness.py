@@ -23,6 +23,11 @@ import yaml
 
 from codebase_index.config import Config
 from codebase_index.indexer.pipeline import build_index
+from codebase_index.retrieval.diversity import (
+    normalize_code_tokens,
+    simhash_distance,
+    token_fingerprint,
+)
 from codebase_index.retrieval.pipeline import search
 from codebase_index.retrieval.tuning import RetrievalTuning
 from codebase_index.storage.db import Database
@@ -48,6 +53,11 @@ class QueryOutcome:
     ranked_files: list[str]
     returned: list[tuple[str, int]]
     latency_ms: float
+    total_tokens: int = 0
+    """Snippet tokens actually handed to the agent for this query."""
+    duplicates: int = 0
+    """Results whose snippet near-duplicates an earlier result in the same page."""
+    n_results: int = 0
 
 
 @dataclass
@@ -68,7 +78,17 @@ class EvalReport:
     p95_ms: float
     p99_ms: float
     mean_ms: float
+    mean_tokens: float = 0.0
+    """Mean tokens of snippet context returned per query — the agent's actual bill."""
+    duplicate_rate: float = 0.0
+    """Fraction of returned results that near-duplicate an earlier result."""
+    mean_candidates: float = 0.0
+    """Mean results returned per query, before the agent reads anything."""
     per_category: dict[str, float] = field(default_factory=dict)
+    per_query: dict[str, list[float]] = field(default_factory=dict)
+    """Per-query metric vectors, in query order. Required for paired significance
+    testing: aggregate deltas alone cannot separate a real gain from resampling
+    noise on a set this size."""
 
     def as_row(self) -> dict[str, float | str | int]:
         return {
@@ -82,6 +102,8 @@ class EvalReport:
             "P@5": self.precision_at_5,
             "MAP": self.map_score,
             "useful@budget": self.useful_context,
+            "tokens": self.mean_tokens,
+            "dup%": self.duplicate_rate * 100.0,
             "p50_ms": self.p50_ms,
             "p95_ms": self.p95_ms,
             "p99_ms": self.p99_ms,
@@ -164,15 +186,42 @@ def run_query(
 
     ranked_files: list[str] = []
     returned: list[tuple[str, int]] = []
-    for r in payload.get("results", []):
+    total_tokens = 0
+    duplicates = 0
+    fingerprints: list[int] = []
+    results = payload.get("results", [])
+    for r in results:
         p = _normalise(r["path"])
         # File-level ranking: the agent's unit of decision is "which file do I
         # open", so multiple hits inside one file collapse to its best rank.
         if p not in ranked_files:
             ranked_files.append(p)
-        returned.append((p, int(r.get("token_est") or 0)))
-    return QueryOutcome(query=q, ranked_files=ranked_files, returned=returned,
-                        latency_ms=latency_ms)
+        tokens = int(r.get("token_est") or 0)
+        returned.append((p, tokens))
+        snippet = r.get("snippet")
+        # Only snippets are actually placed in the agent's context. Results past
+        # the budget still carry a `token_est` for their (unread) chunk, so summing
+        # it would report a bill the agent never pays.
+        if snippet:
+            total_tokens += tokens
+        # Duplicate rate is measured on what the agent actually receives, using the
+        # same fingerprint the pipeline suppresses with — so the number reports the
+        # residual noise after selection, not the raw candidate overlap.
+        chunk_tokens = normalize_code_tokens(snippet or "")
+        if chunk_tokens:
+            fingerprint = token_fingerprint(chunk_tokens)
+            if any(simhash_distance(fingerprint, seen) <= 3 for seen in fingerprints):
+                duplicates += 1
+            fingerprints.append(fingerprint)
+    return QueryOutcome(
+        query=q,
+        ranked_files=ranked_files,
+        returned=returned,
+        latency_ms=latency_ms,
+        total_tokens=total_tokens,
+        duplicates=duplicates,
+        n_results=len(results),
+    )
 
 
 def evaluate(
@@ -198,45 +247,74 @@ def evaluate(
                           token_budget=token_budget).latency_ms
             )
 
-    def mean(fn) -> float:
-        vals = [fn(o) for o in outcomes]
+    # Named metric extractors, so aggregate values and the per-query vectors used
+    # for significance testing can never be computed two different ways.
+    scorers = {
+        "recall@5": lambda o: metrics.recall_at_k(o.ranked_files, o.query.expected_files, 5),
+        "recall@10": lambda o: metrics.recall_at_k(o.ranked_files, o.query.expected_files, 10),
+        "MRR": lambda o: metrics.reciprocal_rank(o.ranked_files, o.query.expected_files),
+        "nDCG@10": lambda o: metrics.ndcg_at_k(o.ranked_files, o.query.expected_files, 10),
+        "hit@3": lambda o: metrics.hit_rate_at_k(o.ranked_files, o.query.expected_files, 3),
+        "P@5": lambda o: metrics.precision_at_k(o.ranked_files, o.query.expected_files, 5),
+        "MAP": lambda o: metrics.average_precision(o.ranked_files, o.query.expected_files),
+        "useful@budget": lambda o: metrics.useful_context_at_budget(
+            o.returned, o.query.expected_files, token_budget
+        ),
+    }
+    per_query = {name: [fn(o) for o in outcomes] for name, fn in scorers.items()}
+
+    def mean(name: str) -> float:
+        vals = per_query[name]
         return statistics.fmean(vals) if vals else 0.0
 
     per_category: dict[str, list[float]] = {}
-    for o in outcomes:
-        per_category.setdefault(o.query.category, []).append(
-            metrics.reciprocal_rank(o.ranked_files, o.query.expected_files)
-        )
+    for o, rr in zip(outcomes, per_query["MRR"]):
+        per_category.setdefault(o.query.category, []).append(rr)
+
+    returned_total = sum(o.n_results for o in outcomes)
+    duplicate_total = sum(o.duplicates for o in outcomes)
 
     return EvalReport(
         label=label,
         n_queries=len(outcomes),
-        recall_at_5=mean(lambda o: metrics.recall_at_k(o.ranked_files, o.query.expected_files, 5)),
-        recall_at_10=mean(lambda o: metrics.recall_at_k(o.ranked_files, o.query.expected_files, 10)),
-        mrr=mean(lambda o: metrics.reciprocal_rank(o.ranked_files, o.query.expected_files)),
-        ndcg_at_10=mean(lambda o: metrics.ndcg_at_k(o.ranked_files, o.query.expected_files, 10)),
-        hit_rate_at_3=mean(lambda o: metrics.hit_rate_at_k(o.ranked_files, o.query.expected_files, 3)),
-        precision_at_5=mean(lambda o: metrics.precision_at_k(o.ranked_files, o.query.expected_files, 5)),
-        map_score=mean(lambda o: metrics.average_precision(o.ranked_files, o.query.expected_files)),
-        useful_context=mean(
-            lambda o: metrics.useful_context_at_budget(
-                o.returned, o.query.expected_files, token_budget
-            )
-        ),
+        recall_at_5=mean("recall@5"),
+        recall_at_10=mean("recall@10"),
+        mrr=mean("MRR"),
+        ndcg_at_10=mean("nDCG@10"),
+        hit_rate_at_3=mean("hit@3"),
+        precision_at_5=mean("P@5"),
+        map_score=mean("MAP"),
+        useful_context=mean("useful@budget"),
         p50_ms=metrics.percentile(latencies, 50),
         p95_ms=metrics.percentile(latencies, 95),
         p99_ms=metrics.percentile(latencies, 99),
         mean_ms=statistics.fmean(latencies) if latencies else 0.0,
+        mean_tokens=(
+            statistics.fmean([o.total_tokens for o in outcomes]) if outcomes else 0.0
+        ),
+        duplicate_rate=(duplicate_total / returned_total) if returned_total else 0.0,
+        mean_candidates=(returned_total / len(outcomes)) if outcomes else 0.0,
         per_category={
             cat: statistics.fmean(vals) for cat, vals in sorted(per_category.items())
         },
+        per_query=per_query,
     )
 
 
-def format_table(reports: Sequence[EvalReport], *, baseline: EvalReport | None = None) -> str:
+_WIDE_COLS = ("tokens", "dup%")
+
+
+def format_table(
+    reports: Sequence[EvalReport],
+    *,
+    baseline: EvalReport | None = None,
+    columns: Sequence[str] | None = None,
+) -> str:
     """Render reports as a Markdown table, with deltas against `baseline`."""
-    cols = ["label", "recall@5", "recall@10", "MRR", "nDCG@10", "hit@3", "P@5",
-            "MAP", "useful@budget", "p50_ms", "p95_ms"]
+    cols = list(columns) if columns else [
+        "label", "recall@5", "recall@10", "MRR", "nDCG@10", "hit@3", "P@5",
+        "MAP", "useful@budget", "tokens", "dup%", "p50_ms", "p95_ms",
+    ]
     lines = ["| " + " | ".join(cols) + " |",
              "|" + "|".join("---" for _ in cols) + "|"]
     for rep in reports:
@@ -245,13 +323,97 @@ def format_table(reports: Sequence[EvalReport], *, baseline: EvalReport | None =
         for c in cols:
             v = row[c]
             if isinstance(v, float):
-                cell = f"{v:.3f}" if c.endswith("_ms") is False else f"{v:.1f}"
+                coarse = c.endswith("_ms") or c in _WIDE_COLS
+                cell = f"{v:.1f}" if coarse else f"{v:.3f}"
                 if baseline is not None and rep is not baseline:
                     delta = v - float(baseline.as_row()[c])
-                    if abs(delta) >= 0.0005:
-                        cell += f" ({delta:+.3f})" if not c.endswith("_ms") else f" ({delta:+.1f})"
+                    if abs(delta) >= (0.05 if coarse else 0.0005):
+                        cell += f" ({delta:+.1f})" if coarse else f" ({delta:+.3f})"
                 cells.append(cell)
             else:
                 cells.append(str(v))
         lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
+def pool(reports: Sequence[EvalReport], *, label: str) -> EvalReport:
+    """Concatenate per-corpus reports into one, weighting every query equally.
+
+    Averaging the per-corpus averages would let a 36-query corpus outvote a
+    118-query one; pooling the raw per-query vectors keeps one query = one vote and
+    is what makes the significance tests valid across a mixed-language benchmark.
+    """
+    reports = list(reports)
+    if not reports:
+        raise ValueError("cannot pool an empty report list")
+
+    per_query: dict[str, list[float]] = {}
+    for rep in reports:
+        for name, values in rep.per_query.items():
+            per_query.setdefault(name, []).extend(values)
+
+    def mean(name: str) -> float:
+        vals = per_query.get(name, [])
+        return statistics.fmean(vals) if vals else 0.0
+
+    total = sum(rep.n_queries for rep in reports) or 1
+
+    def weighted(attr: str) -> float:
+        return sum(getattr(rep, attr) * rep.n_queries for rep in reports) / total
+
+    per_category: dict[str, list[float]] = {}
+    for rep in reports:
+        for cat, value in rep.per_category.items():
+            per_category.setdefault(cat, []).append(value)
+
+    return EvalReport(
+        label=label,
+        n_queries=total,
+        recall_at_5=mean("recall@5"),
+        recall_at_10=mean("recall@10"),
+        mrr=mean("MRR"),
+        ndcg_at_10=mean("nDCG@10"),
+        hit_rate_at_3=mean("hit@3"),
+        precision_at_5=mean("P@5"),
+        map_score=mean("MAP"),
+        useful_context=mean("useful@budget"),
+        # Latency percentiles cannot be pooled from percentiles; report the
+        # query-weighted mean of each, which is honest about being an approximation
+        # only when corpora differ wildly in size.
+        p50_ms=weighted("p50_ms"),
+        p95_ms=weighted("p95_ms"),
+        p99_ms=weighted("p99_ms"),
+        mean_ms=weighted("mean_ms"),
+        mean_tokens=weighted("mean_tokens"),
+        duplicate_rate=weighted("duplicate_rate"),
+        mean_candidates=weighted("mean_candidates"),
+        per_category={c: statistics.fmean(v) for c, v in sorted(per_category.items())},
+        per_query=per_query,
+    )
+
+
+def format_significance(
+    baseline: EvalReport,
+    candidate: EvalReport,
+    *,
+    resamples: int = 5000,
+) -> str:
+    """Paired bootstrap CI + permutation p-value per metric, candidate vs baseline."""
+    lines = [
+        f"paired comparison: {candidate.label} vs {baseline.label} "
+        f"(n={min(baseline.n_queries, candidate.n_queries)})",
+        f"| {'metric':13} | {'delta':>8} | {'95% CI':>19} | {'p':>6} | sig |",
+        "|" + "|".join("---" for _ in range(5)) + "|",
+    ]
+    for name, base_values in baseline.per_query.items():
+        cand_values = candidate.per_query.get(name, [])
+        if len(cand_values) != len(base_values):
+            continue
+        deltas = [c - b for b, c in zip(base_values, cand_values)]
+        delta, lo, hi = metrics.paired_bootstrap_ci(deltas, resamples=resamples)
+        p = metrics.paired_permutation_p(deltas, resamples=resamples)
+        lines.append(
+            f"| {name:13} | {delta:+8.4f} | [{lo:+.4f},{hi:+.4f}] | {p:6.3f} | "
+            f"{'yes' if p < 0.05 else 'no':3} |"
+        )
     return "\n".join(lines)
