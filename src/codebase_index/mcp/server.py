@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from ..config import Config
 
 try:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.fastmcp import FastMCP  # type: ignore[attr-defined]
 except ImportError as exc:  # pragma: no cover
     raise ImportError(
         "MCP server needs the optional extra: pip install codebase-index[mcp]"
