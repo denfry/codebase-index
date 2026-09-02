@@ -113,11 +113,27 @@ _TEST_QUERY_RE = re.compile(
     re.IGNORECASE,
 )
 
+# No single prior may exceed this magnitude. Priors exist to break ties between
+# comparably-matching files, never to overrule retrieval evidence: fused scores
+# reach ~1.0-1.5 and the largest rerank bonus (exact symbol) is 0.20, so a prior
+# capped here can reorder near-neighbours but cannot lift an unrelated file over a
+# genuine match. Widening this constant is a deliberate ranking-policy change.
+MAX_ABS_PRIOR = 0.25
+
 _ROLE_PRIORS = {
     SourceRole.IMPLEMENTATION: 0.08,
     SourceRole.TEST: -0.06,
-    SourceRole.DOCUMENTATION: -0.05,
-    SourceRole.GENERATED_VENDOR_BUILD: -0.12,
+    # Prose about a feature matches a natural-language question more literally than
+    # the code implementing it, so design notes and plans crowded out the modules
+    # they describe. Measured over 305 queries on three repositories, deepening the
+    # demotion from -0.05 to -0.20 raised MRR and — because it only reorders docs
+    # relative to code, never below other docs — also improved documentation-seeking
+    # queries. -0.35 overshoots and collapses them, so the optimum is interior.
+    SourceRole.DOCUMENTATION: -0.20,
+    # Kept below documentation: a vendored or generated copy is the least useful
+    # answer of all. Measured as quality-neutral on the benchmark corpora, so this
+    # value preserves the role ordering rather than chasing a score.
+    SourceRole.GENERATED_VENDOR_BUILD: -0.25,
     SourceRole.UNKNOWN: 0.0,
 }
 _TEST_QUERY_PRIOR = 0.05

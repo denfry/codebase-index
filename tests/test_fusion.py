@@ -64,3 +64,82 @@ def test_fuse_dedupes_repeated_source_hits_in_one_bucket():
     fused = fuse({"fts": fts}, weights={"fts": 1.0}, k=60)
     assert len(fused) == 1
     assert fused[0].score <= 1.0  # single best-rank contribution, not summed 3x
+
+
+def test_file_agreement_credits_cross_locator_evidence():
+    """Two retrievers pointing at one file from different regions is agreement.
+
+    Line bucketing alone cannot merge them — a symbol defined at line 5 and a
+    lexical hit at line 400 are genuinely different locators — so without this the
+    file's evidence stayed split across two weakly-scored candidates.
+    """
+    lists = {
+        "fts": [_c("other.py", "fts", 0.9), Candidate(
+            path="target.py", line_start=400, line_end=420, source="fts", score=0.5)],
+        "symbol": [Candidate(
+            path="target.py", line_start=5, line_end=9, source="symbol", score=0.8)],
+    }
+    weights = {"fts": 1.0, "symbol": 1.0}
+    split = fuse(lists, weights=weights, k=60, file_agreement=0.0)
+    joined = fuse(lists, weights=weights, k=60, file_agreement=0.4)
+
+    assert split[0].path == "other.py"          # rank-0 lexical hit wins outright
+    assert joined[0].path == "target.py"        # ...until both retrievers are heard
+
+
+def test_file_agreement_zero_reproduces_plain_rrf():
+    """The default must be opt-in-able away for a clean single-signal ablation."""
+    lists = {
+        "fts": [_c("a.py", "fts", 0.9), _c("b.py", "fts", 0.4)],
+        "symbol": [Candidate(path="a.py", line_start=90, line_end=95,
+                             source="symbol", score=0.8)],
+    }
+    weights = {"fts": 1.0, "symbol": 1.0}
+    plain = fuse(lists, weights=weights, k=60, file_agreement=0.0)
+    assert [(c.path, round(c.score, 9)) for c in plain] == [
+        (c.path, round(c.score, 9))
+        for c in fuse(lists, weights=weights, k=60)
+    ]
+
+
+def test_file_agreement_does_not_double_count_own_source():
+    """A retriever already counted at this locator must not be counted again."""
+    only_fts = {"fts": [_c("a.py", "fts", 0.9)]}
+    weights = {"fts": 1.0}
+    without = fuse(only_fts, weights=weights, k=60, file_agreement=0.0)
+    with_agreement = fuse(only_fts, weights=weights, k=60, file_agreement=1.0)
+    assert without[0].score == with_agreement[0].score
+
+
+def test_file_agreement_ignores_zero_weight_sources():
+    lists = {
+        "fts": [_c("a.py", "fts", 0.9)],
+        "path": [Candidate(path="a.py", line_start=800, line_end=800,
+                           source="path", score=1.0)],
+    }
+    weights = {"fts": 1.0, "path": 0.0}
+    scored = fuse(lists, weights=weights, k=60, file_agreement=1.0)
+    assert len(scored) == 1
+    assert scored[0].score == fuse({"fts": lists["fts"]}, weights=weights, k=60)[0].score
+
+
+def test_file_agreement_uses_best_rank_per_source_and_is_deterministic():
+    """Repeated same-file hits from one source contribute once, at their best rank."""
+    lists = {
+        "fts": [_c("x.py", "fts", 0.9)],
+        "symbol": [
+            Candidate(path="x.py", line_start=100, line_end=110, source="symbol", score=0.7),
+            Candidate(path="x.py", line_start=200, line_end=210, source="symbol", score=0.6),
+        ],
+    }
+    weights = {"fts": 1.0, "symbol": 1.0}
+    runs = [
+        [(c.path, c.line_start, round(c.score, 12)) for c in
+         fuse(lists, weights=weights, k=60, file_agreement=0.4)]
+        for _ in range(3)
+    ]
+    assert runs[0] == runs[1] == runs[2]
+    top = fuse(lists, weights=weights, k=60, file_agreement=0.4)[0]
+    # fts rank 0 (1.0) + 0.4 * symbol best rank 0 (1.0) == 1.4, not 1.4 + a second
+    # symbol contribution from the line-200 hit.
+    assert top.score == 1.0 + 0.4 * 1.0

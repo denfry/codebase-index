@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import hashlib
 import math
+from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
+from functools import lru_cache
 
 from .types import Candidate
 
@@ -90,6 +92,18 @@ def normalize_code_tokens(content: str | None) -> tuple[str, ...]:
     return tuple(tokens)
 
 
+@lru_cache(maxsize=1 << 16)
+def _token_digest(token: str) -> int:
+    """64-bit blake2b digest of one token. Pure, so caching is safe and bounded.
+
+    Source chunks repeat identifiers and keywords heavily both inside a chunk and
+    across the candidate pool, and hashing dominated fingerprint cost.
+    """
+    return int.from_bytes(
+        hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest(), "big", signed=False
+    )
+
+
 def token_fingerprint(tokens: Iterable[str] | str | None) -> int:
     """Compute a stable unsigned 64-bit SimHash for tokens or source content."""
     if tokens is None:
@@ -100,12 +114,14 @@ def token_fingerprint(tokens: Iterable[str] | str | None) -> int:
     if not values:
         return 0
 
+    # Weighting distinct tokens by multiplicity is arithmetically identical to
+    # summing each occurrence, and collapses the per-occurrence hash and 64-bit
+    # accumulation loop to per-distinct-token work. Output is bit-for-bit unchanged.
     weights = [0] * 64
-    for token in values:
-        digest = hashlib.blake2b(str(token).encode("utf-8"), digest_size=8).digest()
-        hashed = int.from_bytes(digest, "big", signed=False)
+    for token, count in Counter(str(value) for value in values).items():
+        hashed = _token_digest(token)
         for bit in range(64):
-            weights[bit] += 1 if (hashed >> bit) & 1 else -1
+            weights[bit] += count if (hashed >> bit) & 1 else -count
 
     fingerprint = 0
     for bit, weight in enumerate(weights):
@@ -133,8 +149,14 @@ def _score_value(candidate: Candidate) -> float:
 
 
 def _same_or_better(left: Candidate, right: Candidate) -> bool:
-    """Whether left is the representative to retain; ties favor input order."""
-    return _score_value(left) > _score_value(right)
+    """Whether `left` (the incumbent) should stay the representative.
+
+    Ties favor the incumbent, i.e. input order. Candidates arrive sorted by score,
+    so a later duplicate is never strictly better; deciding ties by ">" instead
+    handed the slot to whichever equal-scoring copy happened to arrive last, making
+    the retained snippet depend on retriever emission order.
+    """
+    return _score_value(left) >= _score_value(right)
 
 
 def deduplicate(candidates: Sequence[Candidate], hamming_distance: int = 3) -> list[Candidate]:
@@ -146,14 +168,21 @@ def deduplicate(candidates: Sequence[Candidate], hamming_distance: int = 3) -> l
     fingerprints: list[int | None] = []
 
     for candidate in candidates:
-        _, _, fingerprint = _features(candidate)
+        # Only the fingerprint is needed here; building the token set as well
+        # doubled the per-candidate cost of the pipeline's hottest stage. "No
+        # fingerprint" means "no tokens", never "fingerprint happened to be 0".
+        tokens = normalize_code_tokens(candidate.content)
+        fingerprint = token_fingerprint(tokens) if tokens else None
         if fingerprint is None:
             representatives.append(candidate)
             fingerprints.append(None)
             continue
 
+        # Carry each match's fingerprint alongside its index: it is known non-None
+        # by construction here, and re-reading it from the list later would lose
+        # that guarantee.
         matches = [
-            index
+            (index, existing)
             for index, existing in enumerate(fingerprints)
             if existing is not None and simhash_distance(fingerprint, existing) <= threshold
         ]
@@ -162,17 +191,23 @@ def deduplicate(candidates: Sequence[Candidate], hamming_distance: int = 3) -> l
             fingerprints.append(fingerprint)
             continue
 
-        first = matches[0]
+        indices = [index for index, _ in matches]
+        first = indices[0]
         winner = candidate
-        for index in matches:
+        # The winner is either this candidate or an incumbent, and both
+        # fingerprints are already known — recomputing one from content was pure
+        # duplicated work.
+        winner_fingerprint = fingerprint
+        for index, existing in matches:
             incumbent = representatives[index]
             if _same_or_better(incumbent, winner):
                 winner = incumbent
-        for index in reversed(matches):
+                winner_fingerprint = existing
+        for index in reversed(indices):
             representatives.pop(index)
             fingerprints.pop(index)
         representatives.insert(first, winner)
-        fingerprints.insert(first, token_fingerprint(normalize_code_tokens(winner.content)))
+        fingerprints.insert(first, winner_fingerprint)
 
     return representatives
 
