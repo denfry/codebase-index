@@ -165,11 +165,13 @@ def search(
     if token_budget <= 0:
         token_budget = plan.token_budget
     fetch_limit = limit + offset
-    pool_limit = (
-        max(fetch_limit * 2, 20)
-        if (tuning.mmr or tuning.dedup)
-        else fetch_limit
-    )
+    # Selection (dedup / MMR / per-file diversification) removes candidates, so the
+    # pool is over-fetched. The multiplier is explicit rather than a side effect of
+    # which selection flags happen to be on. A widened pool also carries a floor so
+    # a tiny `limit` still leaves selection something to choose between; multiplier
+    # 1 means "no over-fetch at all" and takes the page size verbatim.
+    pool_mult = max(1, tuning.candidate_pool_multiplier)
+    pool_limit = fetch_limit if pool_mult == 1 else max(fetch_limit * pool_mult, 20)
     lists, weights = _run_retrievers(
         conn,
         query,
@@ -182,7 +184,12 @@ def search(
         graph_node_cap=tuning.graph_node_cap,
         graph_strategy=plan.graph_strategy,
     )
-    fused = fuse(lists, weights=weights, k=tuning.rrf_k)
+    fused = fuse(
+        lists,
+        weights=weights,
+        k=tuning.rrf_k,
+        file_agreement=tuning.file_agreement_weight if tuning.file_agreement else 0.0,
+    )
     ranked = rerank(fused, query=query, intent=plan.intent, tuning=tuning)
     if tuning.dedup:
         ranked = deduplicate(ranked, hamming_distance=tuning.dedup_hamming)

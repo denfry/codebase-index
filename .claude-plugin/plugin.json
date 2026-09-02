@@ -3,7 +3,7 @@
   "name": "codebase-index",
   "displayName": "Codebase Index",
   "description": "Give Claude a precise local map of your codebase: find implementations, trace behavior, and predict change impact with file-line evidence.",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "author": {
     "name": "codebase-index contributors"
   },

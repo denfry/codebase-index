@@ -65,6 +65,11 @@ source)` list so fusion is source-agnostic.
   first when the query clearly names a path.
 - **Symbol** — query against `symbols` (exact, identifier parts, bounded fuzzy matching). Carries
   `kind` (function/class/method/...) and signature. Primary for `locate_impl` / `find_refs`.
+  Fuzzy identifier matching (acronym / concatenation / edit distance) runs only as a **recall
+  fallback**, when the precise lookup named no symbol and returned fewer than
+  `fuzzy_fallback_min` rows. Measured over 305 queries on three repositories it moved no ranking
+  metric while costing ~20% of query latency, so it is kept for typos and abbreviations but no
+  longer runs when the query already spelled its identifier correctly.
 - **FTS** — FTS5 `bm25()` over the `fts_chunks` virtual table (chunk text + symbol names +
   summaries indexed). Query-time camelCase/snake_case splitting, small down-weighted synonym
   expansion, and soft coverage scoring make natural-language questions robust without weakening
@@ -79,28 +84,66 @@ source)` list so fusion is source-agnostic.
 scores:
 
 ```
-RRF(d) = Σ_r  w_r / (k + rank_r(d))        # k ≈ 60, w_r = per-intent retriever weight
+RRF(d) = Σ_r  w_r · k / (k + rank_r(d))    # k ≈ 60, w_r = per-intent retriever weight
 ```
 
 - Robust to scale differences between BM25 and cosine.
 - Per-intent weights `w_r` let `locate_impl` favor the symbol list and `how_it_works` favor FTS.
+- Scaled by `k` so fused scores and the reranker's bounded bonuses share an O(1) scale. This is a
+  monotonic rescale; fusion order is unchanged.
 - Ties broken by rerank features (next step).
+
+### Cross-locator file agreement
+
+Fusion keys on `(path, line-bucket)`, not `(path, start, end)`, because different retrievers report
+different line ranges for the same place. Bucketing alone was not enough: a symbol defined at line
+40 and a lexical hit at line 120 are genuinely different locators, so a file that **two retrievers
+agreed on** still fused as two separate candidates, each carrying one retriever's evidence — and
+cross-source agreement, the entire point of RRF, never fired.
+
+Each candidate therefore also receives, at weight `file_agreement_weight`, the RRF mass of every
+retriever that found its *file* at some other locator:
+
+```
+score(d) = RRF(d) + α · Σ_{r ∉ sources(d)}  w_r · k / (k + best_rank_r(path(d)))
+```
+
+Retrievers already counted at the candidate's own locator are excluded, so nothing double-counts,
+and the term is bounded by the same weights as fusion itself. `α = 0.4`; the 0.3–0.6 plateau peaks
+there. Set `RetrievalTuning(file_agreement=False)` to recover plain locator-only RRF.
 
 ## 4. Reranking (`retrieval/rerank.py`)
 
-A lightweight, explainable feature score (no external model required) layered on the fused order:
+A lightweight, explainable feature score (no external model required) layered on the fused order.
+Every term is bounded, so reranking reorders near-neighbours rather than overruling retrieval:
 
-| Feature | Intuition |
-|---|---|
-| symbol-kind match | a `def`/`class` outranks an incidental mention |
-| path proximity | files near a query-named path score higher |
-| graph centrality | high in/out-degree nodes matter more for `architecture` |
-| recency | recently changed files (git mtime) slightly boosted |
-| exact-name bonus | exact symbol-name match dominates fuzzy |
-| test/generated penalty | test files and generated code demoted unless asked |
+| Feature | Effect | Intuition |
+|---|---:|---|
+| Exact symbol match | +0.20 | the user named a specific symbol |
+| Symbol definition kind | +0.05 | a `def`/`class` outranks an incidental mention |
+| Symbol name among query terms | +0.05 | the name was asked for, not just matched |
+| Path term match | +0.05 | the user supplied a location clue |
+| Graph centrality (`in_degree`) | ≤ +0.08 | `log1p`-damped, so a god class cannot dominate |
+| Reference-count fallback | ≤ +0.04 | for names too common to resolve a precise `in_degree` |
+| Source role prior | −0.25…+0.08 | see below |
+| Generated, or test on a non-test query | −0.15 | supporting evidence, not the answer |
+
+### Source role priors (`retrieval/priors.py`)
+
+| Role | Prior | Rationale |
+|---|---:|---|
+| Implementation | +0.08 | the answer to a code question is usually code |
+| Test | −0.06 | flips to +0.05 when the query or intent is test-oriented |
+| Documentation | −0.20 | prose *about* a feature matches a natural-language question more literally than the code implementing it, so design notes and plans crowded out the modules they describe |
+| Generated / vendor / build | −0.25 | never the answer; kept strictly below documentation |
+
+The documentation prior deepened from −0.05 in 1.8.0. Because it only reorders prose relative to
+code — never below other prose — documentation-seeking queries improved too (MRR 0.579 → 0.612).
+At −0.35 that reverses and the `docs` category collapses, so the optimum is interior, not a
+"more is better" knob. `MAX_ABS_PRIOR` caps every prior so this stays a tiebreaker.
 
 The reranker also produces the human-readable **`reason`** string per result
-(e.g. *"exact symbol match · called by 4 sites · in src/auth/"*).
+(e.g. *"exact symbol match · 4 callers · in src/auth/"*).
 
 ## 5. Graph expansion (`graph/retrieval.py`; `graph/expand.py` for impact APIs)
 
@@ -119,11 +162,17 @@ Expanded nodes retain edge confidence and receive distance-decayed scores so see
 
 ## 6. Diversity and duplicate control
 
-`retrieval.diversity` provides bounded MMR selection and SimHash near-duplicate
-suppression. MMR is disabled in the shipped default because the reproducible
-benchmark favored relevance-only ranking; callers that need broader snippet
-coverage can enable `RetrievalTuning(mmr=True)`. Duplicate suppression remains
-available independently.
+`retrieval.diversity` provides bounded MMR selection and SimHash near-duplicate suppression.
+
+MMR is disabled in the shipped default: it moved no ranking metric on the benchmark and roughly
+doubled p50 latency. Callers that need broader snippet coverage can enable
+`RetrievalTuning(mmr=True)`.
+
+SimHash duplicate suppression stays on, but on noise grounds rather than ranking grounds: it does
+not move MRR, and it takes the duplicate rate of returned snippets from ~1.6% to ~0%. The
+over-fetch that feeds selection is now an explicit `candidate_pool_multiplier` rather than an
+implicit side effect of enabling dedup — an earlier ablation credited dedup with a quality win that
+was really the wider pool doing the work.
 
 ## 7. Token budgeting (`retrieval/budget.py`)
 

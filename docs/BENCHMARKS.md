@@ -1,10 +1,11 @@
 # Benchmarks
 
-`codebase-index` has three benchmark surfaces. Read them with their status in
+`codebase-index` has four benchmark surfaces. Read them with their status in
 mind — the whole point of this page is to keep evidence and aspiration separate.
 
 | Surface | What it is | Status | Use it as |
 |---|---|---|---|
+| Retrieval eval (`tests/eval/`) | Ranking quality vs a fixed baseline across multiple real repositories, with significance tests | **Proven (relative)** | The gate for ranking changes; measures *deltas*, not absolute superiority |
 | Public suite (`tests/benchmark_public.py`) | Deterministic synthetic multi-language fixture with the full metric framework | **Toy/synthetic** | CI regression gate + metric shape, **not** product-quality evidence |
 | Smoke/perf (`test_perf_smoke.py`, `test_benchmark_comparison.py`) | Latency + output-size guards on a tiny fixture | **Toy/smoke** | Regression checks only |
 | Honest real-repo (`tests/benchmark_honest.py`) | 55k LOC Java repo, recall@3 vs disciplined `rg` baseline, symmetric token accounting | **Proven (one repo)** | The only headline product-quality number we stand behind today |
@@ -15,14 +16,32 @@ Do not write, imply, or ship any of these until a run with published logs exists
 
 - Any 10k / 100k / 1M LOC scale or speed claim (no real run at that size).
 - "Beats Cursor / Sourcegraph / Codebase-Memory MCP" — no head-to-head exists.
-- Per-language quality claims beyond Java (the honest run is Java-only).
+- Per-language *absolute* quality claims beyond Java. The retrieval eval covers
+  Python, Java and TypeScript, but it measures this system against its own earlier
+  versions — it says a change helped, not that the product beats an alternative.
 - Generic "Nx faster" / "Nx fewer tokens" without naming the baseline and repo.
-- Latency claims — the honest run explicitly does not headline latency
-  (Python process start dominates; real `rg` is tens of ms).
+- Latency claims against external tools — the honest run explicitly does not
+  headline latency (Python process start dominates; real `rg` is tens of ms).
+  Version-over-version latency from the retrieval eval is in-process and is only
+  comparable to other runs of that harness.
 
 The defensible headline today is exactly: **on one 55k LOC Java repo, recall@3 was
 70% (index) vs 40% (`rg`+window), using ~13× fewer answer tokens.** Everything
 else is roadmap.
+
+## Retrieval evaluation (ranking gate)
+
+See [tests/eval/README.md](../tests/eval/README.md) for the full protocol. In short:
+ground truth comes from hand-written queries verified against the source tree and
+from commit-subject → changed-files pairs mined from git history (leak-free: the
+query text is not in the indexed corpus). Corpora are pooled across languages, one
+index per corpus is shared by every variant, and every non-baseline row carries a
+paired bootstrap CI and permutation p-value.
+
+`1.9.0` was measured over 305 queries across Python, Java and TypeScript corpora
+against `1.8.0`: MRR +0.027, MAP +0.028, nDCG@10 +0.024, recall@5 +0.031 (all
+p < 0.001), with p50 latency 78.6 ms → 51.2 ms. These are version-over-version
+ranking deltas on those corpora, not a universal quality claim.
 
 ## Public benchmark suite
 

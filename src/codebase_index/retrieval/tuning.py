@@ -27,9 +27,20 @@ class RetrievalTuning:
     # --- candidate generation ------------------------------------------------
     fuzzy_symbols: bool = True
     """Acronym / concatenation / edit-distance identifier matching in the symbol
-    retriever, so `userid` and `get user` both reach `getUserById`."""
+    retriever, so `userid` and `get user` both reach `getUserById`.
+
+    Runs only as a *recall fallback* (see `fuzzy_fallback_min`). Measured on 305
+    queries across three repositories it changed no ranking metric while costing
+    ~20% of query latency, because real queries name identifiers correctly often
+    enough that the precise lookup already answers them. Gating it behind an
+    empty-handed precise lookup keeps the typo/acronym capability at ~zero cost.
+    """
     fuzzy_threshold: float = 0.55
     """Minimum identifier similarity for fuzzy symbol candidates."""
+
+    fuzzy_fallback_min: int = 3
+    """Run fuzzy identifier matching only when the precise symbol lookup returned
+    fewer than this many rows and found no exact match. 0 restores always-on."""
 
     query_expansion: bool = True
     """Down-weighted code-synonym expansion (auth->authentication, ...). Original
@@ -52,6 +63,16 @@ class RetrievalTuning:
 
     min_term_coverage: float = 0.5
     """Fraction of salient query terms a chunk must contain under soft matching."""
+
+    candidate_pool_multiplier: int = 2
+    """Over-fetch factor for the pre-selection candidate pool.
+
+    Selection stages (dedup, MMR, per-file diversification) drop or reorder
+    candidates, so the pool must be wider than the requested limit or the page
+    ends up short. Previously this widening was an implicit side effect of
+    `dedup or mmr` being enabled; making it explicit is what let the ablation
+    show that the measured "dedup win" was really a pool-size win.
+    """
     # --- selection -----------------------------------------------------------
     mmr: bool = False
     """Maximal Marginal Relevance re-selection of the ranked list.
@@ -71,6 +92,19 @@ class RetrievalTuning:
     source_priors: bool = True
     """Prefer implementation files over their tests and over prose docs when both
     match a code question. Measured: tests/test_fusion.py outranked fusion.py."""
+
+    file_agreement: bool = True
+    """Credit a candidate for retrievers that found its *file* at another locator.
+
+    RRF fuses on (path, line-bucket), but a symbol hit at line 40 and a lexical
+    hit at line 120 in the same file land in different buckets, so cross-retriever
+    agreement — the entire point of fusion — never fired. This adds the missing
+    evidence back at reduced weight without double-counting a retriever already
+    counted at the candidate's own locator."""
+
+    file_agreement_weight: float = 0.4
+    """Discount applied to same-file, different-locator evidence. Tuned on 305
+    queries over three repositories; the 0.3-0.6 plateau peaks here."""
 
     # --- fixed parameters ----------------------------------------------------
     rrf_k: int = 60
@@ -92,6 +126,9 @@ class RetrievalTuning:
             mmr=False,
             dedup=False,
             source_priors=False,
+            file_agreement=False,
+            # 1.7.0 had no over-fetch: the pool was exactly the requested page.
+            candidate_pool_multiplier=1,
         )
 
     def without(self, flag: str) -> RetrievalTuning:
@@ -99,6 +136,9 @@ class RetrievalTuning:
         field_names = {f.name for f in fields(self)}
         if flag not in field_names:
             raise KeyError(f"unknown tuning flag: {flag!r}")
+        value = getattr(self, flag)
+        if not isinstance(value, bool):
+            raise TypeError(f"tuning flag {flag!r} is not a boolean signal")
         return replace(self, **{flag: False})
 
 

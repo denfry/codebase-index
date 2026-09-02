@@ -292,18 +292,35 @@ def symbol_candidates(
     symbol_terms = list(dict.fromkeys((*terms, *expanded_terms)))
     if not terms:
         return []
+    term_set = set(terms)
+    joined = "".join(terms)
+
+    # Precise lookup first (exact -> prefix -> substring). It answers most real
+    # queries on its own, and knowing its yield is what lets fuzzy matching stay
+    # off the hot path.
+    rows_by_key: dict[tuple, sqlite3.Row] = {}
+    for needle in symbol_terms:
+        for row in repo.symbol_search(conn, needle, limit=limit, kind=kind):
+            rows_by_key.setdefault((row["path"], row["line_start"], row["name"]), row)
+
     fuzzy_enabled = tuning.fuzzy_symbols and (
         len(terms) <= 3 or any(char.isupper() for char in query)
     )
-
-    term_set = set(terms)
-    joined = "".join(terms)
-    rows_by_key: dict[tuple, sqlite3.Row] = {}
+    if fuzzy_enabled and tuning.fuzzy_fallback_min > 0:
+        # Bounded edit distance over a lexical neighborhood is the single most
+        # expensive step in the pipeline. Spend it only when the precise lookup
+        # came up short: naming a real symbol, or simply returning enough
+        # candidates, means the query spelled its identifier well enough that
+        # fuzzing adds cost and noise rather than recall.
+        original_names = {term.casefold() for term in terms}
+        named_a_symbol = any(
+            (row["name"] or "").casefold() in original_names for row in rows_by_key.values()
+        )
+        fuzzy_enabled = not (
+            named_a_symbol or len(rows_by_key) >= tuning.fuzzy_fallback_min
+        )
     if fuzzy_enabled:
         for row in _fuzzy_symbol_rows(conn, query, limit=limit, kind=kind):
-            rows_by_key.setdefault((row["path"], row["line_start"], row["name"]), row)
-    for needle in symbol_terms:
-        for row in repo.symbol_search(conn, needle, limit=limit, kind=kind):
             rows_by_key.setdefault((row["path"], row["line_start"], row["name"]), row)
 
     scored: list[tuple] = []
@@ -313,7 +330,12 @@ def symbol_candidates(
         covered = sum(1 for t in terms if t in subs or t.casefold() in name_l)
         expanded_covered = sum(1 for t in expanded_terms if t in subs or t.casefold() in name_l)
         tightness = len(subs & term_set) / len(subs) if subs else 0.0
-        exact = (len(terms) == 1 and bool(row["is_exact"])) or (
+        # Exactness is judged against the user's own terms, never against an
+        # expansion. `row["is_exact"]` is relative to whichever needle happened to
+        # retrieve the row, so a synonym needle ("config" for "configuration") used
+        # to mark a merely-related symbol as an exact match — worth +0.20 at rerank
+        # and HIGH confidence. Comparing names locally is needle-independent.
+        exact = (len(terms) == 1 and name_l == terms[0].casefold()) or (
             bool(joined) and name_l == joined.casefold()
         )
         fuzzy = 0.0

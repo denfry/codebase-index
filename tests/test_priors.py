@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from codebase_index.retrieval.priors import (
+    MAX_ABS_PRIOR,
     SourceRole,
     classify_source_role,
     is_test_intent,
@@ -38,8 +39,15 @@ def test_prior_preserves_order_and_is_bounded():
     }
     assert values[SourceRole.IMPLEMENTATION] > values[SourceRole.TEST]
     assert values[SourceRole.IMPLEMENTATION] > values[SourceRole.DOCUMENTATION]
+    # Prose is demoted below tests but stays above vendored/generated output: a
+    # design note can still answer a question, a minified bundle never can.
+    assert values[SourceRole.TEST] > values[SourceRole.DOCUMENTATION]
     assert values[SourceRole.DOCUMENTATION] > values[SourceRole.GENERATED_VENDOR_BUILD]
-    assert all(-0.15 <= value <= 0.15 for value in values.values())
+    # Priors must stay tiebreakers. The bound is read from the module so the
+    # contract cannot drift by editing one number in isolation, and is asserted
+    # small here so widening the constant is itself a visible change.
+    assert MAX_ABS_PRIOR <= 0.25
+    assert all(abs(value) <= MAX_ABS_PRIOR for value in values.values())
     assert (
         source_role_prior("src/search.py", query="where is search implemented")
         == values[SourceRole.IMPLEMENTATION]
