@@ -306,7 +306,7 @@ def fts_search(
         JOIN chunks c ON c.id = fts_chunks.rowid
         JOIN files f ON f.id = c.file_id
         WHERE fts_chunks MATCH ?
-        ORDER BY bm25(fts_chunks)
+        ORDER BY bm25(fts_chunks), c.id
         LIMIT ?
         """,
         (match_query, limit),
@@ -328,7 +328,7 @@ def path_search(
                ({score_expr}) AS hits
         FROM files
         WHERE {' OR '.join(['path LIKE ?'] * len(tokens))}
-        ORDER BY hits DESC, length(path) ASC
+        ORDER BY hits DESC, length(path) ASC, path ASC, id ASC
         LIMIT ?
         """,
         (*like_args, *like_args, limit),
@@ -363,7 +363,11 @@ def symbol_search(
         WHERE {name_clause} {kind_clause}
         ORDER BY is_exact DESC,
                  (s.name LIKE :prefix COLLATE NOCASE) DESC,
-                 s.in_degree DESC
+                 s.in_degree DESC,
+                 s.name COLLATE NOCASE ASC,
+                 f.path ASC,
+                 s.line_start ASC,
+                 s.id ASC
         LIMIT :limit
         """,
         {

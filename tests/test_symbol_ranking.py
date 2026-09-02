@@ -40,11 +40,27 @@ def test_multiterm_camelcase_coverage_outranks_single_term(tmp_path):
     db = _db(tmp_path)
     conn = db.conn
     rel = _insert_file(conn, path="src/Religion.java", lang="java", mtime_ns=1)
-    _insert_symbol(conn, rel, name="Religion", kind="class",
-                   line_start=1, line_end=9, signature="class Religion", in_degree=3)
+    _insert_symbol(
+        conn,
+        rel,
+        name="Religion",
+        kind="class",
+        line_start=1,
+        line_end=9,
+        signature="class Religion",
+        in_degree=3,
+    )
     mgr = _insert_file(conn, path="src/managers/ReligionManager.java", lang="java", mtime_ns=2)
-    _insert_symbol(conn, mgr, name="ReligionManager", kind="class",
-                   line_start=1, line_end=99, signature="class ReligionManager", in_degree=5)
+    _insert_symbol(
+        conn,
+        mgr,
+        name="ReligionManager",
+        kind="class",
+        line_start=1,
+        line_end=99,
+        signature="class ReligionManager",
+        in_degree=5,
+    )
     conn.commit()
 
     cands = symbol_candidates(conn, "religion manager belief and faith handling", limit=10)
@@ -62,11 +78,25 @@ def test_exact_single_identifier_still_wins(tmp_path):
     db = _db(tmp_path)
     conn = db.conn
     rel = _insert_file(conn, path="src/Religion.java", lang="java", mtime_ns=1)
-    _insert_symbol(conn, rel, name="Religion", kind="class",
-                   line_start=1, line_end=9, signature="class Religion")
+    _insert_symbol(
+        conn,
+        rel,
+        name="Religion",
+        kind="class",
+        line_start=1,
+        line_end=9,
+        signature="class Religion",
+    )
     mgr = _insert_file(conn, path="src/managers/ReligionManager.java", lang="java", mtime_ns=2)
-    _insert_symbol(conn, mgr, name="ReligionManager", kind="class",
-                   line_start=1, line_end=99, signature="class ReligionManager")
+    _insert_symbol(
+        conn,
+        mgr,
+        name="ReligionManager",
+        kind="class",
+        line_start=1,
+        line_end=99,
+        signature="class ReligionManager",
+    )
     conn.commit()
 
     cands = symbol_candidates(conn, "Religion", limit=10)
@@ -79,13 +109,80 @@ def test_underscore_names_also_covered(tmp_path):
     db = _db(tmp_path)
     conn = db.conn
     f = _insert_file(conn, path="auth/token.py", lang="python", mtime_ns=1)
-    _insert_symbol(conn, f, name="refresh_access_token", kind="function",
-                   line_start=1, line_end=6, signature="def refresh_access_token()")
-    _insert_symbol(conn, f, name="refresh", kind="function",
-                   line_start=8, line_end=9, signature="def refresh()")
+    _insert_symbol(
+        conn,
+        f,
+        name="refresh_access_token",
+        kind="function",
+        line_start=1,
+        line_end=6,
+        signature="def refresh_access_token()",
+    )
+    _insert_symbol(
+        conn,
+        f,
+        name="refresh",
+        kind="function",
+        line_start=8,
+        line_end=9,
+        signature="def refresh()",
+    )
     conn.commit()
 
     cands = symbol_candidates(conn, "how does refresh access token work", limit=10)
     names = [c.symbol for c in cands]
     db.close()
     assert names.index("refresh_access_token") < names.index("refresh")
+
+
+def test_framing_words_do_not_hide_exact_symbol(tmp_path):
+    db = _db(tmp_path)
+    conn = db.conn
+    f = _insert_file(conn, path="src/graph/expand.py", lang="python", mtime_ns=1)
+    _insert_symbol(
+        conn,
+        f,
+        name="walk_impact",
+        kind="function",
+        line_start=1,
+        line_end=8,
+        signature="def walk_impact()",
+    )
+    _insert_symbol(
+        conn,
+        f,
+        name="walk",
+        kind="function",
+        line_start=10,
+        line_end=12,
+        signature="def walk()",
+    )
+    conn.commit()
+
+    cands = symbol_candidates(conn, "find walk_impact", limit=10)
+    db.close()
+
+    assert cands[0].symbol == "walk_impact"
+    assert cands[0].exact_symbol is True
+
+
+def test_symbol_synonym_expansion_retrieves_alias(tmp_path):
+    db = _db(tmp_path)
+    conn = db.conn
+    f = _insert_file(conn, path="src/config.py", lang="python", mtime_ns=1)
+    _insert_symbol(
+        conn,
+        f,
+        name="Config",
+        kind="class",
+        line_start=1,
+        line_end=12,
+        signature="class Config",
+    )
+    conn.commit()
+
+    cands = symbol_candidates(conn, "configuration", limit=10)
+    db.close()
+
+    assert cands[0].symbol == "Config"
+    assert cands[0].exact_symbol is False

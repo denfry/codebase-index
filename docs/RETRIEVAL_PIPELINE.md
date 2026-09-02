@@ -18,7 +18,7 @@ Intent detection (keyword / symbol / impact / general)
 │ 2. Path-based search                    │
 │ 3. SQLite FTS5 lexical search           │
 │ 4. Vector search (optional embeddings)  │
-│ 5. Graph expansion (from seed results)  │
+│ 5. Graph expansion (explicit opt-in)   │
 └─────────────────────────────────────────┘
     ↓
 Reciprocal Rank Fusion (RRF)
@@ -53,15 +53,16 @@ Ranked retrieval packet with confidence score
 
 ## 3. SQLite FTS5 Lexical Search
 
-**Trigger:** General keyword queries.
+**Trigger:** General keyword and natural-language queries.
 
 **Process:**
-- Build an FTS5 query from the user's text
-- Tokenize: split `snake_case`, expand `camelCase` at query time
-- Search the `fts_chunks` virtual table
-- Return matching chunks with BM25-style scores
+- Parse identifiers into camelCase/PascalCase/snake_case subtokens.
+- Add a small, explicit synonym/inflection vocabulary at lower weight.
+- Use OR groups for soft matching, then require bounded term coverage and rank
+  by original-term coverage plus BM25.
+- Quote every FTS term so query punctuation cannot inject MATCH operators.
 
-**Score:** Based on FTS5 rank — higher for more term matches and rarer terms.
+**Score:** Coverage is the primary signal; BM25 is a bounded tie-break.
 
 ## 4. Vector Search (Optional)
 
@@ -80,52 +81,74 @@ Ranked retrieval packet with confidence score
 
 ## 5. Graph Expansion
 
-**Trigger:** After initial results are found.
+**Trigger:** `RetrievalTuning(graph_source=True)` and an intent plan with a
+graph strategy. It is disabled in the shipped default because the reproducible
+self-repository ablation reduced direct-hit MRR.
 
 **Process:**
-- For each seed result, traverse the dependency/call graph
-- Find related files: callers, callees, imports, inheritors
-- Add related files with a decay factor (distance from seed)
+- Seed from lexical/symbol candidates already found in SQLite.
+- Traverse only indexed, resolved edges with bounded depth and node count.
+- Follow `up` (callers/importers), `down` (callees/imports), or `both`
+  according to the intent plan.
+- Apply distance decay and preserve edge confidence in the candidate reason.
 
-**Score:** Decreases with graph distance — direct connections score higher.
+Graph expansion is an opt-in context-discovery signal, not a replacement for
+direct lexical or symbol evidence.
 
-## Reciprocal Rank Fusion (RRF)
+## 6. Diversity and duplicate control
 
-Combines results from multiple retrievers:
+SimHash suppresses near-duplicate snippets independently of MMR. Bounded
+Maximal Marginal Relevance is available through `RetrievalTuning(mmr=True)`;
+the shipped default keeps relevance-only ordering because the benchmark favored
+direct hits.
+
+## 7. Reciprocal Rank Fusion (RRF)
+
+Combines ranked lists from the enabled retrievers:
 
 ```
-RRF_score(d) = Σ (1 / (k + rank_r(d)))
+RRF_score(d) = Σ w_r · k / (k + rank_r(d))
 ```
+
+The implementation multiplies textbook RRF by `k` so fusion and bounded rerank
+bonuses share a comparable scale; ordering is unchanged.
 
 Where:
 - `k` is a constant (default 60)
 - `rank_r(d)` is the rank of document `d` in retriever `r`
-- Sum is over all retrievers that returned `d`
+- `w_r` is the intent/tuning weight for retriever `r`
 
-This ensures documents that appear in multiple retrievers rank higher.
+The implementation merges co-located chunks into one per-file bucket before
+fusion, preventing a large file from dominating the result list.
 
-## Reranking
+## 8. Reranking
 
-After fusion, apply additional boosts:
+After fusion, apply bounded explainable boosts and penalties:
 
-| Factor | Boost | Rationale |
-|---|---|---|
-| Exact symbol match | +0.3 | User named a specific symbol |
-| File type relevance | +0.1 | `.ts` for TypeScript queries, etc. |
-| Recency | +0.05 | Recently modified files may be more relevant |
-| File size | -0.05 per 10KB | Prefer focused files over large ones |
+| Factor | Effect | Rationale |
+|---|---:|---|
+| Exact symbol match | +0.20 | User named a specific symbol |
+| Symbol definition kind | +0.05 | Prefer actionable definitions |
+| Path term match | +0.05 | User supplied a location clue |
+| Degree / reference evidence | up to +0.08 | Stable structural tiebreaker |
+| Implementation source prior | +0.08 | Prefer source over prose/tests |
+| Documentation source prior | -0.05 | Avoid docs displacing implementation |
+| Generated/vendor/build | -0.12 | Suppress low-value derived code |
+| Test path on non-test query | -0.06 | Keep tests as supporting evidence |
 
-## Confidence Score
+## 9. Confidence
 
-The final confidence score (0.0 to 1.0) determines how Claude should proceed:
+Confidence is categorical (`high`, `medium`, `low`) and is derived from
+exact-symbol evidence, multi-retriever agreement, score separation, and result
+count. Exact symbol matches are `high`, including a single-result response.
 
-| Confidence | Meaning | Action |
-|---|---|---|
-| 0.8 - 1.0 | High | Read recommended ranges and answer directly |
-| 0.5 - 0.8 | Medium | Read ranges; optionally confirm with one Grep |
-| 0.0 - 0.5 | Low | Use fallback suggestions (ripgrep, Glob) |
+| Confidence | Action |
+|---|---|
+| `high` | Read recommended ranges and answer directly |
+| `medium` | Read ranges; optionally confirm with one Grep |
+| `low` | Use fallback suggestions (ripgrep, Glob) |
 
-## Token Budget Enforcement
+## 10. Token Budget Enforcement
 
 The output is capped at a configurable token budget:
 
@@ -134,9 +157,9 @@ The output is capped at a configurable token budget:
 3. Remaining results are listed without snippets
 4. The `recommended_reads` field contains only the most critical line ranges
 
-Default budget: 2000 tokens (configurable in `.codeindex.json`).
+Default budget: 1500 tokens (configurable in `.codeindex.json`).
 
-## Fallback Suggestions
+## 11. Fallback Suggestions
 
 When confidence is low, the pipeline generates fallback strategies:
 

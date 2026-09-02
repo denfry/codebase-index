@@ -1,0 +1,204 @@
+# Ground-truth query set over this repository (self-hosted eval corpus).
+#
+# Why self-hosted: it is a real ~4k-LOC multi-package Python codebase that ships
+# with the project, so the benchmark is reproducible by anyone who clones it — no
+# external checkout, no network. A second, larger, Java corpus is evaluated via
+# `--repo` (see tests/eval/README.md) to guard against overfitting to Python.
+#
+# Ground truth is OBJECTIVE: `expected_files` are the files that actually define
+# the answer, verified against the source tree by `harness.validate_queries()`,
+# which fails the run if a path or symbol no longer exists. The index cannot
+# grade its own homework — these are written from the source, not from output.
+#
+# `category` groups queries for per-category reporting; it is not fed to the
+# retriever. Categories follow the agent question taxonomy: navigation,
+# exact_symbol, concept, bug, architecture, impact, test.
+
+- query: "where is query intent classified"
+  category: navigation
+  expected_files: [src/codebase_index/retrieval/intent.py]
+  expected_symbols: [detect_intent]
+
+- query: "how does reciprocal rank fusion combine retrievers"
+  category: concept
+  expected_files: [src/codebase_index/retrieval/fusion.py]
+  expected_symbols: [fuse]
+
+- query: "where is the token budget applied to results"
+  category: navigation
+  expected_files: [src/codebase_index/retrieval/budget.py]
+  expected_symbols: [apply_budget]
+
+- query: "find walk_impact"
+  category: exact_symbol
+  expected_files: [src/codebase_index/graph/expand.py]
+  expected_symbols: [walk_impact]
+
+- query: "build_match_query"
+  category: exact_symbol
+  expected_files: [src/codebase_index/retrieval/searchers.py]
+  expected_symbols: [build_match_query]
+
+- query: "detect_intent"
+  category: exact_symbol
+  expected_files: [src/codebase_index/retrieval/intent.py]
+  expected_symbols: [detect_intent]
+
+- query: "compute_freshness"
+  category: exact_symbol
+  expected_files: [src/codebase_index/indexer/freshness.py]
+  expected_symbols: [compute_freshness]
+
+- query: "resolve_backend"
+  category: exact_symbol
+  expected_files: [src/codebase_index/embeddings/backend.py]
+  expected_symbols: [resolve_backend]
+
+- query: "how does incremental update avoid reparsing everything"
+  category: concept
+  expected_files: [src/codebase_index/indexer/pipeline.py]
+  expected_symbols: [update_index]
+
+- query: "how are files chosen for indexing"
+  category: concept
+  expected_files:
+    - src/codebase_index/discovery/walker.py
+    - src/codebase_index/discovery/ignore.py
+    - src/codebase_index/discovery/classify.py
+
+- query: "where do we split camelCase identifiers"
+  category: concept
+  expected_files:
+    - src/codebase_index/retrieval/searchers.py
+    - src/codebase_index/retrieval/lexical.py
+  expected_symbols: [split_identifier]
+- query: "tree-sitter parsing of source files into symbols"
+  category: navigation
+  expected_files:
+    - src/codebase_index/parsers/treesitter.py
+    - src/codebase_index/parsers/languages.py
+  expected_symbols: [parse_file]
+
+- query: "sqlite pragmas and schema version guard"
+  category: navigation
+  expected_files: [src/codebase_index/storage/db.py]
+  expected_symbols: [Database]
+
+- query: "how does the MCP stdio server expose tools"
+  category: architecture
+  expected_files: [src/codebase_index/mcp/server.py]
+
+- query: "where are secrets redacted before output"
+  category: navigation
+  expected_files: [src/codebase_index/output/redact.py]
+  expected_symbols: [redact_snippet]
+
+- query: "how is the dependency graph built from AST edges"
+  category: concept
+  expected_files: [src/codebase_index/graph/builder.py]
+  expected_symbols: [build_graph]
+
+- query: "detecting god nodes and modules in the codebase map"
+  category: architecture
+  expected_files: [src/codebase_index/graph/analysis.py]
+  expected_symbols: [god_nodes]
+
+- query: "shortest dependency path between two symbols"
+  category: navigation
+  expected_files: [src/codebase_index/graph/navigate.py]
+  expected_symbols: [path_payload]
+
+- query: "what breaks if I change the Candidate dataclass"
+  category: impact
+  expected_files:
+    - src/codebase_index/retrieval/types.py
+    - src/codebase_index/retrieval/searchers.py
+    - src/codebase_index/retrieval/fusion.py
+    - src/codebase_index/retrieval/rerank.py
+    - src/codebase_index/retrieval/budget.py
+
+- query: "what depends on the Database class"
+  category: impact
+  expected_files:
+    - src/codebase_index/storage/db.py
+    - src/codebase_index/cli.py
+    - src/codebase_index/service.py
+
+- query: "how does configuration get loaded and merged"
+  category: concept
+  expected_files: [src/codebase_index/config.py]
+  expected_symbols: [find_root, config_hash]
+
+- query: "where is the project root discovered"
+  category: navigation
+  expected_files: [src/codebase_index/config.py]
+  expected_symbols: [find_root]
+
+- query: "which tests cover the retrieval budget"
+  category: test
+  expected_files: [tests/test_budget.py]
+
+- query: "tests for tree-sitter symbol extraction"
+  category: test
+  expected_files: [tests/test_treesitter.py]
+
+- query: "unsupported language raises during parsing"
+  category: bug
+  expected_files: [src/codebase_index/parsers/treesitter.py]
+
+- query: "why would search return zero results for a stopword-only query"
+  category: bug
+  expected_files: [src/codebase_index/retrieval/searchers.py]
+  expected_symbols: [build_match_query]
+
+- query: "index reports stale after files changed"
+  category: bug
+  expected_files: [src/codebase_index/indexer/freshness.py]
+  expected_symbols: [compute_freshness]
+
+- query: "how does the CLI wire subcommands to the service layer"
+  category: architecture
+  expected_files:
+    - src/codebase_index/cli.py
+    - src/codebase_index/service.py
+
+- query: "config and security diagnostics"
+  category: navigation
+  expected_files: [src/codebase_index/doctor.py]
+  expected_symbols: [run_doctor]
+
+- query: "how are chunks produced when no grammar exists"
+  category: concept
+  expected_files: [src/codebase_index/parsers/line_chunker.py]
+  expected_symbols: [chunk_text]
+
+- query: "skeletonize a snippet to save tokens"
+  category: concept
+  expected_files: [src/codebase_index/retrieval/skeleton.py]
+  expected_symbols: [make_compactor]
+
+- query: "semantic vector search over chunks"
+  category: navigation
+  expected_files:
+    - src/codebase_index/retrieval/searchers.py
+    - src/codebase_index/embeddings/backend.py
+  expected_symbols: [vector_candidates]
+
+- query: "scaffolding the skill directory on init"
+  category: navigation
+  expected_files: [src/codebase_index/scaffold.py]
+
+- query: "watching the filesystem for changes"
+  category: navigation
+  expected_files: [src/codebase_index/watch/watcher.py]
+
+- query: "how does ranking demote generated and test files"
+  category: concept
+  expected_files:
+    - src/codebase_index/retrieval/rerank.py
+    - src/codebase_index/discovery/classify.py
+  expected_symbols: [rerank, is_test_path]
+
+- query: "exporting the graph to HTML for a human"
+  category: navigation
+  expected_files: [src/codebase_index/graph/export.py]

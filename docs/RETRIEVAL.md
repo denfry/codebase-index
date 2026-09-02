@@ -2,7 +2,8 @@
 
 The retrieval engine turns a natural-language or symbolic query into a **compact, ranked,
 token-budgeted** set of file/line ranges for Claude to read. It is hybrid: multiple independent
-retrievers run, their results are fused, reranked, expanded via the graph, then trimmed.
+retrievers run, their results are fused and reranked, then trimmed. Graph expansion and MMR are
+available as bounded opt-in signals; the shipped default prioritizes direct evidence.
 
 ```
 query
@@ -21,13 +22,16 @@ query
 [3] rank fusion  ── Reciprocal Rank Fusion (RRF) across retriever result lists
   │
   ▼
-[4] rerank  ── feature-based score (symbol-kind, path proximity, recency, centrality)
+[4] rerank  ── feature-based score (symbol-kind, path, source role, centrality)
   │
   ▼
-[5] graph expansion  ── pull in imports/callers/callees per intent (bounded)
+[5] optional graph expansion  ── pull in imports/callers/callees per intent (bounded)
   │
   ▼
-[6] token budgeting  ── greedy fill under --token-budget; snippets trimmed + secret-redacted
+[6] diversity / duplicate filtering (MMR opt-in, SimHash duplicate guard)
+  │
+  ▼
+[7] token budgeting  ── greedy fill under --token-budget; snippets trimmed + secret-redacted
   │
   ▼
 ranked results + recommended_reads + fallback_suggestions
@@ -59,10 +63,12 @@ source)` list so fusion is source-agnostic.
 
 - **Path** — exact and glob path matches (`src/auth/*.py`, `auth.py`). Highest precision; surfaced
   first when the query clearly names a path.
-- **Symbol** — query against `symbols` (name exact, prefix, then fuzzy/trigram). Carries `kind`
-  (function/class/method/...) and signature. Primary for `locate_impl` / `find_refs`.
+- **Symbol** — query against `symbols` (exact, identifier parts, bounded fuzzy matching). Carries
+  `kind` (function/class/method/...) and signature. Primary for `locate_impl` / `find_refs`.
 - **FTS** — FTS5 `bm25()` over the `fts_chunks` virtual table (chunk text + symbol names +
-  summaries indexed). Tokenizer is code-aware (splits camelCase/snake_case). Primary lexical signal.
+  summaries indexed). Query-time camelCase/snake_case splitting, small down-weighted synonym
+  expansion, and soft coverage scoring make natural-language questions robust without weakening
+  exact terms.
 - **Vector** *(opt-in)* — cosine similarity over chunk embeddings via `sqlite-vec`. Only runs if
   `embeddings.enabled = true`. Adds semantic recall for paraphrased queries. Absent → pipeline
   degrades gracefully to FTS+symbol.
@@ -96,19 +102,30 @@ A lightweight, explainable feature score (no external model required) layered on
 The reranker also produces the human-readable **`reason`** string per result
 (e.g. *"exact symbol match · called by 4 sites · in src/auth/"*).
 
-## 5. Graph expansion (`graph/expand.py`)
+## 5. Graph expansion (`graph/retrieval.py`; `graph/expand.py` for impact APIs)
 
-After reranking, pull in *related* nodes per the intent's graph strategy, bounded by `--depth`
-(default 1–2) and a node cap:
+Graph expansion runs only when the tuning enables `graph_source` and the intent plan requests a
+graph strategy. It is disabled by default because the reproducible self-repository ablation
+reduced direct-hit MRR when related nodes displaced lexical hits.
+
+When enabled, it is bounded by depth and node cap:
 
 - `impact` → walk **up** edges (callers, importers) = blast radius.
 - `how_it_works` → walk **down** edges (callees, imported defs) = mechanism.
-- `find_refs` → direct reverse edges only.
-- `data_flow` → both directions along call/assignment edges.
+- `find_refs` → walk **up** edges to callers/importers.
+- `data_flow` → walk **both** directions along call/assignment edges.
 
-Expanded nodes are merged into results with a discounted score so seeds stay on top.
+Expanded nodes retain edge confidence and receive distance-decayed scores so seeds stay on top.
 
-## 6. Token budgeting (`retrieval/budget.py`)
+## 6. Diversity and duplicate control
+
+`retrieval.diversity` provides bounded MMR selection and SimHash near-duplicate
+suppression. MMR is disabled in the shipped default because the reproducible
+benchmark favored relevance-only ranking; callers that need broader snippet
+coverage can enable `RetrievalTuning(mmr=True)`. Duplicate suppression remains
+available independently.
+
+## 7. Token budgeting (`retrieval/budget.py`)
 
 Results are trimmed to fit `--token-budget` (default per intent, e.g. 1500 tokens):
 
@@ -121,7 +138,7 @@ Results are trimmed to fit `--token-budget` (default per intent, e.g. 1500 token
 
 The point: Claude gets enough to decide, and a precise list of what to read next — never a dump.
 
-## 7. Confidence & fallback
+## 8. Confidence & fallback
 
 A `confidence` score (high/medium/low) is derived from: top RRF score, score gap between #1 and #2,
 number of agreeing retrievers, and whether a symbol matched exactly.
@@ -131,13 +148,12 @@ number of agreeing retrievers, and whether a symbol matched exactly.
 - **low** → skill instructs Claude to **fall back** to `ripgrep`/Grep/Glob with suggested patterns
   emitted in `fallback_suggestions` (derived from query terms + detected symbols).
 
-## 8. Output payload (shared by Markdown + JSON)
+## 9. Output payload (shared by Markdown + JSON)
 
 ```jsonc
 {
   "query": "where is auth token refresh implemented",
   "intent": "locate_impl",
-  "index": { "exists": true, "stale": false, "built_at": "...", "head_commit": "abc1234" },
   "confidence": "high",
   "results": [
     {

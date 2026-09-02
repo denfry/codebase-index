@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-09-02
+
+### Added
+
+- **Reproducible retrieval evaluation.** Added a self-repository ground-truth
+  query suite with Recall@K, MRR, nDCG, hit rate, precision, MAP, useful-context,
+  latency percentiles, and one-signal ablations.
+
+### Changed
+
+- **Hybrid retrieval quality.** Natural-language lexical queries now use safe,
+  down-weighted identifier/synonym expansion and soft term coverage; exact symbol
+  lookup preserves framing-word tolerance and bounded fuzzy matching.
+- **Packaging compatibility.** Cap the build backend below the Metadata 2.5
+  default until the release validation toolchain supports that metadata version.
+- **Ranking defaults are evidence-driven.** Implementation/test/documentation
+  source priors are calibrated from the benchmark. Graph propagation is bounded
+  and intent-directed; graph and MMR signals remain opt-in because ablations
+  reduced direct retrieval quality on the reproducible corpus.
+
 ## [1.7.0] - 2026-07-29
 
 ### Added
@@ -401,7 +421,8 @@ All notable changes to this project are documented here. The format is based on
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/denfry/codebase-index/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/denfry/codebase-index/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/denfry/codebase-index/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/denfry/codebase-index/compare/v1.4.0...v1.5.0

@@ -271,7 +271,7 @@ See [MCP.md](docs/MCP.md) for client configuration.
 
 ## Project status
 
-The latest released line is **1.7.0**. It includes:
+The latest released line is **1.8.0**. It includes:
 
 - hybrid and optional vector retrieval;
 - Tree-sitter symbol extraction across the documented language tiers;
@@ -279,6 +279,8 @@ The latest released line is **1.7.0**. It includes:
 - architecture communities, central nodes, and surprising cross-module links;
 - shortest dependency paths and node descriptions;
 - token-budgeted and skeletonized retrieval packets;
+- benchmark-calibrated lexical expansion, fuzzy identifier matching, and source-aware ranking;
+- bounded, intent-directed graph discovery with optional diversity and duplicate suppression;
 - CLI, Skill, plugin, and MCP delivery;
 - incremental updates, watch hooks, diagnostics, skill rollback, and diff-aware
   impact analysis.
