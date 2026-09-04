@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/mark.png" width="88" alt="codebase-index logo">
+  <img src="https://raw.githubusercontent.com/denfry/codebase-index/main/assets/mark.png" width="88" alt="codebase-index logo">
 </p>
 
 <h1 align="center">codebase-index</h1>
@@ -31,7 +31,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/demo-terminal.svg" width="960"
+  <img src="https://raw.githubusercontent.com/denfry/codebase-index/main/assets/demo-terminal.svg" width="960"
        alt="Real codebase-index output on Flask: a ranked search with line ranges, references with confidence, and an impact table">
 </p>
 
@@ -165,7 +165,7 @@ Every delta is significant at p < 0.001 (paired bootstrap CI in the log). Read i
 Reproduce with `python tests/eval/run_baselines.py --clone`; details, caveats and the
 repo-map-style comparison are in [BENCHMARKS.md](docs/BENCHMARKS.md).
 
-<p align="center"><img src="assets/benchmark.svg" width="960" alt="Bar chart of hit@3, MRR and context tokens for codebase-index versus ripgrep with windows on Flask, Gson and Fastify"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/denfry/codebase-index/main/assets/benchmark.svg" width="960" alt="Bar chart of hit@3, MRR and context tokens for codebase-index versus ripgrep with windows on Flask, Gson and Fastify"></p>
 
 **Every ranking signal is ablated.** A change to the ranker ships only if it is
 significant on a pooled multi-language query set
@@ -179,7 +179,7 @@ quote task-success numbers for this project; there are none.
 
 ## How it works
 
-<p align="center"><img src="assets/architecture.svg" width="960" alt="Architecture: discovery and secret gates, Tree-sitter symbols and edges, local SQLite with FTS5, one service layer behind CLI, skill and MCP; the query path runs intent detection, retrievers, RRF fusion, rerank and a token budget"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/denfry/codebase-index/main/assets/architecture.svg" width="960" alt="Architecture: discovery and secret gates, Tree-sitter symbols and edges, local SQLite with FTS5, one service layer behind CLI, skill and MCP; the query path runs intent detection, retrievers, RRF fusion, rerank and a token budget"></p>
 
 Indexing walks the repository through ignore and secret gates, extracts symbols and
 import/call/reference/inheritance edges with Tree-sitter for 12 languages, and stores
