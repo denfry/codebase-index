@@ -33,6 +33,7 @@ from codebase_index.retrieval.tuning import RetrievalTuning
 from codebase_index.storage.db import Database
 
 from . import metrics
+from .gen_queries import CHANGELOG_EXCLUDES
 
 QUERY_DIR = Path(__file__).parent / "queries"
 DEFAULT_BUDGET = 1500
@@ -147,13 +148,19 @@ def validate_queries(queries: Iterable[EvalQuery], root: Path) -> list[str]:
 # scaffolding is excluded from the corpus it grades.
 CORPUS_EXCLUDES = ("tests/eval/**", "tests/benchmark_*", "tests/fixtures/expected_answers.yml")
 
+# Changelog-style files paraphrase commit subjects, so for a git-derived query set
+# they are the answer key in prose. They are never accepted as *answers*
+# (`gen_queries._ANSWER_DENY_RE`) and, since 1.9.1, never indexed as *corpus*
+# either: a changelog that outranks the implementation it describes is a
+# measurement artefact, not a ranking signal.
+
 
 def build_corpus_index(root: Path, db_path: Path) -> Database:
     """Build a fresh index for `root` at `db_path` and return the open handle."""
     cfg = Config()
     cfg.root = str(root)
     cfg.embeddings.enabled = False
-    cfg.extra_ignore = [*cfg.extra_ignore, *CORPUS_EXCLUDES]
+    cfg.extra_ignore = [*cfg.extra_ignore, *CORPUS_EXCLUDES, *CHANGELOG_EXCLUDES]
     db = Database(db_path).open()
     build_index(cfg, db, root=root)
     return db
