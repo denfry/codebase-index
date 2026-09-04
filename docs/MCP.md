@@ -126,7 +126,10 @@ Use the client's MCP server configuration UI or JSON file and register:
 ```
 
 Client-specific config file paths and screenshots should be added only after
-they are verified against the current client versions.
+they are verified against the current client versions. The templates above are
+the standard stdio-server shape every listed client accepts; none has been
+re-verified against a specific client release yet (tracked in
+[ROADMAP.md](ROADMAP.md)).
 
 ## Progressive results
 

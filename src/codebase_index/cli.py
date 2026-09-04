@@ -2,8 +2,7 @@
 
 Commands map 1:1 to docs/ARCHITECTURE.md §5 (CLI contract) and delegate to the
 `indexer`, `retrieval`, and `storage` layers through `service.py` — the same
-layer the MCP server uses, so the two surfaces cannot drift. Only `clean` is
-still a stub.
+layer the MCP server uses, so the two surfaces cannot drift.
 
 Conventions:
   * every command accepts global options via the Typer context: --root, --json, --quiet

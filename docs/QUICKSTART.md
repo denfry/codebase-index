@@ -48,39 +48,46 @@ This creates the cache directory, configuration, and the selected CLI instructio
 codebase-index index
 ```
 
-You should see output like:
+The examples below are real output from indexing
+[pallets/flask](https://github.com/pallets/flask) at commit `d318b683` with
+codebase-index 1.9.0:
 
 ```
-Indexing...
-  Discovered 142 files (excluded 23 sensitive/generated)
-  Extracted 891 symbols
-  Built 2,340 chunks
-  Index built in 3.2s
+Indexed 230 files (0 pruned).
+  parse failures: 0; tree-sitter files with 0 symbols: 17
 ```
 
 ## Step 4: Run Your First Search
 
 ```bash
-codebase-index search "where is authentication implemented?"
+codebase-index search "where is the session cookie signed and saved" --limit 5
 ```
 
-Expected output:
-
 ```
-Top matches:
-┌──────┬──────────────────────────┬──────────────────┬───────┬────────────────────────────┐
-│ Rank │ Path                     │ Symbols          │ Score │ Reason                     │
-├──────┼──────────────────────────┼──────────────────┼───────┼────────────────────────────┤
-│    1 │ src/auth/AuthService.ts  │ AuthService      │  0.92 │ exact symbol match         │
-│    2 │ src/routes/auth.ts       │ login, logout    │  0.78 │ FTS match · 4 callers      │
-│    3 │ src/middleware/auth.ts   │ requireAuth      │  0.65 │ path match · FTS match     │
-└──────┴──────────────────────────┴──────────────────┴───────┴────────────────────────────┘
+**Query:** where is the session cookie signed and saved
+**Intent:** `locate_impl` · **Confidence:** medium
 
-Recommended reads:
-  1. src/auth/AuthService.ts:12-148
-  2. src/routes/auth.ts:20-91
-  3. src/middleware/auth.ts:5-42
+| # | Path | Lines | Reason |
+|---|------|-------|--------|
+| 1 | `src/flask/sessions.py` | 24-54 | in src/flask/ · 2 callers · source prior +0.08 |
+| 2 | `src/flask/sessions.py` | 284-385 | in src/flask/ · 2 callers · source prior +0.08 |
+| 3 | `src/flask/sessions.py` | 57-80 | in src/flask/ · 1 callers · source prior +0.08 |
+| 4 | `tests/test_basic.py` | 542-600 | source prior -0.06 · generated/test demoted |
+| 5 | `tests/test_reqctx.py` | 201-249 | source prior -0.06 · generated/test demoted |
+
+`src/flask/sessions.py:284-385`
 ```
+class SecureCookieSessionInterface(SessionInterface):
+```
+...
+
+**Recommended reads:**
+- `src/flask/sessions.py:24-54`
+- `src/flask/sessions.py:284-385`
+```
+
+Rank 2 is the class that signs and saves the cookie. Add `--json` for the
+machine-readable packet agents consume.
 
 ## Step 5: Use with Your AI CLI
 
@@ -100,14 +107,18 @@ The agent will:
 
 ## Interpreting Results
 
-Each result includes:
-
-- **Rank** — position in the result list (start with 1-3)
-- **Path** — file location
-- **Symbols** — extracted symbols in the matched region
-- **Score** — relevance score (0.0 to 1.0)
-- **Reason** — why this result ranked (e.g., "exact symbol match")
-- **Recommended reads** — exact line ranges to open
+- **Intent** — how the query was classified (`locate_impl`, `how_it_works`, `impact`, ...);
+  it selects the retriever mix.
+- **Confidence** — `high`: answer from the evidence; `medium`: read the recommended
+  ranges and confirm the key claim; `low`: follow the fallback suggestions (ripgrep
+  patterns) instead of trusting the list.
+- **#, Path, Lines** — rank and the exact line range that matched. Start with ranks 1–3.
+- **Reason** — why it ranked: exact symbol match, callers, path match, and the source
+  prior (implementation code is preferred over tests and documentation).
+- **Snippets** — budgeted, often skeletonized (unrelated body lines folded) and
+  secret-redacted.
+- **Recommended reads** — the read plan: exact ranges to open, capped at 120 lines
+  each (`truncated: true` in JSON when a longer symbol was cut at its head).
 
 ## What Success Looks Like
 
