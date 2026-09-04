@@ -1,38 +1,21 @@
-## Description
+## What and why
 
-Describe your changes and their impact.
+<!-- Problem, then the change. Link the issue: Fixes #123 -->
 
-Fixes #(issue)
+## How I verified it
 
-## Type of change
+```bash
+# commands you ran, e.g.
+pytest tests/test_xxx.py -q --no-cov
+python tests/eval/run_eval.py --ablate   # required for any ranking change; paste the table below
+```
 
-- [ ] Bug fix (non-breaking change that fixes an issue)
-- [ ] New feature (non-breaking change that adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Documentation update
-- [ ] Refactoring (no functional change)
-- [ ] CI / build / tooling change
+<!-- For retrieval changes: pooled table + significance row for your flag. -->
 
 ## Checklist
 
-- [ ] I have read the [CONTRIBUTING.md](../CONTRIBUTING.md) guide
-- [ ] My code follows the project's style conventions (`ruff check`, `ruff format`)
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] All tests pass (`pytest`)
-- [ ] Type checking passes (`mypy`, if applicable)
-- [ ] I have updated the documentation accordingly
-- [ ] I have updated `CHANGELOG.md` under `[Unreleased]`
-- [ ] My commits follow [Conventional Commits](https://www.conventionalcommits.org/)
-
-## Testing
-
-Describe how you tested your changes:
-
-```bash
-# Example:
-pytest tests/test_my_new_feature.py
-codebase-index index --root tests/fixtures/sample_repo
-codebase-index search "test query"
-```
-
-## Screenshots (if applicable)
+- [ ] `pytest`, `ruff check src tests`, `mypy src/codebase_index` pass
+- [ ] `python scripts/sync_skill_copies.py --check` passes (if `skill_template/` changed)
+- [ ] Goldens regenerated intentionally and the diff explained (if `--json` / MCP output changed)
+- [ ] `CHANGELOG.md` updated under `[Unreleased]` (user-visible changes only; no version bump)
+- [ ] No secrets, generated indexes, or local config committed

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/denfry/codebase-index/discussions
+    about: Ask how to use the tool, discuss design, or share what you built with it.
+  - name: Security vulnerability
+    url: https://github.com/denfry/codebase-index/security/advisories/new
+    about: Report privately. Please do not open a public issue (see SECURITY.md).

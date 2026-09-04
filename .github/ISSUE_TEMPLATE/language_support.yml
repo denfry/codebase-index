@@ -1,0 +1,48 @@
+name: Language support
+description: Request or offer symbol/graph extraction for a language
+title: "[Language]: "
+labels: ["language support"]
+body:
+  - type: input
+    id: language
+    attributes:
+      label: Language and file extensions
+      placeholder: "Swift — .swift"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: current
+    attributes:
+      label: Current status (see docs/LANGUAGES.md)
+      options:
+        - Not detected at all
+        - Tier C (line chunks + FTS only)
+        - Tier B (generic Tree-sitter, no graph edges)
+        - Tier A but extraction is wrong or incomplete
+    validations:
+      required: true
+
+  - type: input
+    id: grammar
+    attributes:
+      label: tree-sitter-language-pack grammar name
+      description: "`tree_sitter_language_pack.get_language('<name>')` must succeed."
+      placeholder: "swift"
+
+  - type: textarea
+    id: expectations
+    attributes:
+      label: What should be extracted?
+      description: Definition kinds (function/class/...), calls, imports, inheritance — with a 10–20 line sample file.
+      render: text
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: offer
+    attributes:
+      label: Contribution
+      options:
+        - label: I can open a PR adding the `LangSpec` and fixture (see docs/DEVELOPMENT.md → "Add a language")
+        - label: I can provide a public repository in this language for the retrieval eval

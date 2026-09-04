@@ -1,0 +1,63 @@
+# Repository labels. Apply with: scripts/apply_labels.sh (requires `gh` auth).
+# Format: name, color (hex, no #), description.
+
+- name: bug
+  color: d73a4a
+  description: Something is broken or returns wrong results
+- name: enhancement
+  color: a2eeef
+  description: New capability or improvement
+- name: documentation
+  color: 0075ca
+  description: Docs, examples, demo, FAQ
+- name: good first issue
+  color: 7057ff
+  description: Small, well-scoped, no prior context needed
+- name: help wanted
+  color: 008672
+  description: Maintainers would welcome a PR here
+- name: benchmark
+  color: fbca04
+  description: Corpora, metrics, baselines, reproductions of published runs
+- name: language support
+  color: 1d76db
+  description: Tree-sitter LangSpecs, tiers, per-language extraction
+- name: graph extraction
+  color: 5319e7
+  description: Edge kinds, resolution, impact/path/describe
+- name: retrieval quality
+  color: 0e8a16
+  description: Ranking, fusion, priors, token budgeting
+- name: integrations
+  color: c5def5
+  description: Skills, hooks, installers, agent wiring
+- name: mcp
+  color: bfd4f2
+  description: MCP server, tools, envelopes, client configs
+- name: claude-code
+  color: e99695
+  description: Claude Code skill / plugin specifics
+- name: codex
+  color: f9d0c4
+  description: Codex CLI integration specifics
+- name: opencode
+  color: fef2c0
+  description: OpenCode integration specifics
+- name: release
+  color: 006b75
+  description: Versioning, changelog, packaging, publishing
+- name: security
+  color: b60205
+  description: Exclusion gates, redaction, network policy (report vulns privately)
+- name: triage
+  color: ededed
+  description: Needs a maintainer look before it is actionable
+- name: question
+  color: d876e3
+  description: Usage question; may be moved to Discussions
+- name: duplicate
+  color: cfd3d7
+  description: Already tracked elsewhere
+- name: wontfix
+  color: ffffff
+  description: Out of scope for this project

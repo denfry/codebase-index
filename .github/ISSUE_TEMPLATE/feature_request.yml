@@ -1,56 +1,50 @@
-name: Feature Request
-description: Suggest an idea or improvement for codebase-index
+name: Feature request
+description: Propose an improvement or a new capability
 title: "[Feature]: "
 labels: ["enhancement", "triage"]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        Thanks for suggesting a feature. Please describe your idea and its use case.
-
   - type: textarea
     id: problem
     attributes:
-      label: Problem statement
-      description: Is your feature request related to a problem? Describe it.
-      placeholder: "I'm frustrated when..."
+      label: Problem
+      description: What are you trying to do with your agent that the tool makes hard today?
+      placeholder: "When I ask Claude Code about ..., codebase-index returns ..., so the agent ends up reading ..."
     validations:
       required: true
 
   - type: textarea
-    id: solution
+    id: proposal
     attributes:
-      label: Proposed solution
-      description: Describe what you want to happen.
-      placeholder: "It would be great if codebase-index could..."
+      label: Proposal
+      description: What should happen instead? A CLI example or a sketch of the JSON is ideal.
     validations:
       required: true
-
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternatives considered
-      description: Describe any alternative solutions or workarounds you've tried.
 
   - type: dropdown
-    id: scope
+    id: area
     attributes:
-      label: Scope
-      description: Which area does this feature primarily affect?
+      label: Area
       options:
-        - Indexing (discovery, parsing, storage)
-        - Retrieval (search, ranking, fusion)
-        - CLI (commands, output format)
-        - Skill (SKILL.md, allowed-tools, workflow)
-        - Configuration (config.json, hooks)
+        - Retrieval quality (ranking, fusion, budget)
+        - Graph extraction (edges, impact, paths)
+        - Language support
+        - Indexing (discovery, parsing, freshness)
+        - CLI / output format
+        - MCP server
+        - Claude Code / Codex / OpenCode integration
+        - Benchmarks / evaluation
         - Documentation
-        - Testing / CI
         - Other
     validations:
       required: true
 
   - type: textarea
-    id: additional
+    id: evidence
     attributes:
-      label: Additional context
-      description: Add any other context, mockups, or examples.
+      label: How would we know it worked?
+      description: Retrieval changes need a measurable effect (see tests/eval). A query and the file you expected is enough to start.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds you tried

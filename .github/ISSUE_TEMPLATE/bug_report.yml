@@ -1,74 +1,74 @@
-name: Bug Report
-description: Report a bug or unexpected behavior
+name: Bug report
+description: Something is wrong, crashes, or returns the wrong result
 title: "[Bug]: "
 labels: ["bug", "triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report a bug. Please fill in as much of the form below as possible.
+        Thanks. A reproducible report gets fixed fastest. Do not paste real secrets — the tool redacts snippets, your logs may not.
 
   - type: input
     id: version
     attributes:
       label: codebase-index version
-      description: What version of codebase-index are you running?
-      placeholder: "0.1.0"
+      description: "`pip show codebase-index` (there is no --version flag)"
+      placeholder: "1.9.0"
     validations:
       required: true
 
   - type: input
-    id: python-version
+    id: env
     attributes:
-      label: Python version
-      description: What Python version are you using?
-      placeholder: "3.12.3"
+      label: Python and OS
+      placeholder: "Python 3.12.3 · macOS 14.4 / Ubuntu 24.04 / Windows 11"
     validations:
       required: true
 
-  - type: input
-    id: os
+  - type: dropdown
+    id: surface
     attributes:
-      label: Operating system
-      description: What OS and version are you using?
-      placeholder: "macOS 14.4, Ubuntu 24.04, Windows 11"
+      label: Surface
+      options:
+        - CLI
+        - Claude Code skill / plugin
+        - Codex CLI
+        - OpenCode
+        - MCP server
+        - Installer scripts
+        - Other
     validations:
       required: true
 
   - type: textarea
     id: what-happened
     attributes:
-      label: What happened?
-      description: Describe the bug and what you expected to happen.
+      label: What happened, and what did you expect?
       placeholder: |
-        1. Ran `codebase-index index` on my project
-        2. Expected: index completes successfully
-        3. Actual: got error "..."
+        Ran `codebase-index refs open_session --json` on <repo>. Expected the call in ctx.py; got an empty list with coverage.partial=false.
     validations:
       required: true
 
   - type: textarea
-    id: reproduction
+    id: repro
     attributes:
       label: Steps to reproduce
-      description: Provide minimal steps to reproduce the issue.
+      description: Ideally against a public repository or a tiny snippet we can index.
       placeholder: |
-        1. `codebase-index init`
-        2. `codebase-index index`
-        3. `codebase-index search "query"`
-        4. See error
+        1. git clone https://github.com/... && cd ...
+        2. codebase-index index
+        3. codebase-index search "..." --json
     validations:
       required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`codebase-index doctor` output"
+      render: shell
 
   - type: textarea
     id: logs
     attributes:
-      label: Relevant log output
-      description: Paste any relevant terminal output or error messages.
+      label: Relevant output (`--json` where applicable) or traceback
       render: shell
-
-  - type: textarea
-    id: additional
-    attributes:
-      label: Additional context
-      description: Add any other context, screenshots, or configuration details.
