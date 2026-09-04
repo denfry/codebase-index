@@ -182,7 +182,9 @@ Results are trimmed to fit `--token-budget` (default per intent, e.g. 1500 token
 2. Greedily attach snippets to the highest-ranked results until budget is hit.
 3. Snippets are trimmed to the relevant line range (± a few context lines), not whole functions.
 4. Lower-ranked results become **`recommended_reads`** (path + range, no snippet) so Claude can
-   choose to read them itself.
+   choose to read them itself. A read is capped at `retrieval.max_read_lines` (default 120): a
+   symbol-aligned chunk can be a whole class, and the read plan should bill the agent for the
+   definition head, not the body. Capped entries carry `truncated: true` and `line_end_full`.
 5. Snippet text passes through secret redaction (see SECURITY.md) before emission.
 
 The point: Claude gets enough to decide, and a precise list of what to read next — never a dump.

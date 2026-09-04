@@ -28,6 +28,12 @@ class RetrievalConfig(BaseModel):
     limit: int = 10
     compact_snippets: bool = True
     compact_min_reduction: float = 0.25
+    # Longest line span a single `recommended_reads` entry may ask the agent to
+    # open. A symbol-aligned chunk can be a whole 1,500-line class; the read plan
+    # points at its head instead and marks the entry `truncated` with the full
+    # `line_end_full`, so the agent pays for a bounded window and decides itself
+    # whether the rest is worth it. 0 disables the cap.
+    max_read_lines: int = 120
 
 
 class EmbeddingsConfig(BaseModel):

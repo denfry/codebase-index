@@ -144,6 +144,26 @@ def _fallback_suggestions(query, ranked) -> dict:
     return {"ripgrep": rg}
 
 
+def _bounded_read(entry: dict, max_lines: int) -> dict:
+    """Cap one read-plan entry to `max_lines`, keeping the original span visible.
+
+    Symbol-aligned chunks can span an entire class. Handing the agent
+    ``line_start..line_end`` verbatim then bills it for the whole body when the
+    definition head is usually what it needs first; the capped entry points at
+    the head and records the full extent so the agent can read on deliberately.
+    Additive fields only (`truncated`, `line_end_full`): schema unchanged.
+    """
+    span = entry["line_end"] - entry["line_start"] + 1
+    if max_lines <= 0 or span <= max_lines:
+        return entry
+    return {
+        **entry,
+        "line_end": entry["line_start"] + max_lines - 1,
+        "line_end_full": entry["line_end"],
+        "truncated": True,
+    }
+
+
 def search(
     conn: sqlite3.Connection,
     query: str,
@@ -159,6 +179,7 @@ def search(
     offset: int = 0,
     compact: bool = True,
     compact_min_reduction: float = 0.25,
+    max_read_lines: int = 120,
 ) -> dict:
     tuning = tuning or DEFAULT_TUNING
     plan = detect_intent(query)
@@ -215,7 +236,7 @@ def search(
     paginated = all_results[offset:offset + limit]
     paginated_keys = {(r["path"], r["line_start"], r["line_end"]) for r in paginated}
     recommended = [
-        r for r in all_recommended
+        _bounded_read(r, max_read_lines) for r in all_recommended
         if (r["path"], r["line_start"], r["line_end"]) in paginated_keys
     ]
     has_more = len(all_results) > offset + limit

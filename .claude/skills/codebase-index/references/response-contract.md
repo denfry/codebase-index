@@ -18,7 +18,10 @@ Each result can contain:
 - `elided_lines`
 
 `recommended_reads` is the read plan. Start with its first one to three entries
-and use exact line ranges.
+and use exact line ranges. An entry with `truncated: true` was capped at the
+definition head (`max_read_lines`, default 120); `line_end_full` gives the real
+extent. Read the capped range first and continue only when the head is not
+enough.
 
 `pagination.has_more` and `pagination.next_offset` indicate additional results.
 Prefer a more specific command or a larger token budget before paging.

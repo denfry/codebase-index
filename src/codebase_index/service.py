@@ -103,6 +103,7 @@ def search_payload(
             config=cfg,
             compact=compact,
             compact_min_reduction=cfg.retrieval.compact_min_reduction,
+            max_read_lines=cfg.retrieval.max_read_lines,
         )
 
 
