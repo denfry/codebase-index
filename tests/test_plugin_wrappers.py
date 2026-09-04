@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -64,3 +65,26 @@ def test_cbx_execs_venv_cli_via_pointer(tmp_path):
     )
     assert res.returncode == 0, res.stderr
     assert "CBXSTUB search foo" in res.stdout
+
+
+def _whitelist_sh(path: Path) -> set[str]:
+    m = re.search(r'^ALLOWED="([^"]+)"', path.read_text(encoding="utf-8"), re.M)
+    assert m, f"no ALLOWED= line in {path}"
+    return set(m.group(1).split())
+
+
+def _whitelist_ps1(path: Path) -> set[str]:
+    m = re.search(r"\$allowed = @\(([^)]+)\)", path.read_text(encoding="utf-8"), re.S)
+    assert m, f"no $allowed line in {path}"
+    return {tok.strip().strip('"') for tok in m.group(1).split(",")}
+
+
+def test_plugin_wrapper_whitelist_matches_skill_template():
+    """The plugin `bin/` wrappers must allow exactly what the skill template's
+    `cbx` allows, or plugin users silently lose commands the SKILL.md advertises
+    (this drifted once: architecture/diff-impact/path/describe were missing)."""
+    template = ROOT / "src/codebase_index/skill_template/scripts"
+    expected = _whitelist_sh(template / "cbx")
+    assert _whitelist_ps1(template / "cbx.ps1") == expected
+    assert _whitelist_sh(ROOT / "bin/cbx") == expected
+    assert _whitelist_ps1(ROOT / "bin/cbx.ps1") == expected
