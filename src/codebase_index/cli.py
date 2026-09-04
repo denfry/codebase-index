@@ -741,6 +741,11 @@ def doctor(
 def mcp(
     ctx: typer.Context,
     transport: str = typer.Option("stdio", "--transport", help="Transport: stdio (default)."),
+    root: Optional[Path] = typer.Option(
+        None, "--root",
+        help="Repository root (same as the global --root; accepted here too so client "
+             "configs can pass `mcp --root <repo>`).",
+    ),
 ) -> None:
     """Start the MCP server — exposes codebase-index tools to any MCP client (e.g. Claude Code).
 
@@ -751,8 +756,7 @@ def mcp(
         "mcpServers": {
           "codebase-index": {
             "command": "codebase-index",
-            "args": ["mcp"],
-            "cwd": "/path/to/your/project"
+            "args": ["mcp", "--root", "/path/to/your/project"]
           }
         }
       }
@@ -767,12 +771,13 @@ def mcp(
         )
         raise typer.Exit(code=1)
 
-    root_opt = ctx.obj.get("root") if ctx.obj else None
+    # Every doc and client template writes `codebase-index mcp --root <repo>`; the
+    # global `--root` lives on the callback, so the subcommand accepts it as well.
+    root_opt = root or (ctx.obj.get("root") if ctx.obj else None)
     if root_opt:
-        import os
-        os.environ.setdefault("CBX_ROOT", str(root_opt))
+        os.environ["CBX_ROOT"] = str(Path(root_opt).resolve())
 
-    _mcp.run(transport=transport)  # type: ignore[arg-type]
+    _mcp.run(transport=transport)  # type: ignore[arg-type,call-overload]
 
 
 @app.command()

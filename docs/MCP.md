@@ -7,7 +7,7 @@ pip install "codebase-index[mcp]"
 codebase-index mcp --root /path/to/repo
 ```
 
-The server speaks MCP over stdio through FastMCP. Build the index with
+The server speaks MCP over stdio through the official Python SDK (`MCPServer` on mcp 2.x, `FastMCP` on 1.x; both are supported). Build the index with
 `codebase-index index` before connecting a client.
 
 Current shipped interfaces:

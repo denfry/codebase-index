@@ -29,12 +29,18 @@ from .. import __version__
 if TYPE_CHECKING:
     from ..config import Config
 
+# mcp 2.x renamed FastMCP to MCPServer and moved it; mcp 1.x only has FastMCP.
+# Both expose the same `tool(structured_output=...)` decorator and `run(transport=)`
+# entry point this module uses, so one server definition serves both lines.
 try:
-    from mcp.server.fastmcp import FastMCP  # type: ignore[attr-defined]
-except ImportError as exc:  # pragma: no cover
-    raise ImportError(
-        "MCP server needs the optional extra: pip install codebase-index[mcp]"
-    ) from exc
+    from mcp.server.mcpserver import MCPServer as FastMCP  # mcp >= 2.0
+except ImportError:  # pragma: no cover - exercised on mcp 1.x only
+    try:
+        from mcp.server.fastmcp import FastMCP  # type: ignore[attr-defined,no-redef]
+    except ImportError as exc:
+        raise ImportError(
+            "MCP server needs the optional extra: pip install codebase-index[mcp]"
+        ) from exc
 
 mcp = FastMCP(
     "codebase-index",
