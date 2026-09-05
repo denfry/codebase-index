@@ -16,18 +16,18 @@ Repository: https://github.com/denfry/codebase-index · PyPI: `pip install codeb
 
 ## Pre-launch checklist (maintainer)
 
-- [ ] Enable **Discussions** (Settings → General → Features); `config.yml`,
+- [x] Enable **Discussions** (Settings → General → Features); `config.yml`,
       `SUPPORT.md` and `DEVELOPMENT.md` link to it.
 - [ ] Upload `assets/social-preview.png` (Settings → Social preview).
-- [ ] Run `scripts/apply_labels.sh` once (needs `gh auth`).
-- [ ] Confirm private vulnerability reporting is enabled (Security tab).
+- [x] Run `scripts/apply_labels.sh` once (needs `gh auth`).
+- [x] Confirm private vulnerability reporting is enabled (Security tab).
 - [ ] Record the GIF from `docs/demo.tape` (optional; the SVG card works).
 - [ ] Tag the release that contains this branch, so the README, PyPI page and
       release notes agree.
-- [ ] Repository description (About): *Local code map for AI coding agents:
+- [x] Repository description (About): *Local code map for AI coding agents:
       find, trace, and predict change impact with file:line evidence. Claude
       Code · Codex · OpenCode · MCP. No network by default.*
-- [ ] Topics (20 max, current set is fine): `ai-agents ai-coding claude-code
+- [x] Topics (20 max, current set is fine): `ai-agents ai-coding claude-code
       cli code-search codebase-indexing codex-cli context-engineering
       developer-tools fts5 local-first mcp opencode python rag
       semantic-code-search sqlite token-optimization tree-sitter
