@@ -21,7 +21,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator, Optional, Sequence
+from typing import Any, Callable, Iterator, Optional, Sequence, Union
 
 from ..config import Config
 from ..discovery.gates import PathGate
@@ -43,13 +43,34 @@ class Session:
         return self.store is not None and self.session_id is not None and not self.unavailable
 
 
+IndexSha = Callable[[str], Optional[str]]
+_STALE = "stale"
+
+
+def index_sha_lookup(conn: sqlite3.Connection) -> IndexSha:
+    """``files.sha256`` by path, cached for one call: the fingerprint the index was built from."""
+    from ..storage import repo
+
+    cache: dict[str, Optional[str]] = {}
+
+    def lookup(rel: str) -> Optional[str]:
+        if rel not in cache:
+            row = repo.get_file(conn, rel)
+            cache[rel] = row["sha256"] if row else None
+        return cache[rel]
+
+    return lookup
+
+
 class EvidenceProcessor:
     def __init__(self, *, root: Path, config: Config, now: datetime,
-                 session: Optional[Session] = None) -> None:
+                 session: Optional[Session] = None,
+                 index_sha: Optional[IndexSha] = None) -> None:
         self.tree = WorkingTree(PathGate(root, config))
         self.config = config
         self.now = now
         self.session = session
+        self.index_sha = index_sha
 
     def __call__(self, payload: dict, candidates: Sequence[Any]) -> None:
         session = self.session
@@ -62,11 +83,11 @@ class EvidenceProcessor:
             if not snippet:
                 continue  # nothing was delivered for this result
             observed = self._observe(result, candidate)
-            if observed is None:
+            if isinstance(observed, str):  # _STALE
                 result["stale"] = True
                 continue
-            if session is None or not session.usable:
-                continue
+            if observed is None or session is None or not session.usable:
+                continue  # derived index text is accurate but not byte-verifiable: never withheld
             rel, span, span_sha = observed
             tokens = int(result.get("token_est") or 0)
             snippet_sha = ident.sha_hex(snippet)
@@ -98,19 +119,27 @@ class EvidenceProcessor:
                 reused=reused, tokens_saved=tokens_saved, tokens_delivered=tokens_delivered,
             )
 
-    def _observe(self, result: dict, candidate: Any) -> Optional[tuple[str, str, str]]:
-        """(path, span text, span sha) when the delivered snippet matches the working tree."""
+    def _observe(self, result: dict, candidate: Any) -> Union[tuple[str, str, str], str, None]:
+        """Classify one delivered snippet against the working tree.
+
+        * ``(path, span text, span sha)`` — the snippet is text these exact lines hold now;
+        * ``"stale"`` — the file is gone, excluded, or its bytes differ from what was indexed;
+        * ``None`` — the index is current for this file but its text was derived (config-key
+          and section summaries), so it cannot be checked byte-for-byte.
+        """
         try:
             rel = ident.normalize_rel_path(str(result["path"]))
         except ValueError:
-            return None
+            return _STALE
         view, _state, _reason = self.tree.view(rel)
         if view is None:
-            return None
+            return _STALE
         span = ident.span_text(view.lines, int(result["line_start"]), int(result["line_end"]))
-        if span is None or not ident.content_matches(getattr(candidate, "content", None), span):
+        if span is not None and ident.content_matches(getattr(candidate, "content", None), span):
+            return rel, span, ident.sha_hex(span)
+        if self.index_sha is None:
             return None
-        return rel, span, ident.sha_hex(span)
+        return None if self.index_sha(rel) == view.sha256 else _STALE
 
     def _known(self, session: Session, rel: str, span_sha: str, snippet_sha: str) -> bool:
         assert session.store is not None and session.session_id is not None
@@ -174,7 +203,8 @@ class EvidenceProcessor:
 
 @contextmanager
 def open_evidence(*, root: Path, config: Config, memory_path: Path, tag: Optional[str],
-                  now: Optional[datetime] = None) -> Iterator[EvidenceProcessor]:
+                  now: Optional[datetime] = None,
+                  index_conn: Optional[sqlite3.Connection] = None) -> Iterator[EvidenceProcessor]:
     """Processor for one retrieval call; opens the store only when a session is named."""
     now = now or utc_now()
     session: Optional[Session] = None
@@ -191,7 +221,10 @@ def open_evidence(*, root: Path, config: Config, memory_path: Path, tag: Optiona
         except (MemoryUnavailable, sqlite3.Error) as exc:
             session.unavailable = str(exc)
     try:
-        yield EvidenceProcessor(root=Path(root), config=config, now=now, session=session)
+        yield EvidenceProcessor(
+            root=Path(root), config=config, now=now, session=session,
+            index_sha=index_sha_lookup(index_conn) if index_conn is not None else None,
+        )
     finally:
         if store is not None:
             store.close()

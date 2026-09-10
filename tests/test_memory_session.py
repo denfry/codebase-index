@@ -173,6 +173,49 @@ def test_excerpt_that_still_holds_is_not_stale(repo):
     assert not again.get("stale") and not again.get("reused") and again["snippet"]
 
 
+def test_derived_index_text_is_flagged_only_when_the_file_really_changed(repo, tmp_path):
+    """Config-key and section summaries are derived, not copied from the file, so they are
+    not byte-verifiable: never recorded or withheld, and flagged stale only when the file's
+    bytes differ from what was indexed. (Ranking decides whether such a chunk surfaces, so
+    this drives the processor with the exact chunk the index stored.)"""
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    from codebase_index.memory import identity as ident
+    from codebase_index.memory.session import EvidenceProcessor, Session, index_sha_lookup
+    from codebase_index.memory.store import MemoryStore
+
+    root, cfg, db_path = repo
+    (root / "config.json").write_text('{"refund": {"window_days": 30}}\n', encoding="utf-8")
+    _update(repo)
+    derived = "config key: refund.window_days = 30"
+    with Database(db_path) as db:
+        stored = [r[0] for r in db.conn.execute(
+            "SELECT c.content FROM chunks c JOIN files f ON f.id = c.file_id "
+            "WHERE f.path = 'config.json' AND c.kind = 'doc'")]
+    assert stored == [derived]
+
+    def process(store: MemoryStore, session_id: int) -> dict:
+        result = {"rank": 1, "path": "config.json", "line_start": 1, "line_end": 1,
+                  "snippet": derived, "token_est": 9, "skeletonized": False}
+        repo_id = ident.repo_id_for(root)
+        with Database(db_path) as db:
+            EvidenceProcessor(
+                root=root, config=cfg, now=datetime.now(timezone.utc),
+                session=Session(tag="t", repo_id=repo_id, store=store, session_id=session_id),
+                index_sha=index_sha_lookup(db.conn),
+            )({"results": [result]}, [SimpleNamespace(content=derived)])
+        return result
+
+    with MemoryStore.open(tmp_path / "derived.sqlite") as store:
+        session_id = store.touch_session("r", "t", now=datetime.now(timezone.utc))
+        fresh = process(store, session_id)
+        assert "stale" not in fresh and fresh["snippet"] == derived and "reused" not in fresh
+        assert store.pending(session_id) == []                      # never recorded
+        (root / "config.json").write_text('{"refund": {"window_days": 14}}\n', encoding="utf-8")
+        assert process(store, session_id).get("stale") is True
+
+
 def test_code_that_only_moved_within_its_file_is_still_reused(repo):
     root, _, _ = repo
     first = _run(repo, session="t1")

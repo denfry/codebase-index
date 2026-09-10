@@ -7,6 +7,7 @@ costs the agent one re-read, a false validation costs it a wrong answer.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import Optional
 
@@ -43,10 +44,16 @@ class Verdict:
 
 
 class FileView:
-    """Lines of one working-tree file; per-line hashes are computed only if needed."""
+    """Lines of one working-tree file; per-line hashes are computed only if needed.
 
-    def __init__(self, lines: list[str]) -> None:
+    ``sha256`` is the digest of the raw bytes — the same fingerprint the indexer stores in
+    ``files.sha256`` — so a caller can tell "the index is older than this file" apart from
+    "the index text was derived rather than copied".
+    """
+
+    def __init__(self, lines: list[str], sha256: Optional[str] = None) -> None:
         self.lines = lines
+        self.sha256 = sha256
         self._line_shas: Optional[list[str]] = None
 
     def line_shas(self) -> list[str]:
@@ -105,7 +112,9 @@ class WorkingTree:
         if cached is None:
             result = self.gate.read(rel)
             if result.state == "ok":
-                cached = (FileView(ident.split_lines(result.data)), "ok", "")
+                view = FileView(ident.split_lines(result.data),
+                                hashlib.sha256(result.data).hexdigest())
+                cached = (view, "ok", "")
             else:
                 cached = (None, result.state, result.reason)
             self._views[rel] = cached

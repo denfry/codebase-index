@@ -99,7 +99,7 @@ def search_payload(
     with Database(db_path) as db:
         if backend is not None and getattr(backend, "enabled", False):
             db.enable_vectors()
-        with _evidence(cfg, tag, enabled) as evidence:
+        with _evidence(cfg, tag, enabled, db.conn) as evidence:
             payload = run_search(
                 db.conn,
                 query,
@@ -148,14 +148,16 @@ def session_tag(session: Optional[str]) -> Optional[str]:
 
 
 @contextmanager
-def _evidence(cfg: "Config", tag: Optional[str], enabled: bool) -> Iterator[Any]:
+def _evidence(cfg: "Config", tag: Optional[str], enabled: bool,
+              conn: sqlite3.Connection) -> Iterator[Any]:
     if not enabled:
         yield None
         return
     from .memory.session import open_evidence
 
     with open_evidence(
-        root=Path(cfg.root), config=cfg, memory_path=memory_path_for(cfg), tag=tag
+        root=Path(cfg.root), config=cfg, memory_path=memory_path_for(cfg), tag=tag,
+        index_conn=conn,
     ) as processor:
         yield processor
 
