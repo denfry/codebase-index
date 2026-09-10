@@ -3,6 +3,8 @@
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+# Exception: a real 1.10.0 index, kept to test the 1.x -> 2.0 upgrade path.
+!tests/fixtures/index-1.10.0/index.sqlite
 
 # The skill itself (.claude/skills/codebase-index/) MAY be committed so the team shares it.
 # The cache above must not be.
