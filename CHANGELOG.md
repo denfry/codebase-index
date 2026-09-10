@@ -6,6 +6,138 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-09-02
+
+Ranking release. 1.9.0's own diagnostics showed that a perfect reranker over the
+candidate pool it already generated would score MRR 0.902 against the 0.577 actually
+delivered — a ranking gap roughly three times larger than the remaining recall gap.
+1.10.0 spends its entire budget on closing part of that gap, and adds the metrics
+that make the gap visible.
+
+Measured over **420 queries across eight repositories** (Python ×2, Java ×3,
+TypeScript/TSX ×2, PowerShell ×1) against a pinned 1.9.0: MRR +0.0188 (p=0.004),
+nDCG@10 +0.0304 (p<0.001), MAP +0.0213 (p=0.001), recall@10 +0.0627 (p<0.001, 37
+wins / 0 losses), useful@budget +0.0292 (p=0.020), −19 tokens per query. The
+candidate pool is unchanged, so every gain is reranking. No corpus regressed. Under
+leave-one-repository-out the pooled gain is +0.0219 MRR with 7/8 folds improving and
+0 regressing. Full tables in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+
+### Added
+
+- **Query↔candidate name co-occurrence** (`retrieval/features.py`), the one new
+  ranking signal. Every retriever scores each query term independently and RRF sums
+  those independent verdicts, so nothing in the pipeline could distinguish a
+  candidate that matched *one* query term well from one that matched *three* terms in
+  a single name. On "graph resolution + traversal accessors" 1.9.0 ranked
+  `graph/retrieval.py` (one term) above `test_graph_accessors_resolve_and_walk`
+  (three); on "greedy token budgeting with redaction" it ranked `output/redact.py`
+  above `retrieval/budget.py`. The signal credits query terms for occurring
+  *together* in one name — file basename plus symbol, camel/snake split, directories
+  excluded — and only for terms beyond the first, since the first match is already
+  paid for by the retriever that surfaced the candidate. Cost is
+  `O(len(path) + len(symbol) + len(terms))` per candidate: no corpus statistics, no
+  posting-list scan, no model, no network. Ablatable via
+  `RetrievalTuning(name_cooccurrence=False)`.
+- **Oracle / headroom metrics** in the eval harness (`oracle`, `cand_recall`, `eff`).
+  MRR alone cannot separate "retrieval never found it" from "the ranker buried it",
+  and those two failures share no fix. `oracle` is the MRR a perfect reranker would
+  achieve over the pool actually generated, `eff = MRR / oracle` is the fraction of
+  achievable quality delivered (0.639 → 0.660 in this release). These also make
+  ranking changes falsifiable in a new way: `-name_cooccurrence` moves eight quality
+  metrics while leaving `oracle` at ±0.0000, proving the gain is not disguised recall.
+- **`search(..., explain=True)`** returns a `diagnostics` block with the pre-rerank
+  candidate pool and the final order, each candidate carrying source, symbol, score
+  and retriever agreement. This is what the oracle metrics are computed from, and
+  what turns "the ranking is wrong" into a decomposable failure. Measured at −0.8ms
+  p50 (inside noise); nothing is allocated when the flag is off.
+- **`RetrievalTuning.v190()`** pins the previous release as the comparison column, so
+  "better than what we shipped last" cannot drift as the default changes.
+  `run_eval.py` now reports 1.7.0, 1.9.0 and the current default side by side.
+
+### Changed
+
+- **Pages are packed with distinct files** (`max_per_file` 3 → 1). The agent's unit
+  of decision is "which file do I open", so a 10-result page spending three slots on
+  three regions of one file offers seven choices, not ten. 1.9.0's page held 7.1
+  distinct files on average, and of the queries whose answer was in the pool but
+  missing from the page, 45 of 57 had it past rank 10 — crowded out by repeat hits
+  rather than better candidates. Monotone over 1–5, so this is a plateau boundary,
+  not a fitted peak. Nothing is dropped: overflow hits keep their relative order at
+  the tail. recall@10 +0.045, nDCG@10 +0.015, unchanged token cost.
+- **Name co-occurrence is discounted for test and generated sources**
+  (`name_cooccurrence_demoted_scale`, 0.5). Test function names are descriptive
+  sentences (`test_compactor_output_is_redacted`), so they harvest query-term
+  co-occurrences real identifiers never do. The value was chosen by splitting the
+  benchmark on whether its own ground truth is a test: across the 261 queries whose
+  answer is *not* a test the gain is flat at +0.020 MRR for every scale, so the whole
+  aggregate difference between 0.5 and 1.0 comes from the 159 test-answer queries —
+  an artifact of mining ground truth from commits, which touch tests. 0.5 is the only
+  setting that improves both partitions.
+- **Benchmark corpora no longer index changelog files.** `gen_queries` documented
+  `CHANGELOG_EXCLUDES` as applied to the corpus but the harness never wired it in. A
+  git-derived query *is* a commit subject and a changelog entry paraphrases it
+  verbatim while never being an accepted answer, so every affected query carried an
+  unbeatable distractor that compressed all variants toward the same floor.
+
+### Performance
+
+- **Duplicate detection roughly halved.** It was 42% of the query path on the Java
+  corpus. Two independent fixes: the operator scan in `normalize_code_tokens` no
+  longer runs up to 24 `str.startswith` calls per punctuation character (1.71×
+  faster on 1600 real chunks, bit-identical token stream), and only the leading 2000
+  characters of a body now decide duplication — two chunks agreeing for 2000
+  characters are the same snippet. Recall, duplicate rate and useful-context are
+  identical; MRR within −0.0003 (p=0.51).
+
+### Fixed
+
+- **Non-ASCII identifiers can now earn name-level ranking credit.** The query side
+  parses Unicode correctly, so `расчёт_налога.py` produced matching query terms but
+  its own name components were silently dropped, making the file unrankable by name.
+- **`.skill_version` is pinned to LF in `.gitattributes`.** `sync_skill_copies.py`
+  writes and byte-compares `"<version>\n"`, but the file carried no EOL attribute,
+  so with `core.autocrlf=true` git materialised CRLF and `test_real_repo_is_in_sync`
+  failed on any fresh Windows clone — and again after any `git checkout` of that file.
+- **Lint is clean repository-wide.** `skill/scripts/` was outside the CI lint scope
+  (`ruff check src tests`) and had accumulated three violations.
+
+### Verdicts on existing signals
+
+Every pre-existing signal was re-examined rather than inherited. `soft_lexical`
+(−0.161 MRR when off) and `source_priors` (−0.029) remain load-bearing;
+`file_agreement` (−0.010, p=0.048) and `dedup` (−0.0016, p=0.006) keep their places.
+
+- **`query_expansion` survives a deletion attempt, and the reason is a lesson.** On
+  the 420 git-derived queries the synonym vocabulary is worth nothing measurable
+  (MRR −0.0022, p=0.40 when removed), and the flag's apparent benefit turned out to
+  come from it also swapping the symbol retriever's tokenizer. It was removed — and
+  then restored, because a commit subject is written by someone looking at the
+  identifiers they just changed and so reuses the codebase's spelling, while a user
+  asking a question does not. On the 36 hand-written natural-language queries removal
+  cost −0.060 MRR. The git benchmark is structurally blind to morphology; both query
+  families are needed to make this call.
+- **The intent classifier is inert on commit-style queries but kept.** It returns
+  `keyword` for 419 of 420 git-derived queries, and removing the layer entirely is
+  bit-identical on that benchmark. It fires on 30.6% of hand-written questions, where
+  removing it costs MRR, and the retriever *weights* it selects are worth +0.058 MRR
+  against uniform weights. Deleting it would optimise for the benchmark's phrasing.
+- **`fuzzy_symbols` and `graph_source` remain measurably inert** on all eight corpora
+  (0/1 and 0/0 query changes respectively); both stay as-is rather than accumulating
+  new tuning.
+
+### Rejected
+
+Recorded so they are not re-attempted without a new hypothesis. A pairwise logistic
+ranker fitted over 19 deterministic query↔candidate features selected exactly one
+feature, and forward selection found no second feature clearing the noise floor, so
+one explainable term ships instead of a model. Individually measured and rejected:
+idf weighting of matched terms (pool-local and corpus-wide), substring matching,
+prefix/stem-tolerant matching, ordered-subsequence matching, term proximity in the
+chunk body, body-text coverage, zone-size normalisation, restricting the name zone to
+the filename or symbol alone, and including the parent directory. `exact_symbol` was
+found to have no discriminative power at all (AUC 0.500) but is left untouched, since
+changing it is a separate experiment from adding a signal.
+
 ## [1.9.0] - 2026-09-02
 
 ### Added
@@ -504,7 +636,9 @@ Pooled over 305 queries (Python, Java, TypeScript), v1.8.0 → 1.9.0:
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/denfry/codebase-index/compare/v1.9.0...v1.10.0
+[1.9.0]: https://github.com/denfry/codebase-index/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/denfry/codebase-index/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/denfry/codebase-index/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/denfry/codebase-index/compare/v1.5.0...v1.6.0

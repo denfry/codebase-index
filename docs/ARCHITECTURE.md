@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-`codebase-index` is a **local-first** code intelligence layer for AI coding agents. In `1.9.0`
+`codebase-index` is a **local-first** code intelligence layer for AI coding agents. In `1.10.0`
 it has two shipped faces:
 
 1. **A Claude Code Skill** (`.claude/skills/codebase-index/SKILL.md`) that Claude auto-invokes for
@@ -97,8 +97,8 @@ codebase-index/
     ├── graph/                   # builder.py (edge resolution), expand.py (impact),
     │                            #   export.py (HTML graph)
     ├── storage/                 # db.py (pragmas, schema, version guard), schema.sql, repo.py
-    ├── retrieval/               # intent.py, searchers.py, fusion.py, rerank.py, priors.py,
-    │                            #   lexical.py, fuzzy.py, diversity.py, skeleton.py,
+    ├── retrieval/               # intent.py, searchers.py, fusion.py, rerank.py, features.py,
+    │                            #   priors.py, lexical.py, fuzzy.py, diversity.py, skeleton.py,
     │                            #   tuning.py (ablation contract), budget.py, pipeline.py, types.py
     ├── embeddings/              # backend.py, noop.py (default), local.py, external.py — opt-in
     ├── output/                  # markdown.py, json.py, redact.py
@@ -128,7 +128,8 @@ CI fails if they drift (`--check`).
   (a future-versioned index asks for a rebuild rather than guessing), and typed accessors.
   FTS5 virtual tables and (optional) `sqlite-vec` vector tables live here.
 - **retrieval** — The query path. `intent.py` classifies the query; `searchers.py` runs the
-  relevant retrievers; `fusion.py` merges them with RRF; `rerank.py` reorders; `graph.expand`
+  relevant retrievers; `fusion.py` merges them with RRF; `features.py` extracts deterministic
+  query↔candidate features and `rerank.py` reorders on them; `graph.expand`
   pulls in related nodes; `budget.py` trims to a token budget.
 - **embeddings** — Opt-in only. A `Backend` protocol so vector providers are pluggable. Default is
   `noop` (disabled). Local models supported; external APIs require explicit config + a warning.

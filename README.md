@@ -271,7 +271,7 @@ See [MCP.md](docs/MCP.md) for client configuration.
 
 ## Project status
 
-The latest released line is **1.9.0**. It includes:
+The latest released line is **1.10.0**. It includes:
 
 - hybrid and optional vector retrieval;
 - Tree-sitter symbol extraction across the documented language tiers;
@@ -281,6 +281,11 @@ The latest released line is **1.9.0**. It includes:
 - token-budgeted and skeletonized retrieval packets;
 - benchmark-calibrated lexical expansion, fuzzy identifier matching, and source-aware ranking;
 - rank fusion that scores cross-retriever agreement at file level, not just at a locator;
+- a reranker that scores query↔candidate *interactions* — several query terms
+  co-occurring in one filename or symbol — instead of only summing independent
+  per-term matches;
+- oracle/headroom metrics that separate "retrieval never found it" from "the ranker
+  buried it", so ranking work is aimed by measurement;
 - bounded, intent-directed graph discovery with optional diversity and duplicate suppression;
 - CLI, Skill, plugin, and MCP delivery;
 - incremental updates, watch hooks, diagnostics, skill rollback, and diff-aware
@@ -289,12 +294,15 @@ The latest released line is **1.9.0**. It includes:
   one-signal ablations, and paired significance tests
   ([tests/eval](tests/eval/README.md)).
 
-Every shipped ranking signal has to survive that evaluation: 1.9.0 removed the
-cost of two signals that could not demonstrate a benefit and rejected several
-plausible ones outright (IDF-weighted coverage, stemming, graph propagation, MMR,
-a file-length prior). Planned work is deliberately separated from shipped
-capability. The next product priorities are typed framework edges and an even more
-direct task-context workflow. See the [roadmap](docs/ROADMAP.md).
+Every shipped ranking signal has to survive that evaluation. 1.10.0 was validated on
+420 queries across eight repositories in four languages, held out one repository at a
+time to choose its parameters, and shipped exactly one new signal — a pairwise model
+fitted over 19 candidate features could not justify a second. Ten further ranking
+features were measured and rejected, and one attempted deletion was reverted when the
+hand-written query set showed what the git-derived set structurally cannot see.
+Planned work is deliberately separated from shipped capability. The next product
+priorities are typed framework edges and an even more direct task-context workflow.
+See the [roadmap](docs/ROADMAP.md).
 
 ## Documentation
 

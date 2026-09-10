@@ -11,6 +11,7 @@ import math
 import re
 
 from ..discovery.classify import is_test_path
+from .features import name_cooccurrence, name_zone, query_profile
 from .priors import source_role_prior
 from .tuning import DEFAULT_TUNING, RetrievalTuning
 from .types import Candidate, Intent
@@ -35,9 +36,33 @@ def rerank(
     tuning: RetrievalTuning = DEFAULT_TUNING,
 ) -> list[Candidate]:
     terms = {t.lower() for t in _TERM_RE.findall(query)}
+    wants_tests = "test" in terms or "tests" in terms
+    profile = query_profile(query) if tuning.name_cooccurrence else None
     for c in candidates:
         bonus = 0.0
         reasons: list[str] = []
+        # Computed before the bonuses because the name-co-occurrence signal is
+        # conditioned on it, not merely penalised after the fact.
+        demoted = c.is_generated or (is_test_path(c.path) and not wants_tests)
+
+        # Name co-occurrence is *discounted*, not withheld, for sources the ranker
+        # is unwilling to promote. Test symbol names are descriptive sentences
+        # (`test_compactor_output_is_redacted`), so they harvest query-term
+        # co-occurrences that real identifiers never do, and a bonus reaching
+        # +`name_cooccurrence_weight` is not counterbalanced by a flat -0.15
+        # demotion calibrated when the largest name bonus was +0.05. Withholding it
+        # outright over-corrects: on git-derived ground truth the changed file often
+        # *is* the test, and zeroing the bonus cost -0.017 MRR across eight
+        # repositories. The discount keeps a strongly-matching test ahead of a
+        # barely-matching implementation while restoring the intended role ordering
+        # when both match comparably.
+        if profile is not None:
+            matched, cooccurrence = name_cooccurrence(profile, name_zone(c.path, c.symbol))
+            if cooccurrence:
+                if demoted:
+                    cooccurrence *= tuning.name_cooccurrence_demoted_scale
+                bonus += tuning.name_cooccurrence_weight * cooccurrence
+                reasons.append(f"{matched}/{profile.n_terms} query terms co-occur in name")
 
         if c.source == "symbol" and c.kind in {"function", "method", "class", "interface", "type"}:
             bonus += 0.05
@@ -71,8 +96,7 @@ def rerank(
                 bonus += prior
                 reasons.append(f"source prior {prior:+.2f}")
 
-        wants_tests = "test" in terms or "tests" in terms
-        if c.is_generated or (is_test_path(c.path) and not wants_tests):
+        if demoted:
             bonus -= 0.15
             reasons.append("generated/test demoted")
 

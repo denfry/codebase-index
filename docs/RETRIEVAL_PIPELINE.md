@@ -132,10 +132,14 @@ strong one, and cross-source agreement never affected the score.
 
 ## 8. Reranking
 
-After fusion, apply bounded explainable boosts and penalties:
+After fusion, apply explainable query↔candidate boosts and penalties. All but the
+first are bounded tiebreakers; the co-occurrence term is deliberately larger,
+because it is the only signal that can see an *interaction* between query terms
+rather than another independent per-term match.
 
 | Factor | Effect | Rationale |
 |---|---:|---|
+| Query terms co-occurring in one name | up to +1.80 | Several query terms in one filename/symbol beats one term matched well; RRF sums per-term evidence and cannot see this |
 | Exact symbol match | +0.20 | User named a specific symbol |
 | Symbol definition kind | +0.05 | Prefer actionable definitions |
 | Path term match | +0.05 | User supplied a location clue |
@@ -144,6 +148,18 @@ After fusion, apply bounded explainable boosts and penalties:
 | Documentation source prior | -0.20 | Prose describing a feature outmatches the code lexically |
 | Generated/vendor/build | -0.25 | Suppress low-value derived code |
 | Test path on non-test query | -0.06 | Keep tests as supporting evidence |
+
+The co-occurrence bonus is halved for test and generated sources: descriptive test
+function names (`test_compactor_output_is_redacted`) are word bags that collect
+query-term matches real identifiers never do. See `retrieval/features.py` and
+[RETRIEVAL.md](RETRIEVAL.md) §4 for the measurement behind both numbers.
+
+## 8a. Page packing
+
+Selection keeps **one hit per file** on the page and pushes further hits from the
+same file to the tail. The agent decides at file granularity, so three regions of
+one file occupy three of ten slots while offering one choice. Nothing is dropped;
+recall@10 improves because distinct files now fit.
 
 ## 9. Confidence
 

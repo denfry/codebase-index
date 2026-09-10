@@ -21,8 +21,7 @@ query
   ▼
 [3] rank fusion  ── Reciprocal Rank Fusion (RRF) across retriever result lists
   │
-  ▼
-[4] rerank  ── feature-based score (symbol-kind, path, source role, centrality)
+[4] rerank  ── query↔candidate features: name co-occurrence, symbol, path, source role, centrality
   │
   ▼
 [5] optional graph expansion  ── pull in imports/callers/callees per intent (bounded)
@@ -115,10 +114,13 @@ there. Set `RetrievalTuning(file_agreement=False)` to recover plain locator-only
 ## 4. Reranking (`retrieval/rerank.py`)
 
 A lightweight, explainable feature score (no external model required) layered on the fused order.
-Every term is bounded, so reranking reorders near-neighbours rather than overruling retrieval:
+Most terms are bounded tiebreakers, so they reorder near-neighbours rather than overruling
+retrieval. The exception is name co-occurrence, which is deliberately large enough to move a
+candidate several places — see below for why, and for the evidence that it should.
 
 | Feature | Effect | Intuition |
 |---|---:|---|
+| Query terms co-occurring in one name | ≤ +1.80 | several query terms in one name is qualitatively better evidence than one term matched well |
 | Exact symbol match | +0.20 | the user named a specific symbol |
 | Symbol definition kind | +0.05 | a `def`/`class` outranks an incidental mention |
 | Symbol name among query terms | +0.05 | the name was asked for, not just matched |
@@ -127,6 +129,56 @@ Every term is bounded, so reranking reorders near-neighbours rather than overrul
 | Reference-count fallback | ≤ +0.04 | for names too common to resolve a precise `in_degree` |
 | Source role prior | −0.25…+0.08 | see below |
 | Generated, or test on a non-test query | −0.15 | supporting evidence, not the answer |
+
+### Name co-occurrence (`retrieval/features.py`)
+
+Every retriever scores each query term independently, and RRF sums those independent verdicts. That
+structure cannot distinguish a candidate which matched **one** query term very well from one which
+matched **three** terms in a single name — and on the 1.9.0 benchmark that confusion was the single
+largest reranking loss. Two measured examples, both ranked wrong by 1.9.0:
+
+| Query | 1.9.0 winner | correct answer, ranked below it |
+|---|---|---|
+| "graph resolution + traversal accessors" | `graph/retrieval.py` (`graph`) | `test_graph_accessors_resolve_and_walk` (`graph` + `accessors` + `resolve`) |
+| "greedy token budgeting with redaction" | `output/redact.py` (`redact`) | `retrieval/budget.py` (`budget` + `token`) |
+
+The fix is an interaction term, not another per-term bonus. Let `zone(d)` be the identifier
+components of the candidate's *name* — file basename plus symbol, camel/snake split — and `m` the
+number of salient query terms appearing in it:
+
+```
+cooccurrence(d) = max(0, m - 1) / (n_terms - 1)          # 0 when m < 2
+score(d)       += w · cooccurrence(d) · (scale if demoted else 1)
+```
+
+Only terms **beyond the first** earn credit: a single matched term is already fully paid for by the
+retriever that surfaced the candidate, so crediting it again would merely re-weight lexical
+matching, which is not what was missing. Directories are excluded from the zone —
+`src/main/java/net/...` is shared by hundreds of files, so it adds co-occurrence noise to all of
+them and evidence to none.
+
+`w = 1.8` sits in the interior of a plateau. Pooled MRR rises to ≈1.8 and then flattens, and past
+that point per-query wins stay flat while losses nearly double (37W/19L at 1.8 against 39W/32L at
+4.0), because a larger bonus turns the feature into the primary sort key and reduces fusion to a
+tiebreak. Every value in 1.0–4.0 leaves all eight benchmark corpora at or above 1.9.0.
+
+`scale = 0.5` discounts — rather than withholds — the bonus for test and generated sources. Test
+function names are descriptive sentences (`test_compactor_output_is_redacted`), so they harvest
+query-term co-occurrences that real identifiers never do, and a bonus reaching +1.8 is not
+counterbalanced by a flat −0.15 demotion calibrated when the largest name bonus was +0.05. The
+value was chosen by splitting the benchmark on whether its *own ground truth* is a test: across the
+261 queries whose answer is not a test, the gain is flat at +0.020 MRR for every scale, so the
+entire aggregate difference between 0.5 and 1.0 comes from the 159 test-answer queries — an
+artifact of mining ground truth from commits, which touch tests. 0.5 is the only setting that
+improves both partitions.
+
+Variants that were measured and **rejected**, each failing to beat this one on held-out
+repositories: idf weighting of the matched terms (pool-local and corpus-wide); substring instead of
+component matching; prefix/stem-tolerant matching (`redact`/`redacted`); ordered-subsequence
+matching; term proximity within the chunk body; body-text coverage; zone-size ("tightness")
+normalisation; and restricting the zone to the filename or the symbol alone. A pairwise logistic
+ranker fitted over 19 candidate features selected this one, and forward selection found no second
+feature clearing the noise floor — so one feature ships, not a model.
 
 ### Source role priors (`retrieval/priors.py`)
 
@@ -160,19 +212,44 @@ When enabled, it is bounded by depth and node cap:
 
 Expanded nodes retain edge confidence and receive distance-decayed scores so seeds stay on top.
 
-## 6. Diversity and duplicate control
+## 6. Diversity, page packing, and duplicate control
 
 `retrieval.diversity` provides bounded MMR selection and SimHash near-duplicate suppression.
+
+### Page packing (`max_per_file`)
+
+The agent's unit of decision is "which file do I open", so a 10-result page that spends three
+slots on three regions of one file offers seven choices, not ten. Measured across eight
+repositories, 1.9.0's page held **7.1 distinct files** on average, and of the queries whose answer
+was in the candidate pool but missing from the page, 45 of 57 had it sitting past rank 10 — crowded
+out by repeat hits rather than by better candidates.
+
+`max_per_file = 1` keeps one hit per file in place and pushes the rest to the tail. Nothing is
+dropped, so a file with several relevant regions still surfaces them below the first page. The
+parameter is monotone over 1–5 (1 > 2 > 3 > 4 > 5), so this is a plateau boundary rather than a
+fitted peak: recall@10 +0.045 and nDCG@10 +0.015 against 1.9.0's value of 3, at unchanged token
+cost, with no metric and no corpus regressing.
+
+### MMR
 
 MMR is disabled in the shipped default: it moved no ranking metric on the benchmark and roughly
 doubled p50 latency. Callers that need broader snippet coverage can enable
 `RetrievalTuning(mmr=True)`.
 
-SimHash duplicate suppression stays on, but on noise grounds rather than ranking grounds: it does
-not move MRR, and it takes the duplicate rate of returned snippets from ~1.6% to ~0%. The
-over-fetch that feeds selection is now an explicit `candidate_pool_multiplier` rather than an
-implicit side effect of enabling dedup — an earlier ablation credited dedup with a quality win that
-was really the wider pool doing the work.
+### Duplicate suppression
+
+SimHash duplicate suppression stays on, but on noise grounds rather than ranking grounds: it moves
+MRR by −0.0016 (p=0.006) and takes the duplicate rate of returned snippets to ~0%. The over-fetch
+that feeds selection is an explicit `candidate_pool_multiplier` rather than an implicit side effect
+of enabling dedup — an earlier ablation credited dedup with a quality win that was really the wider
+pool doing the work.
+
+Only the leading 2000 characters of a candidate body decide duplication. Fingerprinting whole chunk
+bodies made this the most expensive stage of the query path — 42% of it on the Java corpus — to
+answer a question the first ~50 lines already answer: two chunks that agree for 2000 characters are
+the same snippet. The bound leaves recall, duplicate rate and useful-context identical and MRR
+within −0.0003 (p=0.51). Combined with a rewritten operator scan in the tokeniser (1.71× faster,
+bit-identical output), duplicate control costs roughly half what it did in 1.9.0.
 
 ## 7. Token budgeting (`retrieval/budget.py`)
 
@@ -227,3 +304,26 @@ number of agreeing retrievers, and whether a symbol matched exactly.
 
 The Markdown renderer (`output/markdown.py`) prints the same data as a tight table + fenced
 snippets so it's compact in Claude's context. See SKILL.md for how Claude is told to read it.
+
+## 10. Ranking diagnostics (`--explain`)
+
+Every result already carries a `reason` string, but diagnosing *why the ranking was wrong* needs
+the order before reranking as well as after. `search(..., explain=True)` adds a `diagnostics`
+block containing the pre-rerank candidate pool and the final order, each with per-candidate
+source, symbol, score and retriever agreement. Building it costs about thirty dict literals per
+query — measured at −0.8ms p50, i.e. inside the noise of a 40ms query — and nothing is allocated
+when the flag is off.
+
+This is what the evaluation harness uses to compute the **oracle** metrics, and it is what turns
+"MRR is low" into an actionable decomposition:
+
+| Metric | Question it answers |
+|---|---|
+| `oracle` | what MRR a *perfect* reranker would score over the pool actually generated |
+| `1 - oracle` | the share of queries only better **recall** can ever fix |
+| `eff` = MRR / oracle | the share of achievable ranking quality actually delivered |
+
+At 1.9.0 that split read `oracle = 0.902`, `MRR = 0.577`, `eff = 0.639`: a third of the answers
+already sitting in the candidate pool were ranked below something else, an error mode roughly
+three times larger than the remaining 0.098 of recall headroom. That measurement is why 1.10.0
+spent its effort on the reranker instead of adding retrievers.

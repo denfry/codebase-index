@@ -38,6 +38,48 @@ query text is not in the indexed corpus). Corpora are pooled across languages, o
 index per corpus is shared by every variant, and every non-baseline row carries a
 paired bootstrap CI and permutation p-value.
 
+`1.10.0` was measured over **420 queries across eight repositories** (Python ×2,
+Java ×3, TypeScript/TSX ×2, PowerShell ×1) against a pinned `1.9.0`
+(`RetrievalTuning.v190()`, so the comparison point cannot drift with the default):
+
+| Metric | 1.9.0 | 1.10.0 | Δ | 95% CI | p | W/L/T |
+|---|---|---|---|---|---|---|
+| MRR | 0.5767 | 0.5955 | +0.0188 | [+0.0061, +0.0321] | 0.004 | 44/14/362 |
+| nDCG@10 | 0.5352 | 0.5656 | +0.0304 | [+0.0197, +0.0416] | <0.001 | 64/19/337 |
+| MAP | 0.4654 | 0.4867 | +0.0213 | [+0.0104, +0.0331] | 0.001 | 64/19/337 |
+| recall@5 | 0.6026 | 0.6212 | +0.0187 | [+0.0089, +0.0306] | <0.001 | 14/0/406 |
+| recall@10 | 0.6306 | 0.6933 | +0.0627 | [+0.0421, +0.0847] | <0.001 | 37/0/383 |
+| P@5 | 0.1971 | 0.2033 | +0.0062 | [+0.0030, +0.0099] | <0.001 | 14/2/404 |
+| useful@budget | 0.5919 | 0.6210 | +0.0292 | [+0.0048, +0.0550] | 0.020 | 36/17/367 |
+| hit@3 | 0.6690 | 0.6833 | +0.0143 | [+0.0000, +0.0286] | 0.107 | 8/2/410 |
+| tokens/query | 1080 | 1061 | −19 | — | — | — |
+
+Two properties of that table matter more than the deltas:
+
+- **`oracle` and `cand_recall` are unchanged to four decimals.** The candidate pool
+  is identical, so every gain is reranking, not new recall. Reranking efficiency
+  (MRR / oracle) went 0.639 → 0.660, closing ~6% of the ranking headroom 1.9.0 left
+  on the table.
+- **No corpus regressed.** An aggregate improvement is worthless if one large corpus
+  masks a regression elsewhere, so per-corpus MRR is checked on every run.
+
+Held-out validation, because hand-picked coefficients are still fitted parameters:
+under leave-one-repository-out — both tuned numbers selected on seven corpora and
+scored on the eighth — the pooled gain is **+0.0219 MRR, with 7/8 folds improving
+and 0 regressing**. The shipped configuration is deliberately *more conservative*
+than that selection would pick (see the `name_cooccurrence_demoted_scale` rationale
+in `retrieval/tuning.py`), so these numbers under-claim what the benchmark alone
+would support.
+
+Known cost, stated because the benchmark family that reveals it is the small one: on
+the 36 hand-written natural-language queries MRR moved −0.028 (p=0.63; 1 win, 3
+losses, 32 ties). Three questions fell from rank 1 to rank 2–3 where a test file's
+descriptive function name matches more query terms than the implementation's name.
+
+Per-corpus `oracle` ranges 0.795–1.000 and reranking efficiency 0.557–0.753, so the
+largest remaining headroom is still ranking, not recall — see §10 of
+[RETRIEVAL.md](RETRIEVAL.md).
+
 `1.9.0` was measured over 305 queries across Python, Java and TypeScript corpora
 against `1.8.0`: MRR +0.027, MAP +0.028, nDCG@10 +0.024, recall@5 +0.031 (all
 p < 0.001), with p50 latency 78.6 ms → 51.2 ms. These are version-over-version

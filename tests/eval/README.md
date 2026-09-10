@@ -62,16 +62,49 @@ Conventional Commits prefix is stripped; duplicate subjects collapse. Changelog-
 files are never accepted as answers because they paraphrase commit subjects, and any
 commit touching `tests/eval/` is dropped so the benchmark cannot grade itself.
 
-Corpora used to validate the 1.9.0 ranking changes, beyond this repository:
+Corpora used to validate the 1.10.0 ranking changes, beyond this repository:
 
 | Corpus | Language | Files | Queries |
 |---|---|---|---|
 | Civitas | Java | 944 | 64 |
-| PoliternalSite | TypeScript / TSX | 443 | 118 |
+| PoliternalSite | TypeScript / TSX | 450 | 120 |
+| PoliternalParkour | Java | 96 | 64 |
+| TerraForge | Java | 325 | 17 |
+| denfry.github.io | TypeScript / TSX | 48 | 39 |
+| DevGraph | Python | 59 | 12 |
+| Windows-Cleaner-and-Optimizer | PowerShell | 39 | 17 |
 
 Those repositories are not vendored here — shipping someone else's source to run a
 benchmark is not reproducible either. The generator is the reproducible part: point
 it at any git repository and the protocol is identical.
+
+## Two query families, and why both are load-bearing
+
+The git-derived sets are large and objective, but they are not a substitute for
+human phrasing, and 1.10.0 turned up a case where the difference decided a release.
+
+A commit subject is written by someone looking at the identifiers they just
+changed, so it reuses the codebase's own spelling. A user asking a question does
+not: they type "where are secrets redacted", not "redact". So the git sets are
+structurally blind to morphology. Removing the synonym vocabulary looked free on 420
+git-derived queries (MRR −0.0022, p=0.40) and cost −0.060 MRR on the 36 hand-written
+ones. The vocabulary stayed.
+
+The reverse also holds. Ground truth mined from commits counts a *test* file as the
+answer whenever the commit touched tests (159 of 420 queries here), which the
+hand-written set never does. Any signal that rewards test files therefore looks
+better than it is. `run_eval.py` reports both families; a change needs to survive
+the large set and not visibly break the small one.
+
+## Held-out validation
+
+Hand-tuned coefficients are fitted parameters, so tuning them on the same corpora
+that report the result is how a benchmark gets gamed by accident. Ranking parameters
+are selected under **leave-one-repository-out**: choose on seven corpora, score on
+the eighth, pool the eight held-out scores. A parameter is only shipped from a
+*plateau* — a region where neighbouring values are statistically indistinguishable —
+never from a single peak, and per-corpus scores are inspected so that no fold is
+allowed to regress in exchange for a better aggregate.
 
 ## What is measured
 
@@ -87,6 +120,24 @@ best rank.
   budget carry no snippet and are not billed)
 - `dup%` — fraction of returned results that near-duplicate an earlier result
 - `p50/p95/p99` latency, in-process, excluding interpreter start-up
+
+### Oracle metrics: is this a recall problem or a ranking problem?
+
+MRR alone cannot separate "the retrievers never found it" from "the ranker had it
+and buried it", yet those two failures share no fix. Each variant therefore also
+reports, against the *pre-rerank candidate pool* it actually generated:
+
+- `oracle` — the MRR a perfect reranker would score over that pool. `1 - oracle` is
+  the share of the query set that only better recall can ever fix.
+- `cand_recall` — mean fraction of expected files present anywhere in the pool.
+- `eff` = `MRR / oracle` — the share of achievable ranking quality delivered.
+
+At 1.9.0 this read `oracle = 0.902`, `MRR = 0.577`, `eff = 0.639`: a third of the
+answers already in the pool were ranked below something else, an error mode about
+three times larger than the 0.098 of remaining recall headroom. That is why 1.10.0
+worked on the reranker rather than adding retrievers, and it is also the cheapest
+available check that a "ranking" change did not quietly change recall instead —
+`-name_cooccurrence` moves eight quality metrics and leaves `oracle` at ±0.0000.
 
 ## Files
 

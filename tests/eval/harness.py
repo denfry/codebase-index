@@ -32,7 +32,7 @@ from codebase_index.retrieval.pipeline import search
 from codebase_index.retrieval.tuning import RetrievalTuning
 from codebase_index.storage.db import Database
 
-from . import metrics
+from . import gen_queries, metrics
 
 QUERY_DIR = Path(__file__).parent / "queries"
 DEFAULT_BUDGET = 1500
@@ -58,6 +58,12 @@ class QueryOutcome:
     duplicates: int = 0
     """Results whose snippet near-duplicates an earlier result in the same page."""
     n_results: int = 0
+    pool_files: list[str] = field(default_factory=list)
+    """Distinct files in the pre-rerank candidate pool, in fused order.
+
+    The oracle metrics are computed against this, so they measure exactly what the
+    ranker was handed — not what the retrievers could have found with other
+    settings."""
 
 
 @dataclass
@@ -84,6 +90,14 @@ class EvalReport:
     """Fraction of returned results that near-duplicate an earlier result."""
     mean_candidates: float = 0.0
     """Mean results returned per query, before the agent reads anything."""
+    oracle_mrr: float = 0.0
+    """Ceiling MRR a perfect reranker could reach over the pool actually generated.
+
+    `1 - oracle_mrr` is the share of the query set no reranking can ever fix."""
+    candidate_recall: float = 0.0
+    """Mean fraction of expected files present anywhere in the candidate pool."""
+    mean_pool: float = 0.0
+    """Mean distinct files in the candidate pool, i.e. what the ranker chose from."""
     per_category: dict[str, float] = field(default_factory=dict)
     per_query: dict[str, list[float]] = field(default_factory=dict)
     """Per-query metric vectors, in query order. Required for paired significance
@@ -107,6 +121,10 @@ class EvalReport:
             "p50_ms": self.p50_ms,
             "p95_ms": self.p95_ms,
             "p99_ms": self.p99_ms,
+            "oracle": self.oracle_mrr,
+            "eff": metrics.rerank_efficiency(self.mrr, self.oracle_mrr),
+            "cand_recall": self.candidate_recall,
+            "pool": self.mean_pool,
         }
 
 
@@ -145,7 +163,20 @@ def validate_queries(queries: Iterable[EvalQuery], root: Path) -> list[str]:
 # the corpus makes it the top lexical hit for almost every query — a measurement
 # artifact that depresses scores and hides real ranking behaviour. Benchmark
 # scaffolding is excluded from the corpus it grades.
-CORPUS_EXCLUDES = ("tests/eval/**", "tests/benchmark_*", "tests/fixtures/expected_answers.yml")
+#
+# Changelog-like files are excluded for the mirror-image reason: a git-derived
+# query *is* a commit subject, and a changelog entry paraphrases that subject
+# verbatim while never being an accepted answer (`gen_queries._ANSWER_DENY_RE`).
+# Indexing them plants an unbeatable distractor at rank 1 for a large share of
+# queries, which compresses every variant's score toward the same floor and hides
+# ranking differences. `gen_queries.CHANGELOG_EXCLUDES` documented this exclusion;
+# it was never applied to the corpus.
+CORPUS_EXCLUDES = (
+    "tests/eval/**",
+    "tests/benchmark_*",
+    "tests/fixtures/expected_answers.yml",
+    *gen_queries.CHANGELOG_EXCLUDES,
+)
 
 
 def build_corpus_index(root: Path, db_path: Path) -> Database:
@@ -181,8 +212,18 @@ def run_query(
         token_budget=token_budget,
         no_fallback=True,
         tuning=tuning,
+        # The pre-rerank pool is what the oracle metrics are measured against.
+        # Building it costs ~30 dict literals per query, which is inside the noise
+        # of a 38ms query (measured: -0.8ms p50, i.e. unmeasurable), so it stays on
+        # for the timed call rather than forcing a second untimed pass.
+        explain=True,
     )
     latency_ms = (time.perf_counter() - start) * 1000.0
+    pool_files: list[str] = []
+    for entry in payload.get("diagnostics", {}).get("pool", ()):
+        p = _normalise(entry["path"])
+        if p not in pool_files:
+            pool_files.append(p)
 
     ranked_files: list[str] = []
     returned: list[tuple[str, int]] = []
@@ -221,6 +262,7 @@ def run_query(
         total_tokens=total_tokens,
         duplicates=duplicates,
         n_results=len(results),
+        pool_files=pool_files,
     )
 
 
@@ -260,6 +302,15 @@ def evaluate(
         "useful@budget": lambda o: metrics.useful_context_at_budget(
             o.returned, o.query.expected_files, token_budget
         ),
+        # Scored per query so the oracle ceiling gets the same paired significance
+        # treatment as everything else: a ranking change that only moved the
+        # ceiling has not improved ranking.
+        "oracle": lambda o: metrics.oracle_reciprocal_rank(
+            o.pool_files, o.query.expected_files
+        ),
+        "cand_recall": lambda o: metrics.recall_at_k(
+            o.pool_files, o.query.expected_files, len(o.pool_files)
+        ),
     }
     per_query = {name: [fn(o) for o in outcomes] for name, fn in scorers.items()}
 
@@ -294,6 +345,11 @@ def evaluate(
         ),
         duplicate_rate=(duplicate_total / returned_total) if returned_total else 0.0,
         mean_candidates=(returned_total / len(outcomes)) if outcomes else 0.0,
+        oracle_mrr=mean("oracle"),
+        candidate_recall=mean("cand_recall"),
+        mean_pool=(
+            statistics.fmean([len(o.pool_files) for o in outcomes]) if outcomes else 0.0
+        ),
         per_category={
             cat: statistics.fmean(vals) for cat, vals in sorted(per_category.items())
         },
@@ -312,8 +368,8 @@ def format_table(
 ) -> str:
     """Render reports as a Markdown table, with deltas against `baseline`."""
     cols = list(columns) if columns else [
-        "label", "recall@5", "recall@10", "MRR", "nDCG@10", "hit@3", "P@5",
-        "MAP", "useful@budget", "tokens", "dup%", "p50_ms", "p95_ms",
+        "label", "recall@5", "recall@10", "MRR", "oracle", "eff", "nDCG@10",
+        "hit@3", "P@5", "MAP", "useful@budget", "tokens", "dup%", "p50_ms", "p95_ms",
     ]
     lines = ["| " + " | ".join(cols) + " |",
              "|" + "|".join("---" for _ in cols) + "|"]
@@ -387,6 +443,9 @@ def pool(reports: Sequence[EvalReport], *, label: str) -> EvalReport:
         mean_tokens=weighted("mean_tokens"),
         duplicate_rate=weighted("duplicate_rate"),
         mean_candidates=weighted("mean_candidates"),
+        oracle_mrr=mean("oracle"),
+        candidate_recall=mean("cand_recall"),
+        mean_pool=weighted("mean_pool"),
         per_category={c: statistics.fmean(v) for c, v in sorted(per_category.items())},
         per_query=per_query,
     )

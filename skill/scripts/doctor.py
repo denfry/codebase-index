@@ -69,7 +69,7 @@ def check_skill_installed(project_root: Path) -> bool:
         print(f"[OK] Skill installed at: {skill_dir}")
         return True
     else:
-        print(f"[INFO] Skill not installed in .claude/skills/")
+        print("[INFO] Skill not installed in .claude/skills/")
         print("  Run: python skill/scripts/install.py")
         return True  # Not a hard failure
 
@@ -86,7 +86,7 @@ def check_config(project_root: Path) -> bool:
             print(f"[FAIL] Invalid JSON in {config_path}")
             return False
     else:
-        print(f"[INFO] No config file (using defaults)")
+        print("[INFO] No config file (using defaults)")
     return True
 
 

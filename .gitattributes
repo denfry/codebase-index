@@ -5,3 +5,7 @@
 *.py    text eol=lf
 # cbx — POSIX-скрипт без расширения; CRLF в worktree ломает shebang при копировании
 cbx     text eol=lf
+# .skill_version хранит ровно "<version>\n"; scripts/sync_skill_copies.py пишет и
+# сравнивает байты, поэтому при core.autocrlf=true git подставлял CRLF в worktree и
+# test_real_repo_is_in_sync падал на любом свежем клоне под Windows.
+.skill_version  text eol=lf

@@ -144,6 +144,27 @@ def _fallback_suggestions(query, ranked) -> dict:
     return {"ripgrep": rg}
 
 
+def _pool_entry(rank: int, c) -> dict:
+    """One pre-rerank candidate, as the ranking-diagnostics view of it.
+
+    Recorded before rerank mutates `score`/`reason` in place, so the fused order
+    stays comparable with the final order. Only built when `explain` is set: the
+    default query path allocates nothing.
+    """
+    return {
+        "rank": rank,
+        "path": c.path,
+        "line_start": c.line_start,
+        "line_end": c.line_end,
+        "source": c.source,
+        "symbol": c.symbol,
+        "kind": c.kind,
+        "fused_score": round(c.score, 4),
+        "agreeing_sources": c.agreeing_sources,
+        "exact_symbol": c.exact_symbol,
+    }
+
+
 def search(
     conn: sqlite3.Connection,
     query: str,
@@ -159,6 +180,7 @@ def search(
     offset: int = 0,
     compact: bool = True,
     compact_min_reduction: float = 0.25,
+    explain: bool = False,
 ) -> dict:
     tuning = tuning or DEFAULT_TUNING
     plan = detect_intent(query)
@@ -190,6 +212,7 @@ def search(
         k=tuning.rrf_k,
         file_agreement=tuning.file_agreement_weight if tuning.file_agreement else 0.0,
     )
+    pool = [_pool_entry(rank, c) for rank, c in enumerate(fused, start=1)] if explain else []
     ranked = rerank(fused, query=query, intent=plan.intent, tuning=tuning)
     if tuning.dedup:
         ranked = deduplicate(ranked, hamming_distance=tuning.dedup_hamming)
@@ -254,5 +277,26 @@ def search(
             "limit": limit,
             "has_more": has_more,
             "next_offset": offset + limit if has_more else None,
+        }
+    if explain:
+        payload["diagnostics"] = {
+            "weights": plan.weights,
+            "pool_size": len(pool),
+            "pool": pool,
+            "ranked": [
+                {
+                    "rank": rank,
+                    "path": c.path,
+                    "line_start": c.line_start,
+                    "line_end": c.line_end,
+                    "source": c.source,
+                    "symbol": c.symbol,
+                    "score": round(c.score, 4),
+                    "reason": c.reason,
+                    "agreeing_sources": c.agreeing_sources,
+                    "exact_symbol": c.exact_symbol,
+                }
+                for rank, c in enumerate(ranked, start=1)
+            ],
         }
     return payload
