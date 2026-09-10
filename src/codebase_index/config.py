@@ -43,6 +43,14 @@ class GraphConfig(BaseModel):
     node_cap: int = 40
 
 
+class MemoryConfig(BaseModel):
+    """Evidence memory (docs/MEMORY.md). Not indexing-relevant, so not in config_hash."""
+
+    enabled: bool = True
+    retention_days: int = 14
+    max_deliveries: int = 50_000
+
+
 class Config(BaseModel):
     root: str = "."
     languages: Union[Literal["auto"], list[str]] = "auto"
@@ -53,6 +61,7 @@ class Config(BaseModel):
     retrieval: RetrievalConfig = RetrievalConfig()
     embeddings: EmbeddingsConfig = EmbeddingsConfig()
     graph: GraphConfig = GraphConfig()
+    memory: MemoryConfig = MemoryConfig()
     redaction: dict = {"enabled": True}
 
     def config_hash(self) -> str:

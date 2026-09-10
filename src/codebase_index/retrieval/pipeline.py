@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 import sqlite3
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from ..config import Config
 from ..indexer.freshness import compute_freshness
@@ -181,6 +181,7 @@ def search(
     compact: bool = True,
     compact_min_reduction: float = 0.25,
     explain: bool = False,
+    evidence: Optional[Callable[[dict, list], None]] = None,
 ) -> dict:
     tuning = tuning or DEFAULT_TUNING
     plan = detect_intent(query)
@@ -299,4 +300,9 @@ def search(
                 for rank, c in enumerate(ranked, start=1)
             ],
         }
+    if evidence is not None:
+        # Evidence memory (memory/session.py) sees the delivered page and the candidates
+        # behind it only after ranking, budgeting and pagination are final, so it cannot
+        # change which results are returned or which carry snippets.
+        evidence(payload, ranked[offset:offset + limit])
     return payload

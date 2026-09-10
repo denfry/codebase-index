@@ -12,8 +12,9 @@ from __future__ import annotations
 import os
 import sqlite3
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Union
 
 if TYPE_CHECKING:
     from .config import Config
@@ -77,33 +78,86 @@ def search_payload(
     no_fallback: bool = False,
     backend: Any = None,
     raw: bool = False,
+    session: Optional[str] = None,
 ) -> dict:
     """One search session: open the DB (vector-enabled when the backend is
     live), run retrieval, return the payload dict both surfaces serialize.
 
     ``raw`` forces full snippets; otherwise snippets are skeletonized when
-    ``cfg.retrieval.compact_snippets`` is on (the default)."""
+    ``cfg.retrieval.compact_snippets`` is on (the default).
+
+    ``session`` names one agent context for evidence reuse (docs/MEMORY.md);
+    ``ValueError`` for a malformed tag. Without it the packet is the plain
+    retrieval packet, plus ``stale`` on any result whose index text no longer
+    matches the working tree."""
     from .retrieval.pipeline import search as run_search
     from .storage.db import Database
 
     compact = cfg.retrieval.compact_snippets and not raw
+    tag = session_tag(session)
+    enabled = memory_enabled(cfg)
     with Database(db_path) as db:
         if backend is not None and getattr(backend, "enabled", False):
             db.enable_vectors()
-        return run_search(
-            db.conn,
-            query,
-            mode=mode,
-            limit=limit,
-            offset=offset,
-            token_budget=token_budget,
-            no_fallback=no_fallback,
-            backend=backend,
-            root=Path(cfg.root),
-            config=cfg,
-            compact=compact,
-            compact_min_reduction=cfg.retrieval.compact_min_reduction,
-        )
+        with _evidence(cfg, tag, enabled) as evidence:
+            payload = run_search(
+                db.conn,
+                query,
+                mode=mode,
+                limit=limit,
+                offset=offset,
+                token_budget=token_budget,
+                no_fallback=no_fallback,
+                backend=backend,
+                root=Path(cfg.root),
+                config=cfg,
+                compact=compact,
+                compact_min_reduction=cfg.retrieval.compact_min_reduction,
+                evidence=evidence,
+            )
+    if tag is not None and not enabled:
+        payload["memory"] = {"session": tag, "available": False, "reason": "memory is disabled"}
+    return payload
+
+
+def memory_enabled(cfg: "Config") -> bool:
+    """Evidence memory is on unless the config disables it or ``CBX_MEMORY=0``."""
+    if os.environ.get("CBX_MEMORY", "").strip() == "0":
+        return False
+    return bool(cfg.memory.enabled)
+
+
+def memory_path_for(cfg: "Config") -> Path:
+    """``CBX_MEMORY_PATH``, else next to a ``CBX_DB_PATH`` override, else the cache dir."""
+    override = os.environ.get("CBX_MEMORY_PATH")
+    if override:
+        return Path(override)
+    db_override = os.environ.get("CBX_DB_PATH")
+    if db_override:
+        return Path(db_override).with_name("memory.sqlite")
+    return cache_dir_for(cfg) / "memory.sqlite"
+
+
+def session_tag(session: Optional[str]) -> Optional[str]:
+    """Validated session tag, or None. Sessions are only ever named explicitly."""
+    if session is None or not session.strip():
+        return None
+    from .memory.identity import validate_session_tag
+
+    return validate_session_tag(session)
+
+
+@contextmanager
+def _evidence(cfg: "Config", tag: Optional[str], enabled: bool) -> Iterator[Any]:
+    if not enabled:
+        yield None
+        return
+    from .memory.session import open_evidence
+
+    with open_evidence(
+        root=Path(cfg.root), config=cfg, memory_path=memory_path_for(cfg), tag=tag
+    ) as processor:
+        yield processor
 
 
 def diff_impact_payload(
