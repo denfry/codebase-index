@@ -1,0 +1,8 @@
+# Generated benchmark artifacts. Deliberately not committed:
+#  * the query YAMLs contain commit subjects mined from private sibling repositories;
+#  * the SQLite indexes are large binaries regenerable in seconds.
+# `research/README.md` documents the two commands that rebuild everything here, which
+# is the reproducible part -- vendoring someone else's source to run a benchmark is
+# not reproducible either.
+*
+!.gitignore
