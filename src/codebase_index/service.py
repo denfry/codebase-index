@@ -14,7 +14,7 @@ import sqlite3
 import subprocess
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional, Sequence, Union
 
 if TYPE_CHECKING:
     from .config import Config
@@ -322,7 +322,133 @@ def architecture_payload(db_path: Path, cfg: "Config") -> dict[str, Any]:
         return {"exists": True, "available": True, "index": fresh.model_dump(), **summary}
 
 
-def stats_payload(conn: sqlite3.Connection) -> dict[str, Any]:
+def verify_payload(
+    cfg: "Config", refs: Sequence[str], session: Optional[str] = None
+) -> dict[str, Any]:
+    """Re-check evidence references and/or everything one session was given.
+
+    Read-only: nothing is recorded, so it is safe to run at any time and from any agent.
+    References are untrusted input and are validated before any file is read.
+    """
+    from .discovery.gates import PathGate
+    from .memory import identity as ident
+    from .memory.store import MemoryStore, MemoryUnavailable
+    from .memory.validate import WorkingTree, validate
+
+    tag = session_tag(session)
+    root = Path(cfg.root)
+    repo_id = ident.repo_id_for(root)
+    tree = WorkingTree(PathGate(root, cfg))
+    enabled = memory_enabled(cfg)
+    path = memory_path_for(cfg)
+    store: Optional[MemoryStore] = None
+    store_problem: Optional[str] = None
+    if enabled and path.exists():
+        try:
+            store = MemoryStore.open(path)
+        except MemoryUnavailable as exc:
+            store_problem = str(exc)
+
+    evidence: list[dict] = []
+    errors: list[dict] = []
+    session_block: Optional[dict[str, Any]] = None
+    try:
+        for text in refs:
+            try:
+                ref = ident.parse_ref(text)
+            except ValueError as exc:
+                errors.append({"ref": text, "error": str(exc)})
+                continue
+            hint = store.first_line_hint(repo_id, ref.path, ref.sha) if store else None
+            evidence.append(validate(ref, tree, first_line_sha=hint).as_dict())
+        if tag is not None:
+            session_block = {"session": tag}
+            session_id = None
+            if not enabled:
+                session_block.update(available=False, reason="memory is disabled")
+            elif store_problem is not None:
+                session_block.update(available=False, reason=store_problem)
+            elif store is not None:
+                session_id = store.find_session(repo_id, ident.session_key(repo_id, tag))
+            session_block["found"] = session_id is not None
+            if store is not None and session_id is not None:
+                delivered = store.delivered(session_id)
+                session_block["evidence"] = len(delivered)
+                for item in delivered:
+                    ref = ident.EvidenceRef(item.path, item.line_start, item.line_end,
+                                            item.span_sha)
+                    evidence.append(
+                        validate(ref, tree, first_line_sha=item.first_line_sha).as_dict())
+    finally:
+        if store is not None:
+            store.close()
+
+    summary: dict[str, int] = {}
+    for verdict in evidence:
+        summary[verdict["state"]] = summary.get(verdict["state"], 0) + 1
+    payload: dict[str, Any] = {
+        "all_valid": bool(evidence) and not errors and all(v["valid"] for v in evidence),
+        "summary": summary,
+    }
+    if session_block is not None:
+        payload["session"] = session_block
+    payload["evidence"] = evidence
+    payload["errors"] = errors
+    return payload
+
+
+def memory_status_payload(cfg: "Config") -> dict[str, Any]:
+    """Evidence-memory health and counters for this repository (no paths, no content)."""
+    from .memory.identity import repo_id_for
+    from .memory.store import MemoryStore, MemoryUnavailable
+
+    path = memory_path_for(cfg)
+    block: dict[str, Any] = {"enabled": memory_enabled(cfg), "exists": path.exists()}
+    if not block["exists"]:
+        return block
+    try:
+        with MemoryStore.open(path) as store:
+            block.update(store.stats(repo_id_for(Path(cfg.root))))
+            if store.recovered_from:
+                block["recovered_from"] = store.recovered_from
+    except MemoryUnavailable as exc:
+        block.update(available=False, reason=str(exc))
+    return block
+
+
+def memory_gc_payload(cfg: "Config") -> dict[str, Any]:
+    """Apply retention and size limits, drop orphan atoms, and compact the store."""
+    from .memory.identity import repo_id_for
+    from .memory.store import MemoryStore, utc_now
+
+    path = memory_path_for(cfg)
+    if not path.exists():
+        return {"exists": False}
+    with MemoryStore.open(path) as store:
+        removed = store.gc(now=utc_now(), retention_days=cfg.memory.retention_days,
+                           max_deliveries=cfg.memory.max_deliveries)
+        store.vacuum()
+        return {"exists": True, **removed, **store.stats(repo_id_for(Path(cfg.root)))}
+
+
+def memory_clear_payload(cfg: "Config", session: Optional[str] = None) -> dict[str, Any]:
+    """Forget one session, or all evidence memory for this repository."""
+    from .memory import identity as ident
+    from .memory.store import MemoryStore
+
+    tag = session_tag(session)
+    path = memory_path_for(cfg)
+    if not path.exists():
+        return {"exists": False, "removed_sessions": 0, "session": tag}
+    repo_id = ident.repo_id_for(Path(cfg.root))
+    with MemoryStore.open(path) as store:
+        removed = store.clear(repo_id, ident.session_key(repo_id, tag) if tag else None)
+        if tag is None:
+            store.vacuum()
+    return {"exists": True, "removed_sessions": removed, "session": tag}
+
+
+def stats_payload(conn: sqlite3.Connection, cfg: Optional["Config"] = None) -> dict[str, Any]:
     """Index size, freshness, and per-language coverage with the graph tier."""
     from .parsers.languages import has_full_graph
     from .storage import repo
@@ -338,7 +464,7 @@ def stats_payload(conn: sqlite3.Connection) -> dict[str, Any]:
         }
         for r in repo.treesitter_coverage(conn)
     ]
-    return {
+    payload: dict[str, Any] = {
         "files": repo.count_files(conn),
         "symbols": repo.count_symbols(conn),
         "built_at": repo.get_meta(conn, "built_at"),
@@ -346,3 +472,6 @@ def stats_payload(conn: sqlite3.Connection) -> dict[str, Any]:
         "treesitter_coverage": coverage,
         "exists": True,
     }
+    if cfg is not None:
+        payload["memory"] = memory_status_payload(cfg)
+    return payload

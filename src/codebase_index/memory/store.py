@@ -229,11 +229,18 @@ class MemoryStore:
 
     def pending(self, session_id: int) -> list[Delivery]:
         """Distinct evidence delivered to this session and not yet reported invalid."""
+        return self._deliveries(session_id, "AND d.invalid_state IS NULL")
+
+    def delivered(self, session_id: int) -> list[Delivery]:
+        """Every distinct piece of evidence delivered to this session, valid or not."""
+        return self._deliveries(session_id, "")
+
+    def _deliveries(self, session_id: int, condition: str) -> list[Delivery]:
         rows = self.conn.execute(
             "SELECT a.id, a.path, a.span_sha, a.line_count, a.first_line_sha, "
             "       MIN(d.line_start), MIN(d.line_end) "
             "FROM deliveries d JOIN atoms a ON a.id = d.atom_id "
-            "WHERE d.session_id = ? AND d.invalid_state IS NULL "
+            f"WHERE d.session_id = ? {condition} "
             "GROUP BY a.id ORDER BY a.path, MIN(d.line_start)",
             (session_id,),
         ).fetchall()

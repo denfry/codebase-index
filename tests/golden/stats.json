@@ -3,6 +3,10 @@
   "exists": true,
   "files": 6,
   "head_commit": "<SHA>",
+  "memory": {
+    "enabled": true,
+    "exists": false
+  },
   "symbols": 7,
   "treesitter_coverage": [
     {

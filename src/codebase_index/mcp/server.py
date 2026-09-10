@@ -42,7 +42,11 @@ mcp = FastMCP(
         "Local codebase index. Use search_code for general queries, find_symbol for exact "
         "symbol lookups, find_refs to find callers/usages, impact_of for blast-radius analysis, "
         "explain_code for architecture/how-it-works questions, and architecture_overview to map "
-        "the codebase's modules, god nodes, and surprising connections before diving in."
+        "the codebase's modules, god nodes, and surprising connections before diving in. "
+        "Pass the same `session` tag on search_code/explain_code calls made from one context "
+        "so unchanged evidence you already received is not resent; use a new tag after your "
+        "context is cleared or compacted. verify_evidence checks whether evidence you hold or "
+        "cite is still true in the working tree."
     ),
 )
 
@@ -114,6 +118,9 @@ def healthcheck() -> str:
                 "path": str(db_path),
                 **compute_freshness(db.conn, Path(cfg.root), cfg).model_dump(),
             }
+    from ..service import memory_status_payload
+
+    payload["memory"] = memory_status_payload(cfg)
     return _emit("healthcheck", payload)
 
 
@@ -125,6 +132,7 @@ def search_code(
     token_budget: int = 1500,
     offset: int = 0,
     raw: bool = False,
+    session: Optional[str] = None,
 ) -> str:
     """Hybrid search over the codebase index.
 
@@ -142,6 +150,11 @@ def search_code(
         offset: Result offset for pagination. Pass ``next_offset`` from a
                 previous response to fetch the next page.
         raw: If true, return full raw snippets instead of skeletons.
+        session: Optional tag naming this one agent context. A result whose snippet this
+                 session already received from unchanged source comes back with
+                 ``snippet: null, reused: true``; evidence it received that has since
+                 changed is listed under ``memory.invalidated``. Never share a tag with
+                 another context; use a new tag after the context is cleared or compacted.
     """
     db_path, cfg = _resolve_db()
     if not db_path.exists():
@@ -149,11 +162,14 @@ def search_code(
 
     from ..service import search_payload
 
-    payload = search_payload(
-        db_path, cfg, query, mode=mode, limit=limit, offset=offset,
-        token_budget=token_budget, no_fallback=False, backend=_search_backend(cfg),
-        raw=raw,
-    )
+    try:
+        payload = search_payload(
+            db_path, cfg, query, mode=mode, limit=limit, offset=offset,
+            token_budget=token_budget, no_fallback=False, backend=_search_backend(cfg),
+            raw=raw, session=session,
+        )
+    except ValueError as exc:
+        payload = {"error": str(exc)}
     return _emit("search_code", payload)
 
 
@@ -273,6 +289,7 @@ def explain_code(
     token_budget: int = 2200,
     offset: int = 0,
     raw: bool = False,
+    session: Optional[str] = None,
 ) -> str:
     """Intent-aware retrieval for architecture / how-does-X-work questions.
 
@@ -285,6 +302,7 @@ def explain_code(
         offset: Result offset for pagination. Pass ``next_offset`` from a
                 previous response to fetch the next page.
         raw: If true, return full raw snippets instead of skeletons.
+        session: Optional tag naming this one agent context (see search_code).
     """
     db_path, cfg = _resolve_db()
     if not db_path.exists():
@@ -292,12 +310,43 @@ def explain_code(
 
     from ..service import normalize_explain_query, search_payload
 
-    payload = search_payload(
-        db_path, cfg, normalize_explain_query(query), mode="hybrid", limit=10,
-        offset=offset, token_budget=token_budget, no_fallback=False,
-        backend=_search_backend(cfg), raw=raw,
-    )
+    try:
+        payload = search_payload(
+            db_path, cfg, normalize_explain_query(query), mode="hybrid", limit=10,
+            offset=offset, token_budget=token_budget, no_fallback=False,
+            backend=_search_backend(cfg), raw=raw, session=session,
+        )
+    except ValueError as exc:
+        payload = {"error": str(exc)}
     return _emit("explain_code", payload)
+
+
+@_tool()
+def verify_evidence(refs: Optional[list[str]] = None, session: Optional[str] = None) -> str:
+    """Check whether evidence is still true in the current working tree (read-only).
+
+    Use before relying on something read earlier — especially after edits, a branch
+    switch, or when resuming from notes that cite evidence. Works without an index.
+
+    Args:
+        refs: Evidence references ``path:start-end@hash``, e.g. from ``memory.invalidated``
+              or from notes that cite evidence.
+        session: Also verify everything this session tag was given.
+
+    Each verdict has ``state``: valid, relocated (identical content moved within the
+    file) — both still true — or changed, ambiguous, deleted, excluded, unreadable.
+    ``all_valid`` is true only when every checked piece of evidence holds.
+    """
+    _, cfg = _resolve_db()
+    from ..service import verify_payload
+
+    if not refs and not session:
+        return _emit("verify_evidence", {"error": "pass refs, session, or both"})
+    try:
+        payload = verify_payload(cfg, refs or [], session)
+    except ValueError as exc:
+        payload = {"error": str(exc)}
+    return _emit("verify_evidence", payload)
 
 
 @_tool()
@@ -367,8 +416,8 @@ def describe_symbol(symbol: str) -> str:
 
 @_tool()
 def index_stats() -> str:
-    """Return index freshness, file count, symbol count, and per-language coverage."""
-    db_path, _ = _resolve_db()
+    """Return index freshness, file count, symbol count, per-language coverage, and memory."""
+    db_path, cfg = _resolve_db()
     if not db_path.exists():
         return _emit("index_stats", {"exists": False, "error": "No index found."})
 
@@ -376,7 +425,7 @@ def index_stats() -> str:
     from ..storage.db import Database
 
     with Database(db_path) as db:
-        payload = stats_payload(db.conn)
+        payload = stats_payload(db.conn, cfg=cfg)
     return _emit("index_stats", payload)
 
 

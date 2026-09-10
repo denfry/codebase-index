@@ -30,8 +30,12 @@ def _render_dict(payload: dict) -> str:
             )
         lines.append("")
         for r in payload["results"]:
-            if r.get("snippet"):
-                lines.append(f"`{r['path']}:{r['line_start']}-{r['line_end']}`")
+            location = f"`{r['path']}:{r['line_start']}-{r['line_end']}`"
+            if r.get("reused"):
+                lines.append(f"{location} — unchanged; already delivered in this session")
+            elif r.get("snippet"):
+                stale = " — index is older than the file; read the range" if r.get("stale") else ""
+                lines.append(f"{location}{stale}")
                 lines.append("```")
                 lines.append(r["snippet"])
                 lines.append("```")
@@ -40,6 +44,9 @@ def _render_dict(payload: dict) -> str:
         lines.append("\n**Recommended reads:**")
         for rr in payload["recommended_reads"]:
             lines.append(f"- `{rr['path']}:{rr['line_start']}-{rr['line_end']}`")
+
+    if payload.get("memory"):
+        lines.extend(_render_memory(payload["memory"]))
 
     fb = payload.get("fallback_suggestions", {}).get("ripgrep")
     if fb:
@@ -56,6 +63,49 @@ def _render_dict(payload: dict) -> str:
             lines.append(f"\n_Showing {shown} (end of results)._")
 
     return "\n".join(lines)
+
+
+def _render_memory(memory: dict) -> list[str]:
+    session = memory.get("session")
+    if memory.get("available") is False:
+        return [f"\n**Memory** (session `{session}`): unavailable — {memory.get('reason')}; "
+                "nothing was withheld."]
+    out = [f"\n**Memory** (session `{session}`): {memory.get('reused', 0)} snippet(s) not "
+           f"resent ({memory.get('tokens_saved', 0)} tokens)."]
+    invalidated = memory.get("invalidated") or []
+    if invalidated:
+        out.append("**Changed since this session received it — do not rely on the earlier text:**")
+        out.extend(f"- `{n['ref']}` — {n['state']}" for n in invalidated)
+    return out
+
+
+def render_verify(payload: dict) -> str:
+    """Render evidence verdicts: one row per reference, state first."""
+    if payload.get("error"):
+        return f"_{payload['error']}_\n"
+    verdict = ("all evidence is still valid" if payload.get("all_valid")
+               else "some evidence is not valid")
+    lines = [f"**verify:** {verdict}"]
+    session = payload.get("session")
+    if session:
+        name = f"session `{session['session']}`"
+        if session.get("available") is False:
+            lines.append(f"{name}: unavailable — {session.get('reason')}")
+        elif not session.get("found"):
+            lines.append(f"{name}: no evidence recorded")
+        else:
+            lines.append(f"{name}: {session.get('evidence', 0)} piece(s) of evidence")
+    lines.append("")
+    rows = payload.get("evidence", [])
+    if rows:
+        lines.append("| state | evidence | lines now | reason |")
+        lines.append("|---|---|---|---|")
+        for v in rows:
+            now = f"{v['line_start']}-{v['line_end']}" if v.get("line_start") else "—"
+            lines.append(f"| {v['state'].upper()} | `{v['ref']}` | {now} | {v.get('reason', '')} |")
+    for err in payload.get("errors", []):
+        lines.append(f"- not a valid reference `{err['ref']}`: {err['error']}")
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def _render_search_response(resp: SearchResponse) -> str:

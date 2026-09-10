@@ -76,6 +76,32 @@ def _open_in_browser(path: Path) -> None:
         subprocess.Popen(["xdg-open", uri])
 
 
+def _checked_session(session: Optional[str]) -> Optional[str]:
+    """Validate a --session tag before any work is done; exit 2 when malformed."""
+    from .service import session_tag
+
+    try:
+        return session_tag(session)
+    except ValueError as exc:
+        typer.echo(f"[codebase-index] {exc}", err=True)
+        raise typer.Exit(code=2)
+
+
+def _memory_line(memory: dict) -> str:
+    if not memory.get("enabled", True):
+        return "memory: disabled"
+    if not memory.get("exists"):
+        return "memory: empty (starts with the first --session search)"
+    if memory.get("available") is False:
+        return f"memory: unavailable — {memory.get('reason')}"
+    return (
+        f"memory: {memory.get('atoms', 0)} evidence atoms · {memory.get('sessions', 0)} "
+        f"sessions · {memory.get('tokens_saved', 0)} tokens not resent · "
+        f"{memory.get('invalidations', 0)} invalidations · "
+        f"{memory.get('bytes', 0) // 1024} KB"
+    )
+
+
 def _resolve_backend_for_search(ctx: "typer.Context"):
     """Embedding backend for query-time vector search (see service.search_backend)."""
     from .config import load
@@ -383,6 +409,11 @@ def search(
         False, "--raw",
         help="Disable snippet skeletonization; return full raw snippets.",
     ),
+    session: Optional[str] = typer.Option(
+        None, "--session",
+        help="Tag naming ONE agent context: evidence it already received and that is "
+        "unchanged is not resent; changes to it are reported (docs/MEMORY.md).",
+    ),
     json_out: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Hybrid ranked search; returns compact results + recommended_reads."""
@@ -390,6 +421,7 @@ def search(
     from .output import markdown as md_renderer
     from .service import search_payload
 
+    session = _checked_session(session)
     if offset < 0:
         typer.echo("[codebase-index] --offset must be >= 0.")
         raise typer.Exit(code=2)
@@ -408,6 +440,7 @@ def search(
     payload = search_payload(
         db_path, cfg, query, mode=mode, limit=limit, offset=offset,
         token_budget=token_budget, no_fallback=no_fallback, backend=backend, raw=raw,
+        session=session,
     )
 
     want_json = json_out or (ctx.obj and ctx.obj.get("json"))
@@ -523,6 +556,11 @@ def explain(
         False, "--raw",
         help="Disable snippet skeletonization; return full raw snippets.",
     ),
+    session: Optional[str] = typer.Option(
+        None, "--session",
+        help="Tag naming ONE agent context: evidence it already received and that is "
+        "unchanged is not resent; changes to it are reported (docs/MEMORY.md).",
+    ),
     json_out: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Intent-aware bundle for 'how does X work' / overview questions."""
@@ -530,12 +568,14 @@ def explain(
     from .output import markdown as md_renderer
     from .service import normalize_explain_query, search_payload
 
+    session = _checked_session(session)
     backend = _resolve_backend_for_search(ctx)
     db_path, cfg = _ensure_index(ctx)
 
     payload = search_payload(
         db_path, cfg, normalize_explain_query(query), mode="hybrid", limit=10,
         token_budget=token_budget, no_fallback=False, backend=backend, raw=raw,
+        session=session,
     )
 
     want_json = json_out or (ctx.obj and ctx.obj.get("json"))
@@ -601,6 +641,104 @@ def describe(
     with Database(db_path) as db:
         payload = describe_payload(db.conn, symbol)
     typer.echo(json_renderer.render(payload) if is_json else md_renderer.render_describe(payload))
+
+
+@app.command("verify")
+def verify(
+    ctx: typer.Context,
+    refs: Optional[list[str]] = typer.Argument(
+        None, help="Evidence references: path:start-end@hash (as printed by memory)."
+    ),
+    session: Optional[str] = typer.Option(
+        None, "--session", help="Also verify everything this session was given."
+    ),
+    strict: bool = typer.Option(
+        False, "--strict", help="Exit 1 unless every piece of evidence is still valid."
+    ),
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+) -> None:
+    """Is this evidence still true? Checks references against the working tree (read-only)."""
+    import json as _json
+
+    from .output import markdown as md_renderer
+    from .service import resolve_db, verify_payload
+
+    session = _checked_session(session)
+    if not refs and session is None:
+        typer.echo("[codebase-index] pass evidence references, --session, or both.", err=True)
+        raise typer.Exit(code=2)
+    _db_path, cfg = resolve_db(ctx.obj.get("root") if ctx.obj else None)
+    payload = verify_payload(cfg, refs or [], session)
+    is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
+    typer.echo(_json.dumps(payload) if is_json else md_renderer.render_verify(payload))
+    if strict and not payload["all_valid"]:
+        raise typer.Exit(code=1)
+
+
+memory_app = typer.Typer(
+    help="Evidence memory maintenance. Deliberately not exposed to agents or MCP.",
+    no_args_is_help=True,
+)
+app.add_typer(memory_app, name="memory")
+
+
+@memory_app.command("gc")
+def memory_gc(
+    ctx: typer.Context,
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+) -> None:
+    """Drop expired sessions and orphaned evidence, then compact memory.sqlite."""
+    import json as _json
+
+    from .memory.store import MemoryUnavailable
+    from .service import memory_gc_payload, resolve_db
+
+    _db_path, cfg = resolve_db(ctx.obj.get("root") if ctx.obj else None)
+    try:
+        payload = memory_gc_payload(cfg)
+    except MemoryUnavailable as exc:
+        typer.echo(f"[codebase-index] {exc}", err=True)
+        raise typer.Exit(code=1)
+    if json_flag or bool(ctx.obj and ctx.obj.get("json")):
+        typer.echo(_json.dumps(payload))
+    elif not payload.get("exists"):
+        typer.echo("No evidence memory to collect.")
+    else:
+        typer.echo(
+            f"Removed {payload['expired_sessions']} expired and {payload['capped_sessions']} "
+            f"over-limit session(s), {payload['orphan_atoms']} orphaned atom(s). "
+            f"{payload['sessions']} session(s) and {payload['atoms']} atom(s) remain."
+        )
+
+
+@memory_app.command("clear")
+def memory_clear(
+    ctx: typer.Context,
+    session: Optional[str] = typer.Option(None, "--session", help="Forget only this session."),
+    yes: bool = typer.Option(False, "--yes", help="Skip the confirmation prompt."),
+    json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+) -> None:
+    """Forget one session, or all evidence memory for this repository. Source is untouched."""
+    import json as _json
+
+    from .memory.store import MemoryUnavailable
+    from .service import memory_clear_payload, resolve_db
+
+    session = _checked_session(session)
+    is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
+    _db_path, cfg = resolve_db(ctx.obj.get("root") if ctx.obj else None)
+    if not yes and not is_json and sys.stdin.isatty():
+        what = f"session '{session}'" if session else "all evidence memory for this repository"
+        typer.confirm(f"Forget {what}?", abort=True)
+    try:
+        payload = memory_clear_payload(cfg, session)
+    except MemoryUnavailable as exc:
+        typer.echo(f"[codebase-index] {exc}", err=True)
+        raise typer.Exit(code=1)
+    if is_json:
+        typer.echo(_json.dumps(payload))
+    else:
+        typer.echo(f"Forgot {payload['removed_sessions']} session(s).")
 
 
 @app.command("graph")
@@ -687,7 +825,7 @@ def stats(
         raise typer.Exit(code=0)
 
     with Database(db_path) as db:
-        payload = stats_payload(db.conn)
+        payload = stats_payload(db.conn, cfg=_cfg)
 
     if is_json:
         typer.echo(_json.dumps(payload))
@@ -700,6 +838,7 @@ def stats(
             flag = "  ⚠ 0 symbols" if (r["symbols"] or 0) == 0 and r["files"] >= 3 else ""
             tier = "  · partial graph (Tier-B)" if r["graph"] == "partial" else ""
             typer.echo(f"  {r['lang']}: {r['files']} files, {r['symbols']} symbols{flag}{tier}")
+        typer.echo(_memory_line(payload.get("memory") or {}))
 
 
 @app.command()
