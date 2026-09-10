@@ -9,9 +9,7 @@ from typing import Iterator, Optional
 
 from ..config import Config
 from . import classify
-from .ignore import IgnoreMatcher
-
-_BINARY_SNIFF_BYTES = 4096
+from .gates import BINARY_SNIFF_BYTES, PathGate
 
 
 @dataclass
@@ -26,38 +24,31 @@ class Candidate:
 
 def walk(root: Path, config: Config) -> Iterator[Candidate]:
     root = Path(root).resolve()
-    matcher = IgnoreMatcher.from_root(
-        root,
-        ignore_files=config.ignore_files,
-        extra_ignore=config.extra_ignore,
-    )
+    gate = PathGate(root, config)
 
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [
-            d
-            for d in dirnames
-            if not matcher.is_ignored_dir(d)
-            and not matcher.is_ignored(_rel(root, Path(dirpath) / d) + "/")
+            d for d in dirnames if gate.dir_allowed(d, _rel(root, Path(dirpath) / d))
         ]
 
         for fname in filenames:
             abs_path = Path(dirpath) / fname
             rel = _rel(root, abs_path)
 
-            if matcher.is_ignored(rel) or classify.is_secret_filename(rel):
+            if gate.name_rejection(rel):
                 continue
             try:
                 size = abs_path.stat().st_size
             except OSError:
                 continue
-            if size > config.max_file_bytes:
+            if size > gate.max_file_bytes:
                 continue
             try:
                 with abs_path.open("rb") as fh:
-                    head = fh.read(_BINARY_SNIFF_BYTES)
+                    head = fh.read(BINARY_SNIFF_BYTES)
             except OSError:
                 continue
-            if classify.looks_binary(head):
+            if gate.content_rejection(size, head):
                 continue
 
             lang = classify.detect_language(rel)
