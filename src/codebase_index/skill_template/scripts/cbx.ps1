@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = "Stop"
 $allowed = @(
     "search", "explain", "architecture", "symbol", "refs", "impact", "diff-impact",
-    "path", "describe", "graph", "stats", "doctor", "update", "index"
+    "path", "describe", "verify", "graph", "stats", "doctor", "update", "index"
 )
 
 if ($allowed -notcontains $Subcommand) {
