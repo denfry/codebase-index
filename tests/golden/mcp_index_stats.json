@@ -3,6 +3,10 @@
   "exists": true,
   "files": 6,
   "head_commit": "<SHA>",
+  "memory": {
+    "enabled": true,
+    "exists": false
+  },
   "schema_version": 1,
   "symbols": 7,
   "tool": "index_stats",

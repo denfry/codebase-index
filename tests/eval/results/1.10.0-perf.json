@@ -1,0 +1,14 @@
+{
+  "cold_index_s": 4.316,
+  "files": 311,
+  "chunks": 5636,
+  "symbols": 1242,
+  "db_bytes": 5820416,
+  "noop_update_s": 0.139,
+  "one_file_update_s": 0.251,
+  "one_file_update_indexed": 1,
+  "queries": 123,
+  "query_p50_ms": 38.14,
+  "query_p95_ms": 59.77,
+  "query_mean_ms": 39.28
+}

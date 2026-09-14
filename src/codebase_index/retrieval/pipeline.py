@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 import sqlite3
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from ..config import Config
 from ..indexer.freshness import compute_freshness
@@ -144,6 +144,27 @@ def _fallback_suggestions(query, ranked) -> dict:
     return {"ripgrep": rg}
 
 
+def _pool_entry(rank: int, c) -> dict:
+    """One pre-rerank candidate, as the ranking-diagnostics view of it.
+
+    Recorded before rerank mutates `score`/`reason` in place, so the fused order
+    stays comparable with the final order. Only built when `explain` is set: the
+    default query path allocates nothing.
+    """
+    return {
+        "rank": rank,
+        "path": c.path,
+        "line_start": c.line_start,
+        "line_end": c.line_end,
+        "source": c.source,
+        "symbol": c.symbol,
+        "kind": c.kind,
+        "fused_score": round(c.score, 4),
+        "agreeing_sources": c.agreeing_sources,
+        "exact_symbol": c.exact_symbol,
+    }
+
+
 def _bounded_read(entry: dict, max_lines: int) -> dict:
     """Cap one read-plan entry to `max_lines`, keeping the original span visible.
 
@@ -179,6 +200,8 @@ def search(
     offset: int = 0,
     compact: bool = True,
     compact_min_reduction: float = 0.25,
+    explain: bool = False,
+    evidence: Optional[Callable[[dict, list], None]] = None,
     max_read_lines: int = 120,
 ) -> dict:
     tuning = tuning or DEFAULT_TUNING
@@ -211,6 +234,7 @@ def search(
         k=tuning.rrf_k,
         file_agreement=tuning.file_agreement_weight if tuning.file_agreement else 0.0,
     )
+    pool = [_pool_entry(rank, c) for rank, c in enumerate(fused, start=1)] if explain else []
     ranked = rerank(fused, query=query, intent=plan.intent, tuning=tuning)
     if tuning.dedup:
         ranked = deduplicate(ranked, hamming_distance=tuning.dedup_hamming)
@@ -276,4 +300,30 @@ def search(
             "has_more": has_more,
             "next_offset": offset + limit if has_more else None,
         }
+    if explain:
+        payload["diagnostics"] = {
+            "weights": plan.weights,
+            "pool_size": len(pool),
+            "pool": pool,
+            "ranked": [
+                {
+                    "rank": rank,
+                    "path": c.path,
+                    "line_start": c.line_start,
+                    "line_end": c.line_end,
+                    "source": c.source,
+                    "symbol": c.symbol,
+                    "score": round(c.score, 4),
+                    "reason": c.reason,
+                    "agreeing_sources": c.agreeing_sources,
+                    "exact_symbol": c.exact_symbol,
+                }
+                for rank, c in enumerate(ranked, start=1)
+            ],
+        }
+    if evidence is not None:
+        # Evidence memory (memory/session.py) sees the delivered page and the candidates
+        # behind it only after ranking, budgeting and pagination are final, so it cannot
+        # change which results are returned or which carry snippets.
+        evidence(payload, ranked[offset:offset + limit])
     return payload

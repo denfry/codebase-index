@@ -11,7 +11,6 @@ Runs a minimal end-to-end test:
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile

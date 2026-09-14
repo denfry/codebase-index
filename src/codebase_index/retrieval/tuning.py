@@ -44,7 +44,21 @@ class RetrievalTuning:
 
     query_expansion: bool = True
     """Down-weighted code-synonym expansion (auth->authentication, ...). Original
-    terms always keep a strictly higher weight so precision is preserved."""
+    terms always keep a strictly higher weight so precision is preserved.
+
+    1.10.0 tried to delete this. On the 420-query git-derived benchmark the
+    vocabulary is worth nothing measurable — MRR -0.0022 (p=0.40) when removed —
+    and the flag's apparent +0.006 turned out to come from it also swapping the
+    symbol retriever's tokenizer, not from the synonyms.
+
+    It survives because the git benchmark cannot see what it does. A commit
+    subject is written by someone looking at the identifiers they just changed,
+    so it reuses the codebase's own spelling; a user asking a question does not.
+    On the 36 hand-written natural-language queries — the only set that phrases
+    things the way a person would — removing the vocabulary cost -0.060 MRR,
+    because "where are secrets redacted" has to reach `redact_snippet` and
+    "how does authentication work" has to reach `auth/`. Both benchmark families
+    are needed to make this call, and only one of them can measure this."""
 
     graph_source: bool = False
     """Personalized-PageRank candidate source seeded from lexical/symbol hits.
@@ -106,9 +120,62 @@ class RetrievalTuning:
     """Discount applied to same-file, different-locator evidence. Tuned on 305
     queries over three repositories; the 0.3-0.6 plateau peaks here."""
 
+    name_cooccurrence: bool = True
+    """Reward query terms that co-occur in one candidate *name* (file basename +
+    symbol), superlinearly, over and above their independent per-term matches.
+
+    RRF sums independent per-term verdicts, so it cannot distinguish a candidate
+    that matched one query term very well from one that matched three terms in a
+    single name. Measured over eight repositories and 420 queries, that confusion
+    was the largest single reranking loss: the correct answer sat in the candidate
+    pool with a better name-level match and lost to a one-term winner.
+
+    See `retrieval/features.py` for the feature and the variants it beat."""
+
+    name_cooccurrence_weight: float = 1.8
+    """Bonus at full co-occurrence (every query term present in one name).
+
+    Chosen on a plateau, not at a peak. Pooled MRR rises to w≈1.8 and then flattens
+    (0.599 at 1.8, 0.603 at 4.0, saturating at 0.603 beyond); past 1.8 the extra
+    movement is churn, with per-query wins flat and losses nearly doubling
+    (37W/19L at 1.8 against 39W/32L at 4.0), because a larger bonus turns the
+    feature into the primary sort key and reduces fusion to a tiebreak. Every
+    value in 1.0-4.0 leaves all eight corpora at or above 1.9.0; 1.8 is the
+    interior of that region with the strongest significance (p=0.004)."""
+
+    name_cooccurrence_demoted_scale: float = 0.5
+    """Fraction of the co-occurrence bonus granted to test/generated sources.
+
+    1.0 lets descriptive test function names outrank implementations on questions
+    like "where are secrets redacted before output"; 0.0 over-corrects, since on
+    git-derived ground truth the changed file often *is* the test.
+
+    Decided by splitting the benchmark on whether its own ground truth is a test:
+    across the 261 queries whose answer is *not* a test, the gain is flat at
+    +0.020 MRR for every scale, so the whole aggregate difference between 0.5 and
+    1.0 comes from the 159 test-answer queries — an artifact of mining ground
+    truth from commits, which touch tests. 0.5 is the only setting that improves
+    both partitions (+0.015 test-answer, +0.020 implementation-answer)."""
+
+    # --- selection, continued -----------------------------------------------
+    max_per_file: int = 1
+    """Hits from one file kept in place before the rest are pushed to the tail.
+
+    The agent's unit of decision is "which file do I open", so a page of 10
+    results that spends three slots on three regions of one file offers seven
+    choices, not ten. Measured across eight repositories the page held 7.1
+    distinct files on average, and 45 of 57 queries whose answer was in the
+    candidate pool but absent from the page had it sitting past rank 10.
+
+    Monotone over 1-5 (1 > 2 > 3 > 4 > 5), so this is a plateau boundary rather
+    than a fitted peak: recall@10 +0.045 and nDCG@10 +0.015 against 3, at
+    unchanged token cost and with no metric or corpus regressing. Nothing is
+    dropped — overflow hits keep their relative order at the tail — so a file
+    with several relevant regions still surfaces them below the first page.
+    """
+
     # --- fixed parameters ----------------------------------------------------
     rrf_k: int = 60
-    max_per_file: int = 3
     graph_damping: float = 0.85
     graph_iterations: int = 12
     graph_weight: float = 0.1
@@ -127,9 +194,24 @@ class RetrievalTuning:
             dedup=False,
             source_priors=False,
             file_agreement=False,
-            # 1.7.0 had no over-fetch: the pool was exactly the requested page.
+            name_cooccurrence=False,
+            # 1.7.0 had no over-fetch: the pool was exactly the requested page,
+            # and it kept up to three hits from any one file.
             candidate_pool_multiplier=1,
+            max_per_file=3,
         )
+
+    @classmethod
+    def v190(cls) -> RetrievalTuning:
+        """The 1.9.0 shipped configuration, as the immutable "before" column.
+
+        `baseline()` reaches back to 1.7.0 and answers "was any of this worth it";
+        this answers the narrower question every 1.10.0 change is judged on: is it
+        better than the release it replaces. Both must keep working, so a later
+        default change can never silently redefine its own comparison point.
+        """
+        return cls(name_cooccurrence=False, max_per_file=3)
+
 
     def without(self, flag: str) -> RetrievalTuning:
         """Return a copy with one boolean signal disabled (single-signal ablation)."""

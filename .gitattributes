@@ -5,3 +5,12 @@
 *.py    text eol=lf
 # cbx — POSIX-скрипт без расширения; CRLF в worktree ломает shebang при копировании
 cbx     text eol=lf
+# .skill_version хранит ровно "<version>\n"; scripts/sync_skill_copies.py пишет и
+# сравнивает байты, поэтому при core.autocrlf=true git подставлял CRLF в worktree и
+# test_real_repo_is_in_sync падал на любом свежем клоне под Windows.
+.skill_version  text eol=lf
+# sample_repo сравнивается побайтно: tests/fixtures/index-1.10.0/index.sqlite хранит sha256
+# её файлов. Файлы без правила (web/app.ts) git под Windows с core.autocrlf=true отдавал
+# с CRLF, под Linux/macOS с LF, и update на CI переиндексировал файл. -text отключает
+# любую конверсию: в рабочем дереве те же байты, что в репозитории, на любой ОС.
+tests/fixtures/sample_repo/** -text

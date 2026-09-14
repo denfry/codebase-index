@@ -7,6 +7,7 @@ permissions, allowed-tools diff) is M9.
 
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -126,7 +127,44 @@ def run_doctor(root: Path, config: Config) -> list[Finding]:
             )
         )
 
+    findings.append(_memory_finding(config))
     return findings
+
+
+def _memory_finding(config: Config) -> Finding:
+    """Read-only probe of memory.sqlite. Doctor reports; it never repairs or migrates."""
+    from .memory.store import SCHEMA_VERSION
+    from .service import memory_enabled, memory_path_for
+
+    if not memory_enabled(config):
+        return Finding("memory_store", True, "info", "evidence memory is disabled")
+    path = memory_path_for(config)
+    quarantined = [p for p in path.parent.glob(f"{path.name}.corrupt-*")
+                   if not p.name.endswith(("-wal", "-shm"))]
+    kept = f"; {len(quarantined)} quarantined corrupt store(s) kept beside it" if quarantined else ""
+    if not path.exists():
+        return Finding("memory_store", True, "info",
+                       f"no evidence memory yet (created on first --session use){kept}")
+    try:
+        conn = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+        try:
+            check = conn.execute("PRAGMA quick_check").fetchone()[0]
+            row = conn.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        return Finding("memory_store", False, "medium",
+                       f"memory store unreadable ({exc}); it is moved aside and recreated "
+                       f"on next use{kept}")
+    version = int(row[0]) if row else 0
+    if check != "ok":
+        return Finding("memory_store", False, "medium",
+                       f"memory store integrity check failed: {check}{kept}")
+    if version > SCHEMA_VERSION:
+        return Finding("memory_store", False, "medium",
+                       f"memory store schema {version} is newer than supported "
+                       f"{SCHEMA_VERSION}; memory is off until codebase-index is upgraded{kept}")
+    return Finding("memory_store", True, "info", f"memory store healthy (schema {version}){kept}")
 
 
 # Threshold above which a tree-sitter language with zero symbols is treated as broken rather

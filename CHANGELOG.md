@@ -6,7 +6,65 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-14
+
+Evidence release. Everything an agent reads through `codebase-index` is now identified
+by the exact bytes of the span it came from, can be re-checked against the working tree
+at any later moment, is not resent to a session that already holds it, and is reported
+when it changes. 2.0.0 also includes the community-readiness work merged from #26 and the
+1.10.0 ranking release, which was prepared but never published on its own; its notes are in
+the [1.10.0 section of the changelog](https://github.com/denfry/codebase-index/blob/main/CHANGELOG.md#1100---2026-09-02).
+
+Measured by replaying this repository's own history in sessions of 5 to 87 tasks
+(`tests/eval/results/2026-09-14-evidence-memory.md`): memory withheld **zero stale
+snippets** at every session length while the locator-based alternative withheld
+15–54, change notices had precision 1.000 and recall 0.87–0.97, restoring withheld
+snippets reproduced the 1.10.0 packet on every task, and snippet tokens fell by
+4–11%. The savings are modest on this corpus; correctness is the deliverable. Summary in
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md#evidence-memory), design in
+[docs/MEMORY.md](docs/MEMORY.md).
+
 ### Added
+
+- **Evidence identity and verification.** Every delivered snippet carries a
+  `path:start-end@hash` reference whose hash covers the span's exact bytes under the
+  indexer's line model. `codebase-index verify [REF ...] [--session TAG] [--strict]`
+  and MCP `verify_evidence` re-check references against the working tree, read-only
+  and without an index, returning `valid`, `relocated`, `changed`, `ambiguous`,
+  `deleted`, `excluded` or `unreadable` per reference and `all_valid` overall.
+  References are untrusted input: absolute paths, drive letters, `..` and NUL are
+  rejected before any filesystem access.
+- **Session-scoped evidence reuse.** `search`/`explain --session TAG` (MCP `session`)
+  name one agent context. A snippet the session already received from byte-identical
+  source comes back as `snippet: null, reused: true`; evidence the session received
+  that has since changed is listed once under `memory.invalidated`. The evidence hook
+  runs after ranking, budgeting and pagination are final, so memory can never change
+  which results are returned. Sessions are only ever named explicitly.
+- **Stale marking without a session.** A result whose index text no longer matches the
+  working tree carries `stale: true`. Derived index text (config-key chunks, Markdown
+  section summaries) is never flagged: a mismatch counts only when the file's current
+  hash differs from the one the index was built from.
+- **`memory.sqlite`**, a content-free ledger next to the index: hashes, paths, line
+  numbers, token counts and timestamps; session tags stored hashed. Separate from
+  `index.sqlite` so rebuilds and `clean` leave it alone and ledger writes never queue
+  behind an update. A newer schema is refused, a corrupt file is moved aside, lock
+  contention degrades to no-memory output. `memory gc` and `memory clear` are CLI-only
+  maintenance, deliberately absent from the skill wrappers and MCP, like `clean`.
+  `stats`, `doctor`, `index_stats` and `healthcheck` gain an additive `memory` block.
+  Config: `memory.enabled` (true), `memory.retention_days` (14),
+  `memory.max_deliveries` (50 000); `CBX_MEMORY=0` restores 1.10.0 output byte for byte.
+- **Sequential real-history benchmark** (`tests/eval/memory_eval.py`) with an oracle
+  independent of memory's hashing, plus repository-lifecycle, security and
+  stale-context test suites driven by real git: branch switches, detached HEAD,
+  worktrees, dirty trees, renames, rebases, CRLF checkouts, and excluded content that
+  must never reach the ledger.
+- **Upgrade test from a real 1.10.0 index.** The index schema stays at version 3; an
+  upgraded project keeps its index, a 1.x config loads with memory defaults, and
+  `memory.sqlite` attaches on the first `--session` call.
+- **Skill: Find → Trace → Verify → Predict.** The agent wrappers pass one session tag
+  per conversation, run `verify` before relying on evidence gathered earlier, and
+  document `reused`, `stale` and `memory.invalidated` in `references/memory.md`.
+  `verify` joins the wrapper whitelists; `memory` does not.
 
 - **Public baseline benchmark.** `tests/eval/run_baselines.py` compares the index with
   a disciplined `rg` + 80-line-window agent and with repo-map-style context on
@@ -31,6 +89,15 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- **Indexing gates are shared with later working-tree reads.** Evidence validation
+  reads files long after they were indexed, so the walker and the validator now go
+  through one `PathGate`; a parity test asserts the gate admits exactly the files a
+  walk indexes. The resolved on-disk path is gated again, so a symlink or a
+  differently-cased path on a case-insensitive filesystem cannot reach a file the
+  walker would never have indexed.
+- MCP `schema_version` stays **1**: every payload change is an added field. No CLI
+  command, flag or JSON field is removed or retyped.
+
 - **Read plan is bounded.** `recommended_reads` entries are capped at
   `retrieval.max_read_lines` (default 120) and carry `truncated: true` plus
   `line_end_full` when capped. A symbol-aligned chunk can be a whole class; on the
@@ -50,6 +117,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- `codebase-index index` no longer crashes with `ValueError: ... is not in the subpath of ...`
+  when the repository contains a symlink that points outside the tree (for example Bazel's
+  `bazel-out` / `bazel-bin` convenience symlinks). Such entries are now skipped by the walker,
+  matching the gate's existing "resolves outside the repository" exclusion (#27).
 - **MCP server did not start on mcp 2.x.** The SDK renamed `FastMCP` to
   `MCPServer` and removed the old import path, so `codebase-index mcp` reported
   "needs the optional extra" even with the extra installed, and the MCP tests
@@ -68,6 +139,141 @@ All notable changes to this project are documented here. The format is based on
   excluded from the evaluation corpus, but the harness never applied the list, and
   Flask-style `CHANGES.rst` was not covered. Both are fixed; `CHANGES*`, `HISTORY*`,
   `NEWS*` and `RELEASE_NOTES*` are refused as answers and excluded from the corpus.
+
+## [1.10.0] - 2026-09-02
+
+Never published on its own: tagged releases go from 1.9.0 straight to 2.0.0, which
+includes everything in this section.
+
+Ranking release. 1.9.0's own diagnostics showed that a perfect reranker over the
+candidate pool it already generated would score MRR 0.902 against the 0.577 actually
+delivered — a ranking gap roughly three times larger than the remaining recall gap.
+1.10.0 spends its entire budget on closing part of that gap, and adds the metrics
+that make the gap visible.
+
+Measured over **420 queries across eight repositories** (Python ×2, Java ×3,
+TypeScript/TSX ×2, PowerShell ×1) against a pinned 1.9.0: MRR +0.0188 (p=0.004),
+nDCG@10 +0.0304 (p<0.001), MAP +0.0213 (p=0.001), recall@10 +0.0627 (p<0.001, 37
+wins / 0 losses), useful@budget +0.0292 (p=0.020), −19 tokens per query. The
+candidate pool is unchanged, so every gain is reranking. No corpus regressed. Under
+leave-one-repository-out the pooled gain is +0.0219 MRR with 7/8 folds improving and
+0 regressing. Full tables in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+
+### Added
+
+- **Query↔candidate name co-occurrence** (`retrieval/features.py`), the one new
+  ranking signal. Every retriever scores each query term independently and RRF sums
+  those independent verdicts, so nothing in the pipeline could distinguish a
+  candidate that matched *one* query term well from one that matched *three* terms in
+  a single name. On "graph resolution + traversal accessors" 1.9.0 ranked
+  `graph/retrieval.py` (one term) above `test_graph_accessors_resolve_and_walk`
+  (three); on "greedy token budgeting with redaction" it ranked `output/redact.py`
+  above `retrieval/budget.py`. The signal credits query terms for occurring
+  *together* in one name — file basename plus symbol, camel/snake split, directories
+  excluded — and only for terms beyond the first, since the first match is already
+  paid for by the retriever that surfaced the candidate. Cost is
+  `O(len(path) + len(symbol) + len(terms))` per candidate: no corpus statistics, no
+  posting-list scan, no model, no network. Ablatable via
+  `RetrievalTuning(name_cooccurrence=False)`.
+- **Oracle / headroom metrics** in the eval harness (`oracle`, `cand_recall`, `eff`).
+  MRR alone cannot separate "retrieval never found it" from "the ranker buried it",
+  and those two failures share no fix. `oracle` is the MRR a perfect reranker would
+  achieve over the pool actually generated, `eff = MRR / oracle` is the fraction of
+  achievable quality delivered (0.639 → 0.660 in this release). These also make
+  ranking changes falsifiable in a new way: `-name_cooccurrence` moves eight quality
+  metrics while leaving `oracle` at ±0.0000, proving the gain is not disguised recall.
+- **`search(..., explain=True)`** returns a `diagnostics` block with the pre-rerank
+  candidate pool and the final order, each candidate carrying source, symbol, score
+  and retriever agreement. This is what the oracle metrics are computed from, and
+  what turns "the ranking is wrong" into a decomposable failure. Measured at −0.8ms
+  p50 (inside noise); nothing is allocated when the flag is off.
+- **`RetrievalTuning.v190()`** pins the previous release as the comparison column, so
+  "better than what we shipped last" cannot drift as the default changes.
+  `run_eval.py` now reports 1.7.0, 1.9.0 and the current default side by side.
+
+### Changed
+
+- **Pages are packed with distinct files** (`max_per_file` 3 → 1). The agent's unit
+  of decision is "which file do I open", so a 10-result page spending three slots on
+  three regions of one file offers seven choices, not ten. 1.9.0's page held 7.1
+  distinct files on average, and of the queries whose answer was in the pool but
+  missing from the page, 45 of 57 had it past rank 10 — crowded out by repeat hits
+  rather than better candidates. Monotone over 1–5, so this is a plateau boundary,
+  not a fitted peak. Nothing is dropped: overflow hits keep their relative order at
+  the tail. recall@10 +0.045, nDCG@10 +0.015, unchanged token cost.
+- **Name co-occurrence is discounted for test and generated sources**
+  (`name_cooccurrence_demoted_scale`, 0.5). Test function names are descriptive
+  sentences (`test_compactor_output_is_redacted`), so they harvest query-term
+  co-occurrences real identifiers never do. The value was chosen by splitting the
+  benchmark on whether its own ground truth is a test: across the 261 queries whose
+  answer is *not* a test the gain is flat at +0.020 MRR for every scale, so the whole
+  aggregate difference between 0.5 and 1.0 comes from the 159 test-answer queries —
+  an artifact of mining ground truth from commits, which touch tests. 0.5 is the only
+  setting that improves both partitions.
+- **Benchmark corpora no longer index changelog files.** `gen_queries` documented
+  `CHANGELOG_EXCLUDES` as applied to the corpus but the harness never wired it in. A
+  git-derived query *is* a commit subject and a changelog entry paraphrases it
+  verbatim while never being an accepted answer, so every affected query carried an
+  unbeatable distractor that compressed all variants toward the same floor.
+
+### Performance
+
+- **Duplicate detection roughly halved.** It was 42% of the query path on the Java
+  corpus. Two independent fixes: the operator scan in `normalize_code_tokens` no
+  longer runs up to 24 `str.startswith` calls per punctuation character (1.71×
+  faster on 1600 real chunks, bit-identical token stream), and only the leading 2000
+  characters of a body now decide duplication — two chunks agreeing for 2000
+  characters are the same snippet. Recall, duplicate rate and useful-context are
+  identical; MRR within −0.0003 (p=0.51).
+
+### Fixed
+
+- **Non-ASCII identifiers can now earn name-level ranking credit.** The query side
+  parses Unicode correctly, so `расчёт_налога.py` produced matching query terms but
+  its own name components were silently dropped, making the file unrankable by name.
+- **`.skill_version` is pinned to LF in `.gitattributes`.** `sync_skill_copies.py`
+  writes and byte-compares `"<version>\n"`, but the file carried no EOL attribute,
+  so with `core.autocrlf=true` git materialised CRLF and `test_real_repo_is_in_sync`
+  failed on any fresh Windows clone — and again after any `git checkout` of that file.
+- **Lint is clean repository-wide.** `skill/scripts/` was outside the CI lint scope
+  (`ruff check src tests`) and had accumulated three violations.
+
+### Verdicts on existing signals
+
+Every pre-existing signal was re-examined rather than inherited. `soft_lexical`
+(−0.161 MRR when off) and `source_priors` (−0.029) remain load-bearing;
+`file_agreement` (−0.010, p=0.048) and `dedup` (−0.0016, p=0.006) keep their places.
+
+- **`query_expansion` survives a deletion attempt, and the reason is a lesson.** On
+  the 420 git-derived queries the synonym vocabulary is worth nothing measurable
+  (MRR −0.0022, p=0.40 when removed), and the flag's apparent benefit turned out to
+  come from it also swapping the symbol retriever's tokenizer. It was removed — and
+  then restored, because a commit subject is written by someone looking at the
+  identifiers they just changed and so reuses the codebase's spelling, while a user
+  asking a question does not. On the 36 hand-written natural-language queries removal
+  cost −0.060 MRR. The git benchmark is structurally blind to morphology; both query
+  families are needed to make this call.
+- **The intent classifier is inert on commit-style queries but kept.** It returns
+  `keyword` for 419 of 420 git-derived queries, and removing the layer entirely is
+  bit-identical on that benchmark. It fires on 30.6% of hand-written questions, where
+  removing it costs MRR, and the retriever *weights* it selects are worth +0.058 MRR
+  against uniform weights. Deleting it would optimise for the benchmark's phrasing.
+- **`fuzzy_symbols` and `graph_source` remain measurably inert** on all eight corpora
+  (0/1 and 0/0 query changes respectively); both stay as-is rather than accumulating
+  new tuning.
+
+### Rejected
+
+Recorded so they are not re-attempted without a new hypothesis. A pairwise logistic
+ranker fitted over 19 deterministic query↔candidate features selected exactly one
+feature, and forward selection found no second feature clearing the noise floor, so
+one explainable term ships instead of a model. Individually measured and rejected:
+idf weighting of matched terms (pool-local and corpus-wide), substring matching,
+prefix/stem-tolerant matching, ordered-subsequence matching, term proximity in the
+chunk body, body-text coverage, zone-size normalisation, restricting the name zone to
+the filename or symbol alone, and including the parent directory. `exact_symbol` was
+found to have no discriminative power at all (AUC 0.500) but is left untouched, since
+changing it is a separate experiment from adding a signal.
 
 ## [1.9.0] - 2026-09-02
 
@@ -567,7 +773,10 @@ Pooled over 305 queries (Python, Java, TypeScript), v1.8.0 → 1.9.0:
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/denfry/codebase-index/compare/v1.9.0...v2.0.0
+[1.10.0]: https://github.com/denfry/codebase-index/compare/v1.9.0...abb67df
+[1.9.0]: https://github.com/denfry/codebase-index/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/denfry/codebase-index/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/denfry/codebase-index/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/denfry/codebase-index/compare/v1.5.0...v1.6.0

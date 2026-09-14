@@ -49,6 +49,7 @@ from codebase_index.retrieval.tuning import RetrievalTuning  # noqa: E402
 ABLATABLE = (
     "soft_lexical",
     "query_expansion",
+    "name_cooccurrence",
     "fuzzy_symbols",
     "graph_source",
     "mmr",
@@ -56,6 +57,11 @@ ABLATABLE = (
     "source_priors",
     "file_agreement",
 )
+
+# Rows are looked up by label rather than position, so adding a variant cannot
+# silently repoint the significance tests at the wrong column.
+PREVIOUS_LABEL = "previous release (1.9.0)"
+DEFAULT_LABEL = "default (all signals)"
 
 
 def _parse_corpus(spec: str) -> tuple[Path, str]:
@@ -112,7 +118,11 @@ def main(argv: list[str] | None = None) -> int:
 
     variants: list[tuple[str, RetrievalTuning]] = [
         ("baseline (1.7.0)", RetrievalTuning.baseline()),
-        ("default (all signals)", RetrievalTuning()),
+        # The previous release, pinned. "Is this better than 1.7.0" and "is this
+        # better than what we shipped last" are different questions, and only the
+        # second one decides whether a change belongs in the next release.
+        (PREVIOUS_LABEL, RetrievalTuning.v190()),
+        (DEFAULT_LABEL, RetrievalTuning()),
     ]
     if args.ablate:
         default = RetrievalTuning()
@@ -138,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
                         repeats=args.repeats,
                     )
                     collected[label].append(report)
-                    if label == "default (all signals)":
+                    if label == DEFAULT_LABEL:
                         # Relabel so the per-corpus table identifies the repository
                         # rather than repeating the variant name on every row.
                         per_corpus_default[name] = replace(report, label=name)
@@ -146,12 +156,16 @@ def main(argv: list[str] | None = None) -> int:
                 db.close()
 
     reports = [harness.pool(collected[label], label=label) for label, _ in variants]
+    by_label = {rep.label: rep for rep in reports}
+    default = by_label[DEFAULT_LABEL]
+    previous = by_label[PREVIOUS_LABEL]
+    ablations = [rep for rep in reports if rep.label.startswith("  -")]
 
     if args.as_json:
         payload = {
             "pooled": [r.as_row() for r in reports],
             "per_corpus_default": {k: v.as_row() for k, v in per_corpus_default.items()},
-            "per_category_default": reports[1].per_category,
+            "per_category_default": default.per_category,
         }
         print(json.dumps(payload, indent=2))
         return 0
@@ -159,14 +173,15 @@ def main(argv: list[str] | None = None) -> int:
     print()
     print(harness.format_table(reports, baseline=reports[0]))
 
-    default = reports[1]
+    # The release decision is default vs the previous release, so that is the
+    # comparison printed first and in full.
     print()
-    print(harness.format_significance(reports[0], default, resamples=args.resamples))
+    print(harness.format_significance(previous, default, resamples=args.resamples))
 
-    if len(reports) > 2:
+    if ablations:
         print()
         print("Ablation significance (each row vs the shipped default):")
-        for rep in reports[2:]:
+        for rep in ablations:
             print()
             print(harness.format_significance(default, rep, resamples=args.resamples))
 

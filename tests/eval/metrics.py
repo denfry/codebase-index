@@ -121,6 +121,38 @@ def useful_context_at_budget(
     return len(found) / len(rel)
 
 
+# --- oracle / headroom ------------------------------------------------------
+#
+# MRR alone cannot tell "the retrievers never found it" apart from "the ranker had
+# it and buried it", yet those two failures have nothing in common: one is fixed by
+# widening recall, the other by reranking. The pair below splits them, and the split
+# is what justified spending 1.10.0 on the ranker rather than on new retrievers.
+
+
+def oracle_reciprocal_rank(pool: Sequence[str], relevant: Iterable[str]) -> float:
+    """Reciprocal rank a *perfect* reranker would achieve over this candidate pool.
+
+    A perfect reranker puts a relevant candidate first, so the answer is binary:
+    1.0 when the pool contains any relevant item, 0.0 when retrieval never
+    surfaced one. Averaged over a query set this is the ceiling MRR can reach
+    without touching candidate generation, and `1 - oracle` is the share of the
+    query set that only better *recall* can ever fix.
+    """
+    rel = set(relevant)
+    return 1.0 if any(item in rel for item in pool) else 0.0
+
+
+def rerank_efficiency(mrr: float, oracle_mrr: float) -> float:
+    """Fraction of the achievable ranking quality the ranker actually delivers.
+
+    1.0 means every answer the retrievers found is ranked first; 0.0 means none
+    are. This is the number 1.10.0 set out to move: at 1.9.0 it was 0.64, so a
+    third of the answers already in the pool were being ranked below something
+    else — an error mode roughly three times larger than the remaining recall gap.
+    """
+    return mrr / oracle_mrr if oracle_mrr else 0.0
+
+
 def percentile(values: Sequence[float], pct: float) -> float:
     """Nearest-rank percentile (no interpolation) — stable for small samples."""
     if not values:

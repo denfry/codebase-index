@@ -17,6 +17,9 @@ Useful search options:
 - `--offset <pagination offset>`
 - `--raw` to disable snippet skeletonization
 - `--no-fallback` to suppress fallback suggestions
+- `--session <tag>` to name this conversation's context: unchanged evidence it
+  already received comes back as `reused: true` without the snippet, and
+  evidence that changed is listed under `memory.invalidated`
 
 `explain` uses the HOW_IT_WORKS intent and a larger default token budget. Prefer
 it over repeatedly rewording a broad search.
@@ -48,6 +51,18 @@ codebase-index graph "<target>" --direction both --depth 2 --output graph.html
 
 For headless work, use `--output`; do not use `--open`. Exports also support
 `--format graphml|dot|neo4j`.
+
+## Evidence
+
+```bash
+codebase-index verify --session <tag> --json
+codebase-index verify "<path:start-end@hash>" ... --json
+```
+
+- `verify` is read-only and needs no index: it checks evidence against the
+  working tree. `all_valid` is true only when every checked span still holds.
+- `--strict` exits 1 when anything is invalid (useful in scripts).
+- See [memory.md](memory.md) for verdict states and when to reread.
 
 ## Index health
 

@@ -191,7 +191,7 @@ installed skills and the MCP server all call the same service layer, so behaviou
 cannot drift between surfaces.
 
 Deep dives: [Architecture](docs/ARCHITECTURE.md) ·
-[Retrieval](docs/RETRIEVAL.md) · [Schema](docs/SCHEMA.md) ·
+[Retrieval](docs/RETRIEVAL.md) · [Evidence memory](docs/MEMORY.md) · [Schema](docs/SCHEMA.md) ·
 [Languages](docs/LANGUAGES.md) · [Skill design](docs/SKILL_DESIGN.md)
 
 ## Privacy and security
@@ -225,14 +225,15 @@ silently presented as "no callers". Tiers and how to add a language:
 
 ## Project status
 
-Current line: **1.9.x**, on PyPI, MIT. CI runs Linux, macOS and Windows on Python
+Current line: **2.0.x**, on PyPI, MIT. CI runs Linux, macOS and Windows on Python
 3.11–3.13 with an 80% coverage gate, golden snapshots for every CLI and MCP payload,
 a packaging smoke test on every PR, and a skill-copy drift check.
 
 What works today: hybrid retrieval with optional local vectors; Tree-sitter symbols
 and edges; `search`, `explain`, `symbol`, `refs`, `impact`, `diff-impact`, `path`,
-`describe`, `architecture`, `graph`; token-budgeted, skeletonized packets; incremental
-`update`, `watch`, and hooks; CLI, Claude Code plugin/skill, Codex, OpenCode and
+`describe`, `architecture`, `graph`, `verify`; token-budgeted, skeletonized packets;
+evidence memory that withholds byte-identical snippets within a session and reports
+evidence that changed; incremental `update`, `watch`, and hooks; CLI, Claude Code plugin/skill, Codex, OpenCode and
 MCP delivery; a reproducible multi-repository benchmark.
 
 What does not exist yet: framework-aware typed edges (routes, DI, migrations),

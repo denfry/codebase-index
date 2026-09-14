@@ -29,9 +29,9 @@ def test_packaged_cbx_whitelists_safe_subcommands_only():
     cbx = (_template() / "scripts" / "cbx").read_text(encoding="utf-8")
     assert (
         'ALLOWED="search explain architecture symbol refs impact diff-impact path describe '
-        'graph stats doctor update index"'
+        'verify graph stats doctor update index"'
     ) in cbx
-    for forbidden in ("clean", "init", "watch"):
+    for forbidden in ("clean", "init", "watch", "memory"):
         assert f" {forbidden} " not in f' {cbx.split("ALLOWED=")[1].splitlines()[0]} '
 
 

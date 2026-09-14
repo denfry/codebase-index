@@ -39,6 +39,7 @@ def test_mcp_server_has_expected_tools():
         "path_between",
         "describe_symbol",
         "index_stats",
+        "verify_evidence",
     }
 
 
