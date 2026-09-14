@@ -40,12 +40,12 @@ platform.
 | Agent interface | CLI, Claude Code skill, Codex instructions, OpenCode resources, stdio MCP server | Cursor IDE | Aider CLI | IDE + Sourcegraph platform | MCP clients | Any shell-capable agent |
 | Retrieval granularity | File, symbol, line range, references, impact graph | IDE-managed code context | Repo map of important files/classes/functions/signatures within token budget | Code search and code graph | Varies by server | File/line text matches |
 | Offline guarantee | Default local/offline; external embeddings opt-in | Local IDE indexing plus model/provider behavior depends on setup | Local repo map; model calls depend on Aider config | Cloud by default | Varies; often local | Local |
-| Benchmarked quality | Public suite with Recall@1/3/5, MRR, nDCG, tokens, freshness, graph tasks; honest 55k LOC Java run | Public methodology not portable to this repo | No direct local benchmark here | Enterprise/product claims; not benchmarked here | Varies | Baseline only |
+| Benchmarked quality | Public multi-repo baseline run (Flask, Gson, Fastify) vs `rg`+window and repo-map-style context, with significance; version-over-version ranking eval with ablations | Public methodology not portable to this repo | No direct local benchmark here | Enterprise/product claims; not benchmarked here | Varies | Baseline only |
 | Multi-repo support | Single repo today | Workspace/project scoped | Current chat repo/worktree | Strong cross-repo support | Varies | Manual |
 | Language coverage | Tier-A: 12 code languages; Tier-B generic path; configs mostly FTS | IDE proprietary | Tree-sitter repo map support as provided by Aider | Broad enterprise language coverage | Varies | Any text |
 | Security posture | `.gitignore`/`.codeindexignore`, secret filename gates, redaction, no telemetry, no network by default | Proprietary behavior; depends on settings | Local map, but model provider path depends on Aider config | Requires platform trust and account policy | Varies by server | No built-in redaction |
 | Update model | Manual `index`/`update`, hooks, optional watcher | IDE-managed | Rebuilt as Aider manages context | Platform-managed | Varies | Always live but manual |
-| Extensibility | CLI `--json`; MCP schema v1.0; SQLite local DB | Limited external contract | Aider internals/context | Sourcegraph APIs | MCP by design | Shell pipelines |
+| Extensibility | CLI `--json`; MCP envelope `schema_version` 1; SQLite local DB | Limited external contract | Aider internals/context | Sourcegraph APIs | MCP by design | Shell pipelines |
 
 ## When to choose what
 
@@ -133,8 +133,8 @@ This is the closest direct alternative, so the comparison is the most careful.
     OpenCode workflow.
   - **Transparency:** readable Python, 80% coverage gate, golden CLI snapshots,
     and a public benchmark suite wired as a CI regression gate.
-  - **Honest benchmarks:** we publish raw logs (see the 55k LOC Java run) and mark
-    unproven scale/graph claims as roadmap.
+  - **Honest benchmarks:** raw logs are committed next to every headline number
+    (`tests/eval/results/`), and unproven scale/graph claims stay on the roadmap.
 - **Choose Codebase-Memory MCP when:** you need its broader graph engine,
   static-binary distribution, or wider language/agent reach today.
 - **Choose codebase-index when:** you want a simpler, privacy-strict, transparent
@@ -157,24 +157,24 @@ The meaningful distinction is different:
 - Aider's map is good context injection; `codebase-index` aims to be a queryable
   index with freshness checks, ignore/security gates, and agent-readable packets.
 
-## Competitive benchmark bar
+## Benchmark bar
 
-Tiny fixture benchmarks are useful smoke tests, not product evidence. The
-competitive bar now includes graph-first systems that report evaluations over
-dozens of real repositories, large language coverage, answer-quality scoring,
-token savings, and tool-call reductions.
+Tiny fixture benchmarks are smoke tests, not product evidence. What this repository
+can show today, with raw logs committed:
 
-`codebase-index` now includes a public benchmark suite (`tests/benchmark_public.py`) with:
+- **Index vs a disciplined grep agent** on three public repositories (Flask, Gson,
+  Fastify; 450 git-derived questions): hit@3 0.547 vs 0.304, MRR 0.456 vs 0.263,
+  p < 0.001, at about 10% more context tokens under symmetric accounting.
+- **Index vs repo-map-style context**: a 2k-token signature map contains the answer
+  file 38–42% of the time; the index puts it in the top three 55% of the time for a
+  comparable budget. This is an approximation of the repo-map *style*, not a
+  measurement of Aider.
+- **Version over version**: every ranking change passes a pooled, multi-language
+  ablation with significance testing.
 
-- Retrieval quality: Recall@1/3/5, MRR, nDCG
-- Agent usefulness: answer-correctness proxy on the public fixture, plus real-repo recall gate in the honest benchmark
-- Token economy: tokens saved versus grep/read, Aider repo-map style context, and vanilla agent exploration
-- Languages: separate results for Python, TypeScript, Java, Go, Rust, C#, PHP, and other supported languages
-- Freshness: latency from file edit to usable updated result
-- Graph tasks: callers, impact, architecture trace, route -> handler -> service -> DB
-
-The suite is CI-friendly and synthetic today. Real public 10k/100k/1M LOC scale targets remain
-the next benchmark milestone.
+What it cannot show: head-to-head results against Cursor, Sourcegraph, Continue or
+Codebase-Memory MCP (no comparable harness exists), any 1M-LOC scale claim, or
+agent task-success rates. See [BENCHMARKS.md](BENCHMARKS.md).
 
 ## Positioning
 

@@ -44,9 +44,10 @@ python tests/benchmark_public.py --workdir .tmp-public-benchmark
   only; the framework-aware edges that would lift it are designed in
   `docs/superpowers/specs/2026-06-14-typed-framework-edges-design.md` (M13) and
   not yet implemented.
-- Token economy (~3.4× vs an rg+window baseline) is a synthetic-fixture figure;
-  the real-repo figure (~13× on a 55k LOC Java repo) lives in
-  `tests/benchmark_honest_RESULTS.md`.
+- Token economy (~3.4× vs an rg+window baseline) is a synthetic-fixture figure and
+  charges the index only for its snippets. Under symmetric accounting on public
+  repositories (`tests/eval/results/`), the index costs about the same context as a
+  disciplined grep agent; the quality gap, not a token multiplier, is the headline.
 
 ## Raw output
 

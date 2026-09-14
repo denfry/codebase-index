@@ -9,7 +9,6 @@ crisp typography. Re-run after changing copy:
 Outputs:
     assets/mark.png             256x256   -> logo / avatar source
     assets/social-preview.png   1280x640  -> upload in Settings -> Social preview
-    assets/demo.png             1200x760  -> README product story
 """
 from __future__ import annotations
 
@@ -247,115 +246,6 @@ def build_social(out: Path) -> None:
 # --------------------------------------------------------------------------- #
 # README demo still: 1200 x 760
 # --------------------------------------------------------------------------- #
-def build_demo(out: Path) -> None:
-    W, H = 1200, 760
-    w, h = W * SS, H * SS
-    img = gradient_bg(w, h)
-    add_glow(img, int(w * 0.5), int(h * -0.05), 460 * SS, BLUE, 26)
-    d = ImageDraw.Draw(img)
-
-    # Header
-    wm = f_mono_b(34)
-    d.text((48 * SS, 46 * SS), "codebase", font=wm, fill=FG)
-    seg = d.textlength("codebase", font=wm)
-    d.text((48 * SS + seg, 46 * SS), "-index", font=wm, fill=BLUE)
-    d.text((48 * SS, 94 * SS), "One local map. Three engineering jobs.",
-           font=f_ui(23), fill=FG2)
-
-    cards = [
-        {
-            "title": "FIND",
-            "color": BLUE,
-            "query": '"where is auth implemented?"',
-            "lines": [
-                ("01", "src/auth/AuthService.ts:12", "0.92"),
-                ("02", "src/routes/auth.ts:20", "0.78"),
-                ("03", "src/middleware/auth.ts:5", "0.65"),
-            ],
-        },
-        {
-            "title": "TRACE",
-            "color": PURPLE,
-            "query": '"checkout → database"',
-            "lines": [
-                ("", "CheckoutRoute", "extracted"),
-                ("→", "CheckoutService", "extracted"),
-                ("→", "OrderRepository", "inferred"),
-            ],
-        },
-        {
-            "title": "PREDICT",
-            "color": GREEN,
-            "query": '"what changes with User?"',
-            "lines": [
-                ("1", "direct dependents", "7"),
-                ("2", "affected tests", "4"),
-                ("!", "inferred edges", "2"),
-            ],
-        },
-    ]
-
-    card_w = 352
-    card_h = 430
-    gap = 24
-    x_start = 48
-    y0 = 162
-    for idx, card in enumerate(cards):
-        x0 = (x_start + idx * (card_w + gap)) * SS
-        y = y0 * SS
-        x1 = x0 + card_w * SS
-        y1 = y + card_h * SS
-        d.rounded_rectangle(
-            [x0, y, x1, y1], radius=18 * SS, fill=PANEL,
-            outline=BORDER, width=SS + SS // 2,
-        )
-        d.rounded_rectangle(
-            [x0 + 20 * SS, y + 20 * SS, x0 + 102 * SS, y + 51 * SS],
-            radius=15 * SS, fill=PANEL_BAR, outline=card["color"], width=SS,
-        )
-        d.text((x0 + 34 * SS, y + 27 * SS), card["title"],
-               font=f_ui_b(15), fill=card["color"])
-        d.text((x0 + 22 * SS, y + 78 * SS), card["query"],
-               font=f_mono(17), fill=CYAN)
-        d.line(
-            [x0 + 22 * SS, y + 122 * SS, x1 - 22 * SS, y + 122 * SS],
-            fill=BORDER, width=SS,
-        )
-
-        row_y = y + 150 * SS
-        for lead, label, tail in card["lines"]:
-            d.text((x0 + 24 * SS, row_y), lead, font=f_mono_b(17),
-                   fill=card["color"])
-            d.text((x0 + 58 * SS, row_y), label, font=f_mono(16), fill=FG2)
-            tw = d.textlength(tail, font=f_mono_b(15))
-            d.text((x1 - 24 * SS - tw, row_y + 2 * SS), tail,
-                   font=f_mono_b(15),
-                   fill=YELLOW if tail == "inferred" else card["color"])
-            row_y += 55 * SS
-
-        d.text((x0 + 24 * SS, y1 - 58 * SS),
-               ("precise file:line evidence" if idx == 0 else
-                "auditable dependency chain" if idx == 1 else
-                "ranked blast radius"),
-               font=f_ui(15), fill=MUTED)
-
-    # Evidence strip
-    sy = 626 * SS
-    d.rounded_rectangle(
-        [48 * SS, sy, (W - 48) * SS, 702 * SS],
-        radius=16 * SS, fill=PANEL_BAR, outline=BORDER, width=SS,
-    )
-    d.text((72 * SS, sy + 25 * SS), "EVIDENCE CONTRACT", font=f_ui_b(15), fill=GREEN)
-    d.text((246 * SS, sy + 23 * SS),
-           "freshness  ·  confidence  ·  coverage  ·  recommended reads",
-           font=f_mono(17), fill=FG2)
-
-    d.text((48 * SS, 726 * SS),
-           "local by default  ·  no telemetry  ·  CLI + Skill + MCP",
-           font=f_ui(15), fill=MUTED)
-
-    downsave(img, W, H, out)
-
 
 def main() -> None:
     root = Path(__file__).resolve().parent.parent
@@ -363,7 +253,6 @@ def main() -> None:
     print("Generating assets:")
     build_mark(assets / "mark.png")
     build_social(assets / "social-preview.png")
-    build_demo(assets / "demo.png")
     print("Done.")
 
 

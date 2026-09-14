@@ -16,6 +16,13 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev,build]"
+      - name: Version mirrors agree with the tag
+        run: |
+          python scripts/check_versions.py
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            ver=$(python -c "import re,pathlib;print(re.search(r'__version__ = \"([^\"]+)\"', pathlib.Path('src/codebase_index/__init__.py').read_text()).group(1))")
+            [ "${GITHUB_REF_NAME}" = "v${ver}" ] || { echo "tag ${GITHUB_REF_NAME} != package version v${ver}"; exit 1; }
+          fi
       - name: Test gate
         run: pytest
       - name: Build
@@ -43,10 +50,17 @@ jobs:
         with:
           name: dist
           path: dist
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Release notes from CHANGELOG.md
+        run: python scripts/release_notes.py --out release_notes.md
       - name: Create GitHub release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: dist/*
+          body_path: release_notes.md
+          # Appends the auto-generated "What's Changed" PR list after the changelog body.
           generate_release_notes: true
 
   pypi-publish:

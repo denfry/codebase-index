@@ -1,5 +1,7 @@
 # Retrieval Pipeline
 
+(`docs/RETRIEVAL_PIPELINE.md` was merged into this page.)
+
 The retrieval engine turns a natural-language or symbolic query into a **compact, ranked,
 token-budgeted** set of file/line ranges for Claude to read. It is hybrid: multiple independent
 retrievers run, their results are fused and reranked, then trimmed. Graph expansion and MMR are
@@ -70,10 +72,12 @@ source)` list so fusion is source-agnostic.
   `fuzzy_fallback_min` rows. Measured over 305 queries on three repositories it moved no ranking
   metric while costing ~20% of query latency, so it is kept for typos and abbreviations but no
   longer runs when the query already spelled its identifier correctly.
-- **FTS** — FTS5 `bm25()` over the `fts_chunks` virtual table (chunk text + symbol names +
-  summaries indexed). Query-time camelCase/snake_case splitting, small down-weighted synonym
-  expansion, and soft coverage scoring make natural-language questions robust without weakening
-  exact terms.
+- **FTS** — FTS5 `bm25()` over the `fts_chunks` virtual table (chunk text + symbol names
+  indexed). Query-time camelCase/snake_case splitting, a small down-weighted synonym/inflection
+  vocabulary, OR-groups for soft matching with bounded term coverage, and ranking by
+  original-term coverage with BM25 as a tie-break make natural-language questions robust without
+  weakening exact terms. Every FTS term is quoted so query punctuation cannot inject MATCH
+  operators.
 - **Vector** *(opt-in)* — cosine similarity over chunk embeddings via `sqlite-vec`. Only runs if
   `embeddings.enabled = true`. Adds semantic recall for paraphrased queries. Absent → pipeline
   degrades gracefully to FTS+symbol.
@@ -182,20 +186,27 @@ Results are trimmed to fit `--token-budget` (default per intent, e.g. 1500 token
 2. Greedily attach snippets to the highest-ranked results until budget is hit.
 3. Snippets are trimmed to the relevant line range (± a few context lines), not whole functions.
 4. Lower-ranked results become **`recommended_reads`** (path + range, no snippet) so Claude can
-   choose to read them itself.
+   choose to read them itself. A read is capped at `retrieval.max_read_lines` (default 120): a
+   symbol-aligned chunk can be a whole class, and the read plan should bill the agent for the
+   definition head, not the body. Capped entries carry `truncated: true` and `line_end_full`.
 5. Snippet text passes through secret redaction (see SECURITY.md) before emission.
 
 The point: Claude gets enough to decide, and a precise list of what to read next — never a dump.
 
 ## 8. Confidence & fallback
 
-A `confidence` score (high/medium/low) is derived from: top RRF score, score gap between #1 and #2,
-number of agreeing retrievers, and whether a symbol matched exactly.
+A categorical `confidence` (high/medium/low) is derived from exact-symbol evidence,
+multi-retriever agreement, score separation between #1 and #2, and result count. An exact symbol
+match is `high`, including a single-result response.
 
 - **high** → Claude reads `recommended_reads` and answers.
 - **medium** → Claude reads, but may verify with one Grep.
 - **low** → skill instructs Claude to **fall back** to `ripgrep`/Grep/Glob with suggested patterns
-  emitted in `fallback_suggestions` (derived from query terms + detected symbols).
+  emitted in `fallback_suggestions` (derived from query terms + detected symbols): `rg` patterns,
+  likely paths, and query-broadening hints.
+
+Default token budget: 1500 for `search`, 2200 for `explain`, configurable per project in
+`.claude/cache/codebase-index/config.json` (`retrieval.token_budget`).
 
 ## 9. Output payload (shared by Markdown + JSON)
 

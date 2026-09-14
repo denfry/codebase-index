@@ -150,3 +150,18 @@ def test_strip_prefix_handles_unprefixed_and_breaking_subjects():
         "perf",
         "speed up walking",
     )
+
+
+def test_changes_style_files_are_never_answers():
+    """Flask keeps its changelog in CHANGES.rst; it paraphrases commit subjects
+    exactly like CHANGELOG.md and must be refused as an answer too."""
+    for path in ("CHANGES.rst", "docs/CHANGES.md", "HISTORY.rst", "RELEASE_NOTES.md"):
+        assert not gen_queries._is_answerable(path), path
+    assert gen_queries._is_answerable("src/flask/sessions.py")
+
+
+def test_changelog_excludes_reach_the_harness():
+    from eval import harness
+
+    assert harness.CHANGELOG_EXCLUDES is gen_queries.CHANGELOG_EXCLUDES
+    assert "CHANGES*" in gen_queries.CHANGELOG_EXCLUDES

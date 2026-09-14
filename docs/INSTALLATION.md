@@ -64,10 +64,13 @@ ln -s ~/codebase-index/skill ~/.claude/skills/codebase-index
 # From PyPI (recommended)
 pip install codebase-index
 pipx install codebase-index            # isolated environment
-uv tool install codebase-index         # uv-managed tool
+uv tool install codebase-index         # uv-managed tool (standard PyPI path; not part of CI yet)
 
-# Pin to a GitHub tag for an exact or unreleased version
-pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.8.0"
+# Pin an exact release
+pip install codebase-index==1.9.0
+
+# Or install an unreleased commit straight from git
+pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@main"
 
 # From source (editable mode)
 git clone https://github.com/denfry/codebase-index.git
@@ -90,10 +93,11 @@ pip install -e ".[embeddings-local,watch,dev]"
 
 ### uvx / Homebrew status
 
-As of `1.8.0`, **PyPI is shipped** — `pip install codebase-index` and
-`pipx install codebase-index` are the verified paths. `uvx codebase-index init`,
-Homebrew tap installation, signed checksums, and SBOMs remain distribution
-targets for a more complete release story.
+As of `1.9.0`, **PyPI is shipped** — `pip install codebase-index` and
+`pipx install codebase-index` are the paths exercised by the release smoke test.
+`uv tool install` / `uvx` should work because the package is a normal PyPI wheel, but
+they are not verified in CI. Homebrew tap installation, signed checksums, and SBOMs
+remain distribution targets.
 
 Target future commands:
 
@@ -124,20 +128,19 @@ codebase-index --help
 codebase-index doctor
 ```
 
-Expected output:
+Real output (1.9.0, in a freshly cloned repository before `init`):
 
 ```
-=== codebase-index Doctor ===
-
-[OK] Python 3.12 (requires 3.11+)
-[OK] codebase-index package installed (v1.8.0)
-[OK] tree-sitter is available
-[INFO] Cache directory not yet created: ...
-[INFO] Skill not installed in .claude/skills/
-[INFO] No config file (using defaults)
-
-All checks passed.
+!! [high] cache_gitignored: add '.claude/cache/codebase-index/' to .gitignore (run `init`)
+-- [info] hooks_enabled: no auto-update hook (run `init --with-hooks`)
+OK [medium] index_fresh: index is fresh
+OK [medium] symbol_extraction: tree-sitter languages extract symbols
+OK [info] graph_coverage: all indexed languages have full dependency-graph support
 ```
+
+`!!` marks a failed high-severity check (`doctor --strict` exits non-zero on those),
+`--` a failed lower-severity one, `OK` a pass. Running `codebase-index init` clears the
+first finding. Package and Python versions: `pip show codebase-index`.
 
 ## Claude Code Setup
 
@@ -269,7 +272,7 @@ codebase-index index
 If `doctor` warns about external embeddings, check your config:
 
 ```bash
-cat .codeindex.json | grep allow_external
+grep allow_external .claude/cache/codebase-index/config.json
 ```
 
 Set `allow_external` to `false` to disable external API calls.

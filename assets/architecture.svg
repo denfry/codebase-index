@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="420" viewBox="0 0 960 420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
+  <title>codebase-index architecture: repository to ranked file:line evidence</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#656d76"/>
+    </marker>
+  </defs>
+  <rect width="960" height="420" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+
+  <!-- column 1: repository + gates -->
+  <rect x="24" y="40" width="200" height="130" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+  <text x="124" y="64" text-anchor="middle" font-weight="600" fill="#1f2328">Repository</text>
+  <text x="40" y="90" fill="#656d76">discovery walk</text>
+  <text x="40" y="110" fill="#656d76">.gitignore / .codeindexignore</text>
+  <text x="40" y="130" fill="#656d76">secret · binary · generated gates</text>
+  <text x="40" y="150" fill="#656d76">size cap (1 MB)</text>
+
+  <!-- column 2: extraction -->
+  <rect x="264" y="40" width="200" height="130" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+  <text x="364" y="64" text-anchor="middle" font-weight="600" fill="#1f2328">Tree-sitter extraction</text>
+  <text x="280" y="90" fill="#656d76">symbols (12 Tier-A languages)</text>
+  <text x="280" y="110" fill="#656d76">import · call · reference ·</text>
+  <text x="280" y="126" fill="#656d76">extends / implements edges</text>
+  <text x="280" y="150" fill="#656d76">symbol-aligned chunks</text>
+
+  <!-- column 3: storage -->
+  <rect x="504" y="40" width="200" height="130" rx="8" fill="#ddf4ff" stroke="#54aeff"/>
+  <text x="604" y="64" text-anchor="middle" font-weight="600" fill="#0550ae">Local SQLite</text>
+  <text x="520" y="90" fill="#0550ae">files · chunks · symbols</text>
+  <text x="520" y="110" fill="#0550ae">edges (with confidence)</text>
+  <text x="520" y="130" fill="#0550ae">FTS5 · optional sqlite-vec</text>
+  <text x="520" y="150" fill="#0550ae">.claude/cache/codebase-index/</text>
+
+  <!-- column 4: surfaces -->
+  <rect x="744" y="40" width="192" height="130" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+  <text x="840" y="64" text-anchor="middle" font-weight="600" fill="#1f2328">One service layer</text>
+  <text x="760" y="90" fill="#656d76">CLI  (codebase-index / cbx)</text>
+  <text x="760" y="110" fill="#656d76">Skill  (Claude Code, Codex, OpenCode)</text>
+  <text x="760" y="130" fill="#656d76">MCP  (stdio, schema_version 1)</text>
+  <text x="760" y="150" fill="#656d76">--json for anything else</text>
+
+  <line x1="224" y1="105" x2="262" y2="105" stroke="#656d76" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="464" y1="105" x2="502" y2="105" stroke="#656d76" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="704" y1="105" x2="742" y2="105" stroke="#656d76" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- query path -->
+  <text x="24" y="215" font-weight="600" fill="#1f2328">Query path (per question)</text>
+  <g font-size="12">
+    <rect x="24" y="228" width="130" height="56" rx="6" fill="#fff8c5" stroke="#d4a72c"/>
+    <text x="89" y="252" text-anchor="middle" fill="#1f2328">intent detection</text>
+    <text x="89" y="270" text-anchor="middle" fill="#656d76">locate · trace · impact</text>
+
+    <rect x="184" y="228" width="150" height="56" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+    <text x="259" y="246" text-anchor="middle" fill="#1f2328">retrievers</text>
+    <text x="259" y="262" text-anchor="middle" fill="#656d76">path · symbol · FTS5</text>
+    <text x="259" y="276" text-anchor="middle" fill="#656d76">(+ vector, opt-in)</text>
+
+    <rect x="364" y="228" width="140" height="56" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+    <text x="434" y="252" text-anchor="middle" fill="#1f2328">RRF fusion</text>
+    <text x="434" y="270" text-anchor="middle" fill="#656d76">file-level agreement</text>
+
+    <rect x="534" y="228" width="150" height="56" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+    <text x="609" y="252" text-anchor="middle" fill="#1f2328">rerank · priors · dedup</text>
+    <text x="609" y="270" text-anchor="middle" fill="#656d76">every signal ablated</text>
+
+    <rect x="714" y="228" width="222" height="56" rx="6" fill="#dafbe1" stroke="#4ac26b"/>
+    <text x="825" y="252" text-anchor="middle" fill="#116329">token-budgeted packet</text>
+    <text x="825" y="270" text-anchor="middle" fill="#116329">ranked file:line · reads · confidence</text>
+
+    <line x1="154" y1="256" x2="182" y2="256" stroke="#656d76" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <line x1="334" y1="256" x2="362" y2="256" stroke="#656d76" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <line x1="504" y1="256" x2="532" y2="256" stroke="#656d76" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <line x1="684" y1="256" x2="712" y2="256" stroke="#656d76" stroke-width="1.5" marker-end="url(#arrow)"/>
+  </g>
+
+  <!-- graph path -->
+  <text x="24" y="320" font-weight="600" fill="#1f2328">Graph path (refs · path · impact · diff-impact · architecture)</text>
+  <g font-size="12">
+    <rect x="24" y="333" width="280" height="50" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+    <text x="164" y="354" text-anchor="middle" fill="#1f2328">bounded expansion over the edge table</text>
+    <text x="164" y="372" text-anchor="middle" fill="#656d76">direction · depth · node cap</text>
+
+    <rect x="334" y="333" width="280" height="50" rx="6" fill="#f6f8fa" stroke="#d0d7de"/>
+    <text x="474" y="354" text-anchor="middle" fill="#1f2328">edge confidence carried through</text>
+    <text x="474" y="372" text-anchor="middle" fill="#656d76">extracted · inferred · ambiguous</text>
+
+    <rect x="644" y="333" width="292" height="50" rx="6" fill="#dafbe1" stroke="#4ac26b"/>
+    <text x="790" y="354" text-anchor="middle" fill="#116329">coverage.partial when a language lacks edges</text>
+    <text x="790" y="372" text-anchor="middle" fill="#116329">so "no callers" is never silently wrong</text>
+
+    <line x1="304" y1="358" x2="332" y2="358" stroke="#656d76" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <line x1="614" y1="358" x2="642" y2="358" stroke="#656d76" stroke-width="1.5" marker-end="url(#arrow)"/>
+  </g>
+
+  <text x="24" y="406" font-size="11" fill="#656d76">Network: off by default. Telemetry: none. External embeddings: opt-in, triple-gated. Source: docs/ARCHITECTURE.md</text>
+</svg>

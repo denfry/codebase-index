@@ -1,29 +1,32 @@
-# Multi-CLI Installer для codebase-index
+# Multi-CLI installer for codebase-index
 
-Единый GitHub-hosted installer, который раскладывает skill **codebase-index**
-сразу в несколько AI-CLI сред: **Claude Code**, **Codex CLI** и **OpenCode**.
+A single GitHub-hosted installer that lays out the **codebase-index** skill into several
+AI-CLI environments at once: **Claude Code**, **Codex CLI** and **OpenCode**.
 
-Архитектура: один entrypoint (`install.sh` / `install.ps1`) + отдельные
-адаптеры под каждую среду (`adapters/<target>.{sh,ps1}`). Источник правды —
-каталог `skill/` в репозитории. Никакой «магии»: все пути логируются и
-переопределяются.
+Architecture: one entrypoint (`install.sh` / `install.ps1`) plus one adapter per environment
+(`adapters/<target>.{sh,ps1}`). The source of truth is the `skill/` directory in the
+repository. No magic: every path is logged and can be overridden.
 
----
-
-## Что устанавливается
-
-| CLI | Что именно | Куда (global по умолчанию) |
-|-----|------------|----------------------------|
-| **Claude Code** | skill-директория с `SKILL.md` + scripts | `~/.claude/skills/codebase-index/` |
-| **Codex CLI** | managed block в `AGENTS.md` + ресурсы (instruction package, **не** Claude Skill) | блок в `~/.codex/AGENTS.md`, ресурсы в `~/.codex/skills/codebase-index/` |
-| **OpenCode** | markdown-команда `/codebase-index` + agent-файл + ресурсы | `~/.config/opencode/commands/`, `.../agents/`, `.../skills/codebase-index/` |
-
-Для project-установки (`--scope project`) пути меняются на
-`./.claude/...`, `./AGENTS.md`, `./.opencode/...`.
+> Most users should prefer `pip install codebase-index` followed by `codebase-index init`
+> (see [INSTALLATION.md](INSTALLATION.md)). The shell installer exists for environments where
+> the skill files need to be placed globally without a Python package install first.
 
 ---
 
-## Быстрая установка
+## What gets installed
+
+| CLI | What | Where (global scope, the default) |
+|-----|------|-----------------------------------|
+| **Claude Code** | skill directory with `SKILL.md` + scripts | `~/.claude/skills/codebase-index/` |
+| **Codex CLI** | managed block in `AGENTS.md` + resources (an instruction package, **not** a Claude Skill) | block in `~/.codex/AGENTS.md`, resources in `~/.codex/skills/codebase-index/` |
+| **OpenCode** | markdown command `/codebase-index` + agent file + resources | `~/.config/opencode/commands/`, `.../agents/`, `.../skills/codebase-index/` |
+
+With a project install (`--scope project`) the paths become `./.claude/...`, `./AGENTS.md`,
+`./.opencode/...`.
+
+---
+
+## Quick install
 
 **macOS / Linux:**
 
@@ -37,10 +40,9 @@ curl -fsSL https://raw.githubusercontent.com/denfry/codebase-index/main/install.
 irm https://raw.githubusercontent.com/denfry/codebase-index/main/install.ps1 | iex
 ```
 
-### Безопасная установка (с предпросмотром — рекомендуется)
+### Safer install (download, read, then run — recommended)
 
-Pipe-to-shell исполняет удалённый код «вслепую». Безопаснее скачать, прочитать
-и только потом запустить:
+Pipe-to-shell executes remote code blindly. Download, read, then run:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/denfry/codebase-index/main/install.sh -o install.sh
@@ -56,9 +58,9 @@ pwsh ./install.ps1
 
 ---
 
-## Сценарии использования
+## Usage scenarios
 
-**Конкретный target:**
+**A specific target:**
 
 ```sh
 sh install.sh --target claude
@@ -70,32 +72,32 @@ sh install.sh --target opencode
 pwsh ./install.ps1 -Target claude
 ```
 
-**Все сразу:**
+**Everything at once:**
 
 ```sh
 sh install.sh --target all
 ```
 
-**Авто-определение (по умолчанию)** — installer сам находит CLI по PATH и
-типичным конфиг-директориям (`~/.claude`, `~/.codex`, `~/.config/opencode`):
+**Auto-detect (default)** — the installer looks for CLIs on `PATH` and in the usual config
+directories (`~/.claude`, `~/.codex`, `~/.config/opencode`):
 
 ```sh
 sh install.sh            # = --target auto
 ```
 
-**Dry-run** (ничего не меняет, показывает план):
+**Dry run** (changes nothing, prints the plan):
 
 ```sh
 sh install.sh --target all --dry-run
 ```
 
-**Uninstall** (удаляет только установленное этим installer — по manifest):
+**Uninstall** (removes only what this installer wrote, per its manifest):
 
 ```sh
 sh install.sh --target all --uninstall
 ```
 
-**Переопределение директории установки:**
+**Override the install directory:**
 
 ```sh
 sh install.sh --target claude --install-dir "$HOME/my-skills/codebase-index"
@@ -105,53 +107,53 @@ sh install.sh --target claude --install-dir "$HOME/my-skills/codebase-index"
 pwsh ./install.ps1 -Target claude -InstallDir "D:\skills\codebase-index"
 ```
 
-**Pinning по ветке/тегу** (воспроизводимость и безопасность):
+**Pin to a branch or tag** (reproducibility and safety):
 
 ```sh
-sh install.sh --branch v1.8.0
+sh install.sh --branch v1.9.0
 ```
 
 ---
 
-## Флаги
+## Flags
 
-| install.sh | install.ps1 | Значение |
-|------------|-------------|----------|
+| install.sh | install.ps1 | Meaning |
+|------------|-------------|---------|
 | `--target` | `-Target` | `claude\|codex\|opencode\|all\|auto` |
-| `--install-dir` | `-InstallDir` | переопределить путь установки |
-| `--repo-url` | `-RepoUrl` | URL репозитория-источника |
-| `--branch` | `-Branch` | ветка/тег для скачивания |
+| `--install-dir` | `-InstallDir` | override the install path |
+| `--repo-url` | `-RepoUrl` | source repository URL |
+| `--branch` | `-Branch` | branch or tag to download |
 | `--scope` | `-Scope` | `global\|project` |
-| `--dry-run` | `-DryRun` | не вносить изменений |
-| `--force` | `-Force` | перезаписать существующую установку (с backup) |
-| `--no-python-bootstrap` | `-NoPythonBootstrap` | не создавать venv / не запускать bootstrap.py |
-| `--verbose` | `-Verbose` | подробный лог |
-| `--uninstall` | `-Uninstall` | удалить по manifest |
-| `--help` | `-Help` | справка |
+| `--dry-run` | `-DryRun` | make no changes |
+| `--force` | `-Force` | overwrite an existing install (a backup is taken first) |
+| `--no-python-bootstrap` | `-NoPythonBootstrap` | do not create a venv / run `bootstrap.py` |
+| `--verbose` | `-Verbose` | verbose log |
+| `--uninstall` | `-Uninstall` | remove per manifest |
+| `--help` | `-Help` | show help |
 
 ---
 
 ## Python / runtime
 
-После раскладки файлов installer (если не указан `--no-python-bootstrap`):
+After laying out the files, unless `--no-python-bootstrap` was given, the installer:
 
-1. ищет `python3`/`python` (Unix) или `py`/`python` (Windows), **минимум 3.9**;
-2. если Python не найден — **не** ставит системный Python сам, а печатает
-   понятную инструкцию;
-3. при наличии Python создаёт `.venv` внутри директории skill;
-4. ставит зависимости из `requirements.txt`, если файл есть;
-5. запускает `skill/scripts/bootstrap.py` (создаёт `runtime.json`, дополняет manifest).
+1. looks for `python3` / `python` (Unix) or `py` / `python` (Windows), **3.9 minimum** for the
+   bootstrap itself (the `codebase-index` package requires 3.11+);
+2. if no Python is found, does **not** install one, but prints a clear instruction;
+3. otherwise creates a `.venv` inside the skill directory;
+4. installs dependencies from `requirements.txt` if that file exists;
+5. runs `skill/scripts/bootstrap.py` (creates `runtime.json`, extends the manifest).
 
 ---
 
 ## Manifest
 
-После установки в директории skill создаётся `install_manifest.json`:
+After installation the skill directory contains `install_manifest.json`:
 
 ```json
 {
   "skill_name": "codebase-index",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "target": "claude",
   "os": "linux",
   "source_repo": "https://github.com/denfry/codebase-index",
@@ -162,70 +164,67 @@ sh install.sh --branch v1.8.0
 }
 ```
 
-Uninstall читает этот файл и удаляет **только** перечисленные в нём файлы.
-Для `AGENTS.md` удаляется только managed block, сам файл сохраняется.
+Uninstall reads this file and removes **only** the files listed in it. For `AGENTS.md` only the
+managed block is removed; the file itself is kept.
 
 ---
 
-## Как запускать в OpenCode
+## Running in OpenCode
 
-После установки команда доступна как:
+After installation the command is available as:
 
 ```
-/codebase-index <запрос>
+/codebase-index <query>
 ```
 
 ---
 
 ## Troubleshooting
 
-- **«Python 3.9+ не найден»** — установите Python и повторите без
-  `--no-python-bootstrap`, либо игнорируйте, если venv не нужен.
-- **«Уже установлено … (используйте --force)»** — добавьте `--force`
-  (создаётся backup перед перезаписью).
-- **Неверный путь для вашей версии Claude Code** — задайте `--install-dir`.
-  Дефолтные пути вынесены в функции `*_default_dir` / `Get-*TargetDir`.
-- **Нет curl/wget (Unix)** — установите один из них; на Windows используется
-  `Invoke-WebRequest`.
-- **Авто-режим ничего не нашёл (exit 4)** — укажите `--target` явно.
+- **"Python 3.9+ not found"** — install Python and re-run without `--no-python-bootstrap`, or
+  ignore it if you do not need the venv.
+- **"Already installed … (use --force)"** — add `--force` (a backup is taken before overwriting).
+- **Wrong path for your Claude Code version** — pass `--install-dir`. Default paths live in the
+  `*_default_dir` / `Get-*TargetDir` functions.
+- **No curl/wget (Unix)** — install one of them; Windows uses `Invoke-WebRequest`.
+- **Auto mode found nothing (exit 4)** — pass `--target` explicitly.
 
 ---
 
 ## Security notes
 
-- Удалённый код не исполняется «на лету»: архив сначала скачивается,
-  проверяется структура (`SKILL.md` + frontmatter) и пути (запрет traversal).
-- URL источника всегда печатается перед скачиванием.
-- Поддерживается pinning по `--branch`.
-- Без `--install-dir` installer не пишет за пределы `HOME`/проекта.
-- `sudo` не используется.
-- Есть `--dry-run`.
+- Remote code is not executed on the fly: the archive is downloaded first, its structure is
+  checked (`SKILL.md` + frontmatter) and its paths are checked (no traversal).
+- The source URL is always printed before downloading.
+- Pinning with `--branch` is supported.
+- Without `--install-dir` the installer never writes outside `HOME` / the project.
+- `sudo` is never used.
+- `--dry-run` is available.
 
 ---
 
 ## Developer notes
 
-### Структура
+### Layout
 
 ```
-install.sh / install.ps1     entrypoints
-lib/common.sh / common.ps1   общие функции (лог, скачивание, manifest, bootstrap)
-adapters/<target>.{sh,ps1}   логика конкретного CLI
-skill/                       источник правды (SKILL.md, scripts/bootstrap.py)
-tests/installer/smoke.{sh,ps1}  smoke-тесты
+install.sh / install.ps1        entrypoints
+lib/common.sh / common.ps1      shared functions (logging, download, manifest, bootstrap)
+adapters/<target>.{sh,ps1}      per-CLI logic
+skill/                          source of truth (SKILL.md, scripts/bootstrap.py)
+tests/installer/smoke.{sh,ps1}  smoke tests
 ```
 
-### Как добавить новый adapter
+### Adding an adapter
 
-1. Создайте `adapters/<new>.sh`, определив функции `adapter_install` и
-   `adapter_uninstall` (используйте функции из `lib/common.sh`).
-2. Создайте `adapters/<new>.ps1` с `Invoke-AdapterInstall` /
-   `Invoke-AdapterUninstall`.
-3. Добавьте `<new>` в `--target`/`-Target` и в авто-определение
-   (`detect_targets` / `Get-AutoTargets`).
-4. Допишите строку в smoke-тесты.
+1. Create `adapters/<new>.sh` defining `adapter_install` and `adapter_uninstall` (use the
+   helpers from `lib/common.sh`).
+2. Create `adapters/<new>.ps1` with `Invoke-AdapterInstall` / `Invoke-AdapterUninstall`.
+3. Add `<new>` to `--target` / `-Target` and to auto-detection (`detect_targets` /
+   `Get-AutoTargets`).
+4. Add a line to the smoke tests.
 
-### Как тестировать локально
+### Testing locally
 
 ```sh
 sh tests/installer/smoke.sh
@@ -235,5 +234,5 @@ sh tests/installer/smoke.sh
 pwsh tests/installer/smoke.ps1
 ```
 
-Smoke-тест прогоняет dry-run для всех целей, ставит skill в temp-директорию,
-проверяет `SKILL.md` + manifest и выполняет uninstall.
+The smoke test dry-runs every target, installs the skill into a temp directory, checks
+`SKILL.md` + the manifest, and uninstalls.

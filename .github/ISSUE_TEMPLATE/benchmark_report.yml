@@ -1,0 +1,62 @@
+name: Benchmark report
+description: Share a reproduced, failed, or new benchmark run (good or bad numbers both welcome)
+title: "[Benchmark]: "
+labels: ["benchmark"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Independent runs are how this project keeps its numbers honest. Unflattering results are as useful as flattering ones.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What did you run?
+      options:
+        - tests/eval/run_eval.py (retrieval eval, own corpus)
+        - tests/eval/run_eval.py (shipped query sets)
+        - tests/benchmark_public.py (synthetic suite)
+        - tests/benchmark_honest.py (index vs rg+window)
+        - Something else (describe below)
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: codebase-index version / commit
+      placeholder: "1.9.0 or git SHA"
+    validations:
+      required: true
+
+  - type: input
+    id: corpus
+    attributes:
+      label: Corpus
+      description: Public repository URL + commit SHA, or language / size if private.
+      placeholder: "https://github.com/pallets/flask @ d318b68 — Python, ~18k LOC"
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Exact commands
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: results
+    attributes:
+      label: Results table / raw output
+      description: Paste the pooled table and significance rows as printed. Attach the JSON if large.
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Observations
+      description: Anything surprising, queries that failed, or where the baseline beat the index.

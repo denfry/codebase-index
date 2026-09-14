@@ -9,31 +9,30 @@ recreating a GitHub release (used to publish an already-tagged version).
 
 Work top to bottom. Do not tag until every required box is checked.
 
-## 1. Version sync (single source + the two manual mirrors)
+## 1. Version sync (single source, mirrors checked by script)
 
 The package version is single-sourced from `src/codebase_index/__init__.py`
-(hatch dynamic version). Two files mirror it and are **not** auto-synced — bump
-them by hand and verify:
+(hatch dynamic version). `scripts/sync_skill_copies.py` rewrites every mirror;
+`scripts/check_versions.py` proves they agree and runs in CI lint and at the top
+of the release build, so a mismatched tag fails before anything is published.
 
 - [ ] `src/codebase_index/__init__.py` → `__version__` bumped (canonical).
-- [ ] `.claude-plugin/plugin.json` → `"version"` matches.
-- [ ] `.claude-plugin/marketplace.json` → version matches (if present).
-- [ ] `requirements.lock` → the GitHub tarball tag matches the new tag
-      (`.../tags/vX.Y.Z.tar.gz`). The plugin bootstrap installs exactly this pin.
-- [ ] README / QUICKSTART / INSTALLATION / FAQ / MCP install snippets reference
-      the new tag (`@vX.Y.Z`).
-- [ ] Skill copies + `.skill_version` stamps regenerated and in sync:
+- [ ] Mirrors regenerated and verified:
 
   ```bash
-  python scripts/sync_skill_copies.py          # regenerate
-  python scripts/sync_skill_copies.py --check   # CI gate: must pass clean
+  python scripts/sync_skill_copies.py          # plugin.json, requirements.lock, skill copies + stamps
+  python scripts/sync_skill_copies.py --check   # CI gate: no drift
+  python scripts/check_versions.py              # CI gate: package == plugin.json == lock tag == stamps, CHANGELOG has the section
   ```
+
+- [ ] Docs that quote a pinned tag (`@vX.Y.Z`, `codebase-index==X.Y.Z`) updated;
+      `python scripts/check_links.py` passes (CI gate for relative links).
 
 ## 2. Tests and lint
 
 - [ ] `pytest` green locally (coverage gate `--cov-fail-under=80` enforced).
-- [ ] `ruff check src/ tests/` clean.
-- [ ] `mypy src/codebase_index` (advisory) reviewed.
+- [ ] `ruff check src tests scripts` clean (CI gate).
+- [ ] `mypy src/codebase_index` clean (CI gate, not advisory).
 - [ ] Slow/perf tests considered: `pytest --runslow` for index/search latency.
 - [ ] CI matrix green (Ubuntu/macOS/Windows × py3.11–3.13) on the release branch.
 
@@ -93,8 +92,15 @@ them by hand and verify:
 
 ## 8. Changelog and docs
 
-- [ ] `CHANGELOG.md`: move `[Unreleased]` items under the new `vX.Y.Z` dated
+- [ ] `CHANGELOG.md`: move `[Unreleased]` items under the new `## [X.Y.Z] - YYYY-MM-DD`
       heading; add the version-compare link at the bottom.
+- [ ] Preview the GitHub release body — it is generated from that section, and an
+      empty or missing section fails the release job:
+
+  ```bash
+  python scripts/release_notes.py            # prints the notes for __version__
+  ```
+
 - [ ] ROADMAP / docs reflect anything that shipped or moved.
 - [ ] `docs/PRODUCT_UPGRADE_PLAN.md` status column updated for shipped items.
 
@@ -102,9 +108,12 @@ them by hand and verify:
 
 - [ ] Commit the version bump + changelog on the release branch; open/merge PR.
 - [ ] Tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-- [ ] `release.yml` build job green (test gate + `python -m build` + `twine check`
-      + `release_smoke.py`).
-- [ ] GitHub release created with artifacts attached; release notes reviewed.
+- [ ] `release.yml` build job green (`check_versions.py` + tag/version match + test
+      gate + `python -m build` + `twine check` + `release_smoke.py`). The same
+      build/twine/smoke steps already ran on the PR in CI's `package` job.
+- [ ] GitHub release created with artifacts attached; body = CHANGELOG section
+      (`release_notes.py`) followed by the auto-generated PR list.
+- [ ] PyPI shows the new version (`pip index versions codebase-index`).
 - [ ] Post-publish: re-run `pipx install "...@vX.Y.Z"` once to confirm the tag
       resolves.
 

@@ -1,7 +1,8 @@
 # Database Schema
 
 Single SQLite database at `.claude/cache/codebase-index/index.sqlite`. WAL mode, foreign keys on.
-The DDL below is the canonical source mirrored by `src/codebase_index/storage/schema.sql`.
+`src/codebase_index/storage/schema.sql` is the applied DDL; this page mirrors it and explains it.
+(`docs/DATABASE_SCHEMA.md` was merged into this page.)
 
 ## Pragmas
 
@@ -87,6 +88,7 @@ CREATE INDEX idx_edges_src ON edges(src_kind, src_id);
 CREATE INDEX idx_edges_dst ON edges(dst_kind, dst_id);
 CREATE INDEX idx_edges_name ON edges(dst_name);
 CREATE INDEX idx_edges_type ON edges(edge_type);
+CREATE INDEX idx_edges_file ON edges(file_id);   -- replace_edges deletes per file on every update
 
 -- Module / package level summaries for architecture-intent queries.
 CREATE TABLE modules (
@@ -158,10 +160,21 @@ backend; everything else is copied straight from the cache into `vec_chunks`. Ne
 are written back to `vec_cache` so subsequent rebuilds reuse them. The reported "embedded" count
 reflects cache **misses** — i.e. the work actually performed.
 
-## Migrations
+## Schema versioning
 
-`meta.schema_version` gates migrations in `storage/db.py`. On version mismatch the CLI either
-migrates in place (for additive changes) or, for breaking changes, prompts a `index --rebuild`.
+`meta.schema_version` is guarded in `storage/db.py`. There is no in-place migration framework:
+
+- a **newer** index than the installed CLI supports is refused on open with a message asking for
+  an updated CLI;
+- an **older** index is still readable (queries never touch columns added later); the build
+  commands (`index`, `update`) detect the mismatch with `peek_schema_version` and rebuild from
+  scratch, because `schema.sql` is applied with `IF NOT EXISTS` and old tables would persist.
+
+## FTS5 query syntax
+
+FTS5 supports phrase matching (`"exact phrase"`), prefix matching (`auth*`), boolean operators
+(`auth AND login`, `auth OR login`, `auth NOT test`) and `NEAR/5`. The lexical retriever quotes
+every term it derives from the query, so user punctuation cannot inject MATCH operators.
 
 ## Incremental indexing keys
 

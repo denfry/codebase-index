@@ -1,5 +1,11 @@
 # Honest benchmark — codebase-index vs no-skill agent (NewTowny)
 
+> **Historical.** The repository under test is private, so nobody else can rerun
+> this, and its token accounting (index charged for signature snippets, grep charged
+> for 80-line windows) is not symmetric. The reproducible successor is
+> `tests/eval/run_baselines.py` on public repositories; see `docs/BENCHMARKS.md`.
+> Do not quote the numbers below as product claims.
+
 Script: `tests/benchmark_honest.py` · Raw run: `tests/benchmark_honest_newtowny.txt`
 Repo under test: `C:/Users/denfry/IdeaProjects/NewTowny` (303 Java files, ~55k LOC; 574 text files indexed)
 Token counter: `tiktoken/cl100k_base` (real tokens, identical estimator both sides)

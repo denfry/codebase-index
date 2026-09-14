@@ -7,7 +7,7 @@ pip install "codebase-index[mcp]"
 codebase-index mcp --root /path/to/repo
 ```
 
-The server speaks MCP over stdio through FastMCP. Build the index with
+The server speaks MCP over stdio through the official Python SDK (`MCPServer` on mcp 2.x, `FastMCP` on 1.x; both are supported). Build the index with
 `codebase-index index` before connecting a client.
 
 Current shipped interfaces:
@@ -126,7 +126,10 @@ Use the client's MCP server configuration UI or JSON file and register:
 ```
 
 Client-specific config file paths and screenshots should be added only after
-they are verified against the current client versions.
+they are verified against the current client versions. The templates above are
+the standard stdio-server shape every listed client accepts; none has been
+re-verified against a specific client release yet (tracked in
+[ROADMAP.md](ROADMAP.md)).
 
 ## Progressive results
 
