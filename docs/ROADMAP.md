@@ -46,13 +46,18 @@ release in `CHANGELOG.md`.
 The current priority is to make existing power obvious, measurable, and easy to
 invoke.
 
-- [ ] Publish 10k and 100k LOC public-repository benchmark runs with raw logs.
+- [~] Publish public-repository benchmark runs with raw logs. **Partially done:**
+      `tests/eval/run_baselines.py` compares the index with grep-style and
+      repo-map-style baselines on Flask (~18k LOC Python), Gson (~57k LOC Java)
+      and Fastify (~78k LOC JavaScript) at pinned commits, with a logged run under
+      `tests/eval/results/`. Remaining: a 1M-LOC / large-monorepo run.
 - [ ] Add task-level agent evaluation: success rate, tokens, files read, time,
       and citation correctness.
 - [ ] Verify MCP setup against current releases of each documented client.
 - [ ] Add progressive/paged MCP retrieval for large repositories.
 - [ ] Complete `uvx` and clean-machine install verification on every CI OS.
 - [ ] Publish signed checksums and an SBOM with releases.
+- [ ] Homebrew tap (`brew install denfry/tap/codebase-index`).
 
 ## Next — task-native context
 

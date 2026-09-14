@@ -139,6 +139,19 @@ worked on the reranker rather than adding retrievers, and it is also the cheapes
 available check that a "ranking" change did not quietly change recall instead —
 `-name_cooccurrence` moves eight quality metrics and leaves `oracle` at ±0.0000.
 
+## Baselines on public repositories
+
+`run_eval.py` compares the ranker with itself. `run_baselines.py` compares it with
+*not having an index*: a disciplined `rg` agent and a repo-map-style context blob, on
+Flask, Gson and Fastify at pinned commits, with symmetric token accounting and the
+same significance tests. The logged run lives in `results/`; the read models are in
+`baselines.py`.
+
+```bash
+python tests/eval/run_baselines.py --clone --workdir .tmp-baselines --out tests/eval/results/<date>-public-baselines
+python tests/eval/run_baselines.py --repo ../your-repo          # any local git repository
+```
+
 ## Files
 
 | File | Role |
@@ -147,4 +160,7 @@ available check that a "ranking" change did not quietly change recall instead �
 | `harness.py` | Index build, query execution, aggregation, pooling, tables |
 | `metrics.py` | IR metrics + paired bootstrap / permutation tests |
 | `gen_queries.py` | Ground-truth generator from git history |
+| `baselines.py` | rg+window and repo-map-style read models, symmetric token accounting |
+| `run_baselines.py` | Index vs baselines on public repositories, with significance |
+| `results/` | Logged runs (raw JSON + Markdown) |
 | `queries/` | Checked-in query sets |

@@ -9,7 +9,10 @@
     "default_mode": "hybrid",
     "rrf_k": 60,
     "token_budget": 1500,
-    "limit": 10
+    "limit": 10,
+    "compact_snippets": true,
+    "compact_min_reduction": 0.25,
+    "max_read_lines": 120
   },
   "embeddings": {
     "backend": "noop",

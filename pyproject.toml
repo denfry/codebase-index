@@ -11,8 +11,9 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "codebase-index contributors" }]
 keywords = [
-    "claude-code", "codex-cli", "opencode", "mcp", "code-search",
-    "semantic-code-search", "codebase-indexing", "codebase-rag", "ai-agents",
+    "claude-code", "claude-code-plugin", "codex-cli", "opencode", "mcp", "mcp-server",
+    "code-search", "semantic-code-search", "codebase-indexing", "codebase-rag",
+    "code-graph", "impact-analysis", "ai-agents", "coding-agents", "context-engineering",
     "local-first", "tree-sitter", "rag", "sqlite", "fts5", "cli",
 ]
 classifiers = [

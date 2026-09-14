@@ -9,13 +9,11 @@ from unittest.mock import patch
 
 import pytest
 
-try:
-    from codebase_index.mcp import server as mcp_server
-    MCP_AVAILABLE = True
-except ImportError:
-    MCP_AVAILABLE = False
-
-pytestmark = pytest.mark.skipif(not MCP_AVAILABLE, reason="mcp extra not installed")
+# Skip only when the `mcp` SDK itself is absent. Our own server module must import
+# cleanly against whatever SDK is installed; wrapping *that* import in a skip once
+# hid a full CI run in which every MCP test was silently skipped on mcp 2.x.
+pytest.importorskip("mcp", reason="mcp extra not installed")
+from codebase_index.mcp import server as mcp_server  # noqa: E402
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -214,3 +212,30 @@ def test_explain_code_accepts_raw_parameter():
     """explain_code accepts raw without raising TypeError."""
     result = _with_missing_db(lambda: _call(mcp_server.explain_code, query="foo", raw=True))
     assert "error" in result
+
+
+def test_mcp_subcommand_accepts_root_option(monkeypatch, tmp_path):
+    """Every client template writes `codebase-index mcp --root <repo>`; the global
+    --root lives on the Typer callback, so the subcommand must accept it too or the
+    documented config fails with "No such option: --root"."""
+    import os
+
+    from typer.testing import CliRunner
+
+    from codebase_index import cli
+
+    captured: dict = {}
+
+    class FakeServer:
+        def run(self, transport):  # noqa: D401 - mimics FastMCP.run
+            captured["transport"] = transport
+            captured["root"] = os.environ.get("CBX_ROOT")
+
+    import codebase_index.mcp.server as server_mod
+
+    monkeypatch.setattr(server_mod, "mcp", FakeServer())
+    monkeypatch.delenv("CBX_ROOT", raising=False)
+    result = CliRunner().invoke(cli.app, ["mcp", "--root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert captured["transport"] == "stdio"
+    assert captured["root"] == str(tmp_path.resolve())

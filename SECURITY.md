@@ -1,51 +1,73 @@
 # Security Policy
 
-## Supported Versions
+`codebase-index` reads entire repositories, so its security posture matters
+more than for a typical CLI. The full trust model, exclusion pipeline and
+redaction rules are documented in [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md);
+this page covers reporting and the guarantees in short form.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.2.x   | :white_check_mark: |
-| < 1.2   | :x:                |
+## Supported versions
 
-Only the latest minor version receives security updates.
+Only the latest minor release line receives security fixes.
 
-## Reporting a Vulnerability
+| Version | Supported |
+|---|---|
+| 1.9.x (latest) | Yes |
+| < 1.9 | No — upgrade with `pip install -U codebase-index` |
 
-We take security seriously. If you discover a vulnerability, please report it responsibly:
+## Reporting a vulnerability
 
-1. **Do not** open a public issue.
-2. Email the maintainers with a description of the vulnerability and steps to reproduce.
-3. We will acknowledge receipt within 48 hours and provide a timeline for a fix.
-4. Once resolved, we will publish a security advisory and credit the reporter (if desired).
+Please do **not** open a public issue for security problems.
 
-## No Telemetry Promise
+1. Use GitHub private vulnerability reporting:
+   <https://github.com/denfry/codebase-index/security/advisories/new>
+   (the *Report a vulnerability* button under the repository's **Security** tab).
+2. Include the version (`pip show codebase-index`),
+   platform, a description, and reproduction steps. Redact any real secrets.
+3. You will get an acknowledgement within a few days. Fixes are released as a
+   patch on the supported line and published as a GitHub security advisory,
+   crediting the reporter unless they prefer otherwise.
 
-`codebase-index` does **not** collect, transmit, or store any telemetry, usage data, or analytics. All indexing, search, and storage operations occur entirely on your local machine. There are no phone-home mechanisms, crash reporters, or usage counters.
+If private reporting is unavailable for any reason, open a minimal issue that
+says only "security report, please contact me" without details, and a
+maintainer will reach out.
 
-## Secret Handling
+## What the tool guarantees
 
-- **Never indexed**: `.env` files, private keys (`.pem`, `.key`), certificates, tokens, credential files, and binary artifacts are excluded before parsing.
-- **Redacted in output**: Any snippets that may contain secret-like patterns (AWS keys, JWTs, bearer tokens, connection strings) are masked before being returned to Claude or printed to the terminal.
-- **Respects ignore files**: `.gitignore`, `.claudeignore`, `.codeindexignore`, and `.cursorignore` are all honored during discovery.
+- **No telemetry.** No usage data, analytics, crash reports or phone-home of
+  any kind.
+- **No network by default.** The base install makes no network requests.
+  The only code path that can send repository text off the machine is the
+  *external* embeddings backend, which is refused unless all three hold:
+  `embeddings.allow_external = true` in config, an API key provided via
+  environment variable, and the endpoint warning printed by `doctor` / `index`.
+- **Secrets are never indexed.** `.env*`, private keys and certificates
+  (`*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `*.crt`, `*.keystore`),
+  `credentials*`, `secrets*`, binaries, dependency and build directories,
+  generated files and oversized files are excluded before parsing.
+- **Secrets are redacted on output.** Snippets pass through
+  `output/redact.py` before reaching the agent or the terminal (AWS keys,
+  private-key blocks, JWTs and bearer tokens, connection strings with
+  credentials, Slack tokens, high-entropy values assigned to key-like names).
+- **Ignore files are honoured.** `.gitignore`, `.claudeignore`,
+  `.codeindexignore` and `.cursorignore`.
+- **Read-only agent surface.** The generated skill's `allowed-tools` and the
+  `cbx` wrappers whitelist read-only subcommands; `clean`, `init` and `watch`
+  are not callable from the skill.
+- **Self-audit.** `codebase-index doctor --strict` exits non-zero if any gate
+  is misconfigured; use it in CI.
 
-## External Embeddings Opt-In
+## Threat model in brief
 
-The default configuration disables embeddings entirely (`backend = "noop"`). External embedding APIs (which would send code text to a remote service) require:
+- Indexing a repository is like opening it in an editor: parsers read file
+  content, nothing is executed.
+- The derived index lives in `.claude/cache/codebase-index/` and is
+  gitignored by `init`. Do not commit it or share it as if it were sanitised —
+  redaction happens at output time, and the index stores indexed text.
+- Treat `doctor` warnings about world-writable cache directories as real.
 
-1. Explicit `embeddings.allow_external = true` in configuration.
-2. A user-provided API key via environment variable.
-3. Warnings printed by both `doctor` and `index` commands.
+## Release integrity
 
-Without all three conditions, external embeddings are refused.
-
-## Threat Model
-
-- **Indexed content**: Treat indexing an untrusted repository the same as opening it in a text editor. Parsers operate over file content but do not execute code.
-- **Cache location**: The SQLite index is stored in `.claude/cache/codebase-index/`. Ensure this directory is not committed to version control (it is in the default `.gitignore`).
-- **World-writable directories**: `doctor` warns if the cache directory has insecure permissions.
-
-## Unsafe Patterns to Avoid
-
-- Do not commit the SQLite index file to a shared repository.
-- Do not enable external embeddings on repositories containing proprietary or regulated code without reviewing your organization's data handling policies.
-- Do not run `codebase-index index` on repositories you do not trust without reviewing the `doctor` output first.
+Releases are built in GitHub Actions and published to PyPI with Trusted
+Publishing (OIDC, no stored tokens). Signed checksums, SBOMs and build
+attestations are on the roadmap and are **not** yet provided; do not assume
+them.

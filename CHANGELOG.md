@@ -6,12 +6,72 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Public baseline benchmark.** `tests/eval/run_baselines.py` compares the index with
+  a disciplined `rg` + 80-line-window agent and with repo-map-style context on
+  Flask, Gson and Fastify at pinned commits, using git-derived ground truth, one
+  tokenizer on every side, and paired bootstrap / permutation significance. The
+  logged run is committed under `tests/eval/results/`: pooled over 450 queries,
+  hit@3 0.547 vs 0.304 and MRR 0.456 vs 0.263 (p < 0.001) at 3.8k vs 3.5k context
+  tokens per query. `scripts/gen_benchmark_chart.py` renders the chart from the log.
+- **Reproducible demo.** `examples/demo/run_demo.sh|.ps1` run Find / Trace / Predict
+  on `pallets/flask` at a pinned commit; `EXPECTED_OUTPUT.md` is the captured run and
+  `assets/demo-terminal.svg` is rendered from it (`scripts/gen_terminal_svg.py`).
+  `docs/DEMO.md` documents GIF/video recording.
+- **Release and CI gates.** `scripts/check_versions.py` (package, plugin manifest,
+  lock tag, skill stamps and changelog must agree), `scripts/check_links.py`
+  (relative Markdown links must resolve), `scripts/release_notes.py` (GitHub release
+  body comes from the changelog section and an empty section fails the release), and
+  a `package` CI job that builds, `twine check`s and runs the clean-venv install smoke
+  on every pull request.
+- **Contributor onboarding.** `docs/DEVELOPMENT.md`, rewritten `CONTRIBUTING.md`,
+  benchmark-report and language-support issue templates, `SUPPORT.md`, a labels
+  manifest, and `docs/COMMUNITY_AUDIT.md` / `docs/COMMUNITY_LAUNCH.md`.
+
+### Changed
+
+- **Read plan is bounded.** `recommended_reads` entries are capped at
+  `retrieval.max_read_lines` (default 120) and carry `truncated: true` plus
+  `line_end_full` when capped. A symbol-aligned chunk can be a whole class; on the
+  public baseline benchmark the uncapped read plan cost 6.8k tokens per query against
+  3.5k for grep, the capped one 3.8k, with identical ranking quality. Set the option to
+  0 for the previous behaviour.
+- **README, docs and examples show real output only.** Fabricated tables (an
+  `AuthService.ts` example with a `Score` column, an invented `doctor` transcript,
+  the mock-up `assets/demo.png`) are replaced by output captured on Flask.
+  Duplicate pages (`DATABASE_SCHEMA`, `RETRIEVAL_PIPELINE`, `docs/SECURITY`) are
+  redirect stubs; `SCHEMA.md` now matches `storage/schema.sql`.
+- **Benchmark headline.** The "13× fewer tokens on a 55k LOC Java repo" figure is
+  withdrawn: the repository is private and the accounting was asymmetric. The
+  defensible claim is the public baseline run above.
+- `SECURITY.md` points to GitHub private vulnerability reporting and states the
+  supported line as 1.9.x.
+
 ### Fixed
 
 - `codebase-index index` no longer crashes with `ValueError: ... is not in the subpath of ...`
   when the repository contains a symlink that points outside the tree (for example Bazel's
   `bazel-out` / `bazel-bin` convenience symlinks). Such entries are now skipped by the walker,
   matching the gate's existing "resolves outside the repository" exclusion (#27).
+- **MCP server did not start on mcp 2.x.** The SDK renamed `FastMCP` to
+  `MCPServer` and removed the old import path, so `codebase-index mcp` reported
+  "needs the optional extra" even with the extra installed, and the MCP tests
+  skipped silently in CI because the skip guard wrapped our own module's import.
+  The server now imports `MCPServer` first and falls back to `FastMCP` on 1.x
+  (verified against mcp 1.29 and 2.1); the tests skip only when the SDK itself is
+  missing.
+- **`codebase-index mcp --root <repo>` was rejected.** Every client template
+  used that form, but `--root` was only a global option (`codebase-index --root
+  <repo> mcp`). The subcommand now accepts it as well.
+- **Plugin wrappers refused four documented commands.** `bin/cbx` and `bin/cbx.ps1`
+  whitelisted ten subcommands while the skill allowed fourteen; `architecture`,
+  `diff-impact`, `path` and `describe` now work from the plugin. A parity test pins
+  the two lists together.
+- **Benchmark leakage.** `gen_queries` documented that changelog-style files were
+  excluded from the evaluation corpus, but the harness never applied the list, and
+  Flask-style `CHANGES.rst` was not covered. Both are fixed; `CHANGES*`, `HISTORY*`,
+  `NEWS*` and `RELEASE_NOTES*` are refused as answers and excluded from the corpus.
 
 ## [1.10.0] - 2026-09-02
 

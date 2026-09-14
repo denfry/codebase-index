@@ -114,6 +114,7 @@ def search_payload(
                 compact=compact,
                 compact_min_reduction=cfg.retrieval.compact_min_reduction,
                 evidence=evidence,
+                max_read_lines=cfg.retrieval.max_read_lines,
             )
     if tag is not None and not enabled:
         payload["memory"] = {"session": tag, "available": False, "reason": "memory is disabled"}

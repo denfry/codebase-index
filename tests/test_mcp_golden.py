@@ -17,13 +17,11 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-try:
-    from codebase_index.mcp import server as mcp_server
-    MCP_AVAILABLE = True
-except ImportError:
-    MCP_AVAILABLE = False
-
-pytestmark = pytest.mark.skipif(not MCP_AVAILABLE, reason="mcp extra not installed")
+# Skip only when the `mcp` SDK itself is absent. Our own server module must import
+# cleanly against whatever SDK is installed; wrapping *that* import in a skip once
+# hid a full CI run in which every MCP test was silently skipped on mcp 2.x.
+pytest.importorskip("mcp", reason="mcp extra not installed")
+from codebase_index.mcp import server as mcp_server  # noqa: E402
 
 from codebase_index.cli import app  # noqa: E402  (after the skip guard)
 from tests.golden_utils import assert_matches_golden  # noqa: E402

@@ -63,7 +63,19 @@ External embeddings require **all three** conditions:
 
 Without all three, external embedding is refused.
 
+## Skill tool surface
+
+The generated `SKILL.md` frontmatter restricts the agent to read-only subcommands
+(`search`, `explain`, `architecture`, `symbol`, `refs`, `impact`, `diff-impact`, `path`,
+`describe`, `graph`, `stats`, `doctor`, `update`, `index`, and the `cbx` wrapper) plus `Read`,
+`Grep`, `Glob`. `clean`, `init`, `watch`, unscoped `Bash`, and `python -m codebase_index` are not
+allowed. The `cbx` wrappers (skill `scripts/cbx` and plugin `bin/cbx`) enforce the same whitelist
+and refuse other subcommands.
+
 ## Threat Model
+
+(`docs/SECURITY.md` was merged into this page; the reporting policy lives in the root
+[SECURITY.md](../SECURITY.md).)
 
 ### Trusted Inputs
 - The user's own codebase (they control what's in it)
@@ -83,29 +95,32 @@ Without all three, external embedding is refused.
 | Malicious file content | Parsers are read-only; no code execution |
 | Cache leakage | Cache in `.gitignore`; doctor checks permissions |
 
-## Unsafe Patterns
+## `doctor` — safety self-check
 
-- **Do not commit the SQLite index** to a shared repository. It contains code snippets.
-- **Do not enable external embeddings** on repositories containing proprietary or regulated code without reviewing your organization's data handling policies.
-- **Do not run `codebase-index index`** on repositories you do not trust without reviewing the `doctor` output first.
+`codebase-index doctor` (`src/codebase_index/doctor.py`) reports exactly these findings today:
 
-## Hook Risks
+| id | severity | what it checks |
+|---|---|---|
+| `cache_gitignored` | high | the derived index directory is in `.gitignore` (a committed index leaks indexed text) |
+| `hooks_enabled` | info | whether the Claude Code PostToolUse auto-update hook is configured |
+| `index_fresh` | medium | the index exists and is not stale relative to the tree |
+| `symbol_extraction` | medium | Tree-sitter languages actually produce symbols (guards silent parser failure) |
+| `graph_coverage` | info | every indexed language has dependency-graph support, or names the partial ones |
 
-Optional hooks (e.g., post-tool-use auto-update) execute CLI commands automatically. Ensure:
+`--strict` exits non-zero when a high-severity finding fails, so it can gate CI. The external-
+embedding warning (naming the endpoint) is printed by `index` and `search` when the backend is
+resolved, not by `doctor`. Secret-pattern scans of the index, `allowed-tools` diffs and
+cache-permission checks are **not** implemented; do not rely on `doctor` for them.
 
-- Hook commands are read-only or safe (`codebase-index update --quiet`)
-- Hook commands do not contain user-controlled input
-- Hook output is not echoed to the user unless necessary
+## Hook risks
 
-## `doctor` — Safety Self-Check
+Optional hooks (the PostToolUse auto-update) execute CLI commands automatically. Keep hook
+commands read-only (`codebase-index update --quiet`), free of user-controlled input, and quiet.
 
-`codebase-index doctor` reports:
+## Unsafe patterns
 
-- Whether the cache is inside `.gitignore` (warns if the index could be committed)
-- Whether external embeddings are enabled and to which endpoint
-- Any indexed file that matches a secret pattern (should be none)
-- Ignore-file coverage and any oversized/binary files that slipped through
-- The resolved `allowed-tools` vs. the recommended minimal set
-- World-writable cache directory permissions
-
-With `--strict` flag, `doctor` exits non-zero if any high-severity finding is present, suitable for CI gating.
+- Do not commit the SQLite index to a shared repository: it stores indexed text, and redaction
+  happens only at output time.
+- Do not enable external embeddings on proprietary or regulated code without reviewing your
+  organisation's data-handling policy.
+- Review `doctor` output before indexing a repository you do not trust.

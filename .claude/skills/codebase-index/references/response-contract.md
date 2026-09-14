@@ -21,7 +21,10 @@ Each result can contain:
   session already received that exact text from unchanged source
 
 `recommended_reads` is the read plan. Start with its first one to three entries
-and use exact line ranges.
+and use exact line ranges. An entry with `truncated: true` was capped at the
+definition head (`max_read_lines`, default 120); `line_end_full` gives the real
+extent. Read the capped range first and continue only when the head is not
+enough.
 
 With `--session`, the packet also carries `memory`: `session`, `reused`,
 `tokens_saved`, and `invalidated` — references to evidence the session received

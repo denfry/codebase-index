@@ -2,8 +2,9 @@
 
 ## 1. Overview
 
-`codebase-index` is a **local-first** code intelligence layer for AI coding agents. In `1.10.0`
-it has two shipped faces:
+`codebase-index` is a **local-first** code intelligence layer for AI coding agents. This page is
+the design reference; the hands-on guide (setup, tests, benchmarks, recipes) is
+[DEVELOPMENT.md](DEVELOPMENT.md). It has two shipped faces:
 
 1. **A Claude Code Skill** (`.claude/skills/codebase-index/SKILL.md`) that Claude auto-invokes for
    codebase questions. The skill is thin: it tells Claude *when* to search, *how* to call the CLI,
@@ -71,7 +72,8 @@ codebase-index/
 ├── adapters/                    # per-CLI install logic (claude/codex/opencode, sh + ps1)
 ├── lib/                         # shared shell helpers for the installer
 ├── bin/                         # plugin wrappers (cbx resolves the provisioned venv)
-├── scripts/                     # bootstrap.sh/.ps1, release_smoke.py, sync_skill_copies.py
+├── scripts/                     # bootstrap.sh/.ps1, release_smoke.py, sync_skill_copies.py,
+│                                #   check_versions.py, check_links.py, release_notes.py, gen_assets.py
 ├── hooks/                       # plugin hooks.json (SessionStart bootstrap)
 ├── .claude-plugin/              # plugin manifest + marketplace catalog
 ├── .github/                     # CI (lint, skill-sync gate, OS/Python test matrix), release
@@ -81,6 +83,8 @@ codebase-index/
 ├── .claude/ .codex/ .opencode/  # committed installed copies (generated — same script)
 ├── examples/                    # sample queries, configs, hooks
 ├── tests/                       # pytest suite + fixtures (sample_repo, multilang)
+│   └── eval/                    # retrieval evaluation: harness, metrics, gen_queries, run_eval,
+│                                #   baselines + run_baselines (public-repo comparison), results/
 └── src/codebase_index/
     ├── cli.py                   # Typer app: all commands (delegates to service.py)
     ├── service.py               # shared CLI/MCP service layer: paths, search sessions, stats
@@ -94,8 +98,8 @@ codebase-index/
     │                            #   symbol_chunks.py, base.py
     ├── indexer/                 # pipeline.py (full + incremental build), freshness.py,
     │                            #   doc_chunks.py
-    ├── graph/                   # builder.py (edge resolution), expand.py (impact),
-    │                            #   export.py (HTML graph)
+    ├── graph/                   # builder.py (edge resolution), expand.py (impact), analysis.py
+    │                            #   (communities/god nodes), navigate.py (path/describe), export.py
     ├── storage/                 # db.py (pragmas, schema, version guard), schema.sql, repo.py
     ├── retrieval/               # intent.py, searchers.py, fusion.py, rerank.py, features.py,
     │                            #   priors.py, lexical.py, fuzzy.py, diversity.py, skeleton.py,
@@ -159,8 +163,9 @@ upward to nearest `.git`/`.claude`), and `--quiet`. Search-family commands accep
 | `clean` | `--yes`, `--all` | resets index DB (`--all` wipes cache dir) | removed-count |
 | `watch` | `--debounce ms` | long-running | event log |
 
-The skill only ever calls the **read-only** family (`search`, `symbol`, `refs`, `impact`, `diff-impact`,
-`explain`, `stats`) plus `update`. It never calls `clean` or `init`. See SECURITY.md.
+The skill only ever calls the **read-only** family (`search`, `explain`, `architecture`, `symbol`,
+`refs`, `impact`, `diff-impact`, `path`, `describe`, `graph`, `stats`, `doctor`) plus `update` and
+`index`. It never calls `clean`, `init` or `watch`. See [SECURITY_MODEL.md](SECURITY_MODEL.md).
 
 ### Freshness contract
 
@@ -193,9 +198,9 @@ If `exists=false` → skill runs `index`. If `stale=true` and cheap → skill ru
 
 ## 8. MCP server
 
-The same `retrieval` + `storage` layers are wrapped in a stdio MCP server exposing tools like
-`search_code`, `find_symbol`, `find_refs`, `impact_of`, `impact_of_diff`, `explain_code`, `index_stats`, and
-`healthcheck`.
+The same `retrieval` + `storage` layers are wrapped in a stdio MCP server exposing
+`healthcheck`, `search_code`, `find_symbol`, `find_refs`, `impact_of`, `impact_of_diff`,
+`explain_code`, `architecture_overview`, `path_between`, `describe_symbol`, and `index_stats`.
 
 Current implementation:
 

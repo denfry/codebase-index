@@ -13,8 +13,8 @@ or `pipx` (isolated):
 pip install codebase-index        # or: pipx install codebase-index
 ```
 
-To pin an exact version or grab an unreleased commit, install from a GitHub tag
-instead: `pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@v1.8.0"`.
+To pin an exact version: `pip install codebase-index==1.9.0`. To try an unreleased
+commit, install from git: `pip install "codebase-index @ git+https://github.com/denfry/codebase-index.git@main"`.
 
 Then run `codebase-index init` inside your project and `codebase-index index` to build
 the first index. In Claude Code you can instead install the plugin
@@ -74,16 +74,12 @@ Yes. Run:
 codebase-index mcp --root /path/to/repo
 ```
 
-The stdio MCP server exposes:
+The stdio MCP server exposes eleven tools (`src/codebase_index/mcp/server.py`):
 
-- `healthcheck`
-- `search_code`
-- `find_symbol`
-- `find_refs`
-- `impact_of`
-- `impact_of_diff`
-- `explain_code`
-- `index_stats`
+- `healthcheck`, `index_stats`
+- `search_code`, `explain_code`, `find_symbol`, `find_refs`
+- `impact_of`, `impact_of_diff`
+- `architecture_overview`, `path_between`, `describe_symbol`
 
 See [MCP.md](MCP.md) for schema and client config templates.
 
@@ -158,27 +154,41 @@ Yes. Use any of these methods:
 1. **`.codeindexignore`** — Tool-specific ignore file (highest priority)
 2. **`.gitignore`** — Standard git ignore file
 3. **`.claudeignore`** — Claude-specific ignore file
-4. **Configuration** — `extra_ignore` patterns in `.codeindex.json`
+4. **Configuration** — `extra_ignore` patterns in
+   `.claude/cache/codebase-index/config.json` (written by `init`; see
+   `examples/config.example.json`)
 
 ## Is it production-ready?
 
-Yes — `codebase-index` is released as **v1.8.0**. The core indexing and search
-functionality is implemented and tested. The current `1.8.0` package includes:
+Yes, with the caveats below. The current line is **1.9.x** (see
+[CHANGELOG.md](../CHANGELOG.md)). It ships:
 
-- Hybrid FTS/path/symbol/vector retrieval with benchmark-calibrated lexical expansion
-  and bounded fuzzy identifier matching
-- Import/call/reference graph expansion, intent-directed graph discovery, and `impact`
-- Diff-aware blast-radius analysis for tracked working-tree changes
-- Optional local embeddings, with external embeddings gated behind explicit opt-in
-- Hooks and watch mode for freshness
-- Multi-CLI setup for Claude Code, Codex CLI, and OpenCode
+- Hybrid FTS5 / path / symbol retrieval with optional local embeddings; rank fusion that
+  scores cross-retriever agreement at file level; evidence-calibrated source priors,
+  lexical expansion, and fuzzy identifier fallback (1.8.0, 1.9.0).
+- Tree-sitter symbols for twelve Tier-A languages; import / call / reference /
+  inheritance graph with per-edge confidence; `refs`, `path`, `describe`,
+  `architecture`, `impact`, and diff-aware `diff-impact` (1.5.0, 1.7.0).
+- Token-budgeted, skeletonized retrieval packets with bounded `recommended_reads`.
+- CLI, Claude Code skill and plugin, Codex CLI and OpenCode resources, and a stdio MCP
+  server sharing one service layer.
+- A reproducible retrieval evaluation with leak-free git-derived ground truth,
+  multi-corpus pooling, and paired significance tests; every 1.9.0 ranking change had
+  to pass it.
 
-Known gaps: the public benchmark suite is still small, the MCP server needs
-verified client-specific docs and progressive/paged results, and the graph is
-closer to an import/call/reference graph than a full framework-aware code
-intelligence graph.
+Known gaps: the graph is import/call/reference-level rather than framework-aware, MCP
+client configs are templates not yet verified against each client release, and there
+is no LLM-driven task-level evaluation yet. See [ROADMAP.md](ROADMAP.md).
 
-See [ROADMAP.md](../ROADMAP.md) for the full milestone plan.
+## How does it differ from Aider's repo-map, Cursor, or plain grep?
+
+Grep is exact text matching with no ranking, symbol awareness or read plan. A repo map
+is a query-independent context blob fed to one agent. Cursor is an IDE with its own
+proprietary index. `codebase-index` is a queryable, local, scriptable retrieval and
+graph layer any shell-capable or MCP agent can call. The trade-offs, including when
+each alternative is the better choice, are in [COMPARISON.md](COMPARISON.md); the
+measured comparison against grep-style and repo-map-style baselines is in
+[BENCHMARKS.md](BENCHMARKS.md).
 
 ## How do I contribute?
 

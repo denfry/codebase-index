@@ -70,7 +70,7 @@ _TYPE_CATEGORY = {
 # Files that may be *changed* by a commit but are never a useful retrieval answer.
 _ANSWER_DENY_RE = re.compile(
     r"(?:^|/)(?:"
-    r"CHANGELOG[^/]*|HISTORY[^/]*|NEWS[^/]*|"
+    r"CHANGELOG[^/]*|CHANGES[^/]*|HISTORY[^/]*|NEWS[^/]*|RELEASE[_-]?NOTES[^/]*|"
     r"package-lock\.json|yarn\.lock|poetry\.lock|Cargo\.lock|requirements\.lock|"
     r"go\.sum|Gemfile\.lock|pnpm-lock\.yaml"
     r")$",
@@ -90,9 +90,13 @@ _ANSWER_EXTS = frozenset(
 # Benchmark scaffolding: a commit touching it must not become a benchmark query.
 _SCAFFOLD_RE = re.compile(r"(?:^|/)tests/(?:eval|benchmark_)", re.I)
 
-# Corpus documents that paraphrase commit subjects. `harness` applies these on top
-# of its own excludes whenever a git-derived query set is evaluated.
-CHANGELOG_EXCLUDES = ("CHANGELOG*", "HISTORY*", "NEWS*", "**/CHANGELOG*")
+# Corpus documents that paraphrase commit subjects. `harness.build_corpus_index`
+# applies these on top of its own excludes for every corpus, so a changelog can
+# never be the top lexical hit for a query that is literally its own line item.
+CHANGELOG_EXCLUDES = (
+    "CHANGELOG*", "CHANGES*", "HISTORY*", "NEWS*", "RELEASE_NOTES*", "RELEASE-NOTES*",
+    "**/CHANGELOG*", "**/CHANGES*", "**/HISTORY*", "**/NEWS*",
+)
 
 _WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]*")
 
