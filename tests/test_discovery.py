@@ -49,3 +49,27 @@ def test_walk_sniffs_only_file_prefix(tmp_path, monkeypatch):
     found = _walk_paths(root)
 
     assert "big.py" in found
+
+
+def test_walk_skips_symlinks_pointing_outside_root(tmp_path):
+    import os
+
+    import pytest
+
+    outside = tmp_path / "outside"
+    (outside / "bazel-out").mkdir(parents=True)
+    (outside / "bazel-out" / "gen.py").write_text("x = 1\n", encoding="utf-8")
+    (outside / "leak.py").write_text("SECRET = 1\n", encoding="utf-8")
+
+    root = tmp_path / "proj"
+    (root / "src").mkdir(parents=True)
+    (root / "src" / "keep.py").write_text("y = 2\n", encoding="utf-8")
+    try:
+        os.symlink(outside / "bazel-out", root / "bazel-out", target_is_directory=True)
+        os.symlink(outside / "leak.py", root / "src" / "leak.py")
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks unavailable")
+
+    found = _walk_paths(root)
+
+    assert set(found) == {"src/keep.py"}

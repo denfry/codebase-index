@@ -27,13 +27,18 @@ def walk(root: Path, config: Config) -> Iterator[Candidate]:
     gate = PathGate(root, config)
 
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [
-            d for d in dirnames if gate.dir_allowed(d, _rel(root, Path(dirpath) / d))
-        ]
+        kept: list[str] = []
+        for d in dirnames:
+            rel_dir = _rel(root, Path(dirpath) / d)
+            if rel_dir is not None and gate.dir_allowed(d, rel_dir):
+                kept.append(d)
+        dirnames[:] = kept
 
         for fname in filenames:
             abs_path = Path(dirpath) / fname
             rel = _rel(root, abs_path)
+            if rel is None:
+                continue
 
             if gate.name_rejection(rel):
                 continue
@@ -62,5 +67,15 @@ def walk(root: Path, config: Config) -> Iterator[Candidate]:
             )
 
 
-def _rel(root: Path, path: Path) -> str:
-    return path.resolve().relative_to(root).as_posix()
+def _rel(root: Path, path: Path) -> Optional[str]:
+    """Root-relative POSIX path of ``path``, or ``None`` if it resolves outside ``root``.
+
+    ``os.walk`` lists symlinks lexically under ``root``, but a link may point elsewhere
+    (Bazel's ``bazel-out`` convenience symlinks are the common case). Such entries are
+    skipped rather than raising, matching the gate's "resolves outside the repository"
+    exclusion.
+    """
+    try:
+        return path.resolve().relative_to(root).as_posix()
+    except (ValueError, OSError):
+        return None

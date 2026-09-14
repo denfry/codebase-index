@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- `codebase-index index` no longer crashes with `ValueError: ... is not in the subpath of ...`
+  when the repository contains a symlink that points outside the tree (for example Bazel's
+  `bazel-out` / `bazel-bin` convenience symlinks). Such entries are now skipped by the walker,
+  matching the gate's existing "resolves outside the repository" exclusion (#27).
+
 ## [1.10.0] - 2026-09-02
 
 Ranking release. 1.9.0's own diagnostics showed that a perfect reranker over the
