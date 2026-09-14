@@ -11,8 +11,9 @@ All notable changes to this project are documented here. The format is based on
 Evidence release. Everything an agent reads through `codebase-index` is now identified
 by the exact bytes of the span it came from, can be re-checked against the working tree
 at any later moment, is not resent to a session that already holds it, and is reported
-when it changes. 2.0.0 also carries the unreleased 1.10.0 ranking work below and the
-community-readiness work merged from #26.
+when it changes. 2.0.0 also includes the community-readiness work merged from #26 and the
+1.10.0 ranking release, which was prepared but never published on its own; its notes are in
+the [1.10.0 section of the changelog](https://github.com/denfry/codebase-index/blob/main/CHANGELOG.md#1100---2026-09-02).
 
 Measured by replaying this repository's own history in sessions of 5 to 87 tasks
 (`tests/eval/results/2026-09-14-evidence-memory.md`): memory withheld **zero stale
@@ -140,6 +141,9 @@ snippets reproduced the 1.10.0 packet on every task, and snippet tokens fell by
   `NEWS*` and `RELEASE_NOTES*` are refused as answers and excluded from the corpus.
 
 ## [1.10.0] - 2026-09-02
+
+Never published on its own: tagged releases go from 1.9.0 straight to 2.0.0, which
+includes everything in this section.
 
 Ranking release. 1.9.0's own diagnostics showed that a perfect reranker over the
 candidate pool it already generated would score MRR 0.902 against the 0.577 actually
@@ -769,9 +773,9 @@ Pooled over 305 queries (Python, Java, TypeScript), v1.8.0 → 1.9.0:
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/v2.0.0...HEAD
 [2.0.0]: https://github.com/denfry/codebase-index/compare/v1.9.0...v2.0.0
-[1.10.0]: https://github.com/denfry/codebase-index/compare/v1.9.0...v1.10.0
+[1.10.0]: https://github.com/denfry/codebase-index/compare/v1.9.0...abb67df
 [1.9.0]: https://github.com/denfry/codebase-index/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/denfry/codebase-index/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/denfry/codebase-index/compare/v1.6.0...v1.7.0
