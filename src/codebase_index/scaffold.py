@@ -166,10 +166,15 @@ Use the local codebase index before scanning repository files.
 
 Skill resources: `{rel.as_posix()}`
 
-Run `codebase-index search "<query>" --json` for general questions, or use
-`symbol`, `refs`, `impact`, and `graph` for symbol lookup, references, change
-impact, and HTML graph export. Search/read commands auto-build the index when
-it is missing; run `codebase-index update` when responses report stale data.
+Run `codebase-index search "<query>" --session <tag> --json` for general
+questions, or use `symbol`, `refs`, `impact`, and `graph` for symbol lookup,
+references, change impact, and HTML graph export. Use one session tag per
+conversation: unchanged evidence you already received comes back as
+`reused: true`, and evidence that changed is listed under `memory.invalidated`.
+Before relying on something read earlier, run
+`codebase-index verify --session <tag> --json`. Search/read commands auto-build
+the index when it is missing; run `codebase-index update` when responses report
+stale data.
 """
     return _upsert_managed_block(root / "AGENTS.md", content)
 
@@ -192,6 +197,9 @@ codebase-index search "$ARGUMENTS" --json
 
 Use `symbol <name>`, `refs <name>`, or `impact <file|symbol>` when those match
 the request. If the index is missing, run `codebase-index index` first.
+
+In a multi-step task pass `--session <tag>` (one tag per conversation) and check
+evidence read earlier with `codebase-index verify --session <tag> --json`.
 """,
         encoding="utf-8",
     )

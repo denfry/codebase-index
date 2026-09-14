@@ -16,9 +16,17 @@ Each result can contain:
 - `snippet`
 - `skeletonized`
 - `elided_lines`
+- `stale` — only when the index text no longer matches the file
+- `reused` — only with `--session`, when `snippet` was withheld because this
+  session already received that exact text from unchanged source
 
 `recommended_reads` is the read plan. Start with its first one to three entries
 and use exact line ranges.
+
+With `--session`, the packet also carries `memory`: `session`, `reused`,
+`tokens_saved`, and `invalidated` — references to evidence the session received
+that has since changed. `available: false` means nothing was withheld. See
+[memory.md](memory.md).
 
 `pagination.has_more` and `pagination.next_offset` indicate additional results.
 Prefer a more specific command or a larger token budget before paging.
