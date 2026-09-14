@@ -11,8 +11,8 @@ Only the latest minor release line receives security fixes.
 
 | Version | Supported |
 |---|---|
-| 1.9.x (latest) | Yes |
-| < 1.9 | No — upgrade with `pip install -U codebase-index` |
+| 2.0.x (latest) | Yes |
+| < 2.0 | No — upgrade with `pip install -U codebase-index` |
 
 ## Reporting a vulnerability
 

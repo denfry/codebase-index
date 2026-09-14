@@ -6,7 +6,64 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-14
+
+Evidence release. Everything an agent reads through `codebase-index` is now identified
+by the exact bytes of the span it came from, can be re-checked against the working tree
+at any later moment, is not resent to a session that already holds it, and is reported
+when it changes. 2.0.0 also carries the unreleased 1.10.0 ranking work below and the
+community-readiness work merged from #26.
+
+Measured by replaying this repository's own history in sessions of 5 to 87 tasks
+(`tests/eval/results/2026-09-14-evidence-memory.md`): memory withheld **zero stale
+snippets** at every session length while the locator-based alternative withheld
+15–54, change notices had precision 1.000 and recall 0.87–0.97, restoring withheld
+snippets reproduced the 1.10.0 packet on every task, and snippet tokens fell by
+4–11%. The savings are modest on this corpus; correctness is the deliverable. Summary in
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md#evidence-memory), design in
+[docs/MEMORY.md](docs/MEMORY.md).
+
 ### Added
+
+- **Evidence identity and verification.** Every delivered snippet carries a
+  `path:start-end@hash` reference whose hash covers the span's exact bytes under the
+  indexer's line model. `codebase-index verify [REF ...] [--session TAG] [--strict]`
+  and MCP `verify_evidence` re-check references against the working tree, read-only
+  and without an index, returning `valid`, `relocated`, `changed`, `ambiguous`,
+  `deleted`, `excluded` or `unreadable` per reference and `all_valid` overall.
+  References are untrusted input: absolute paths, drive letters, `..` and NUL are
+  rejected before any filesystem access.
+- **Session-scoped evidence reuse.** `search`/`explain --session TAG` (MCP `session`)
+  name one agent context. A snippet the session already received from byte-identical
+  source comes back as `snippet: null, reused: true`; evidence the session received
+  that has since changed is listed once under `memory.invalidated`. The evidence hook
+  runs after ranking, budgeting and pagination are final, so memory can never change
+  which results are returned. Sessions are only ever named explicitly.
+- **Stale marking without a session.** A result whose index text no longer matches the
+  working tree carries `stale: true`. Derived index text (config-key chunks, Markdown
+  section summaries) is never flagged: a mismatch counts only when the file's current
+  hash differs from the one the index was built from.
+- **`memory.sqlite`**, a content-free ledger next to the index: hashes, paths, line
+  numbers, token counts and timestamps; session tags stored hashed. Separate from
+  `index.sqlite` so rebuilds and `clean` leave it alone and ledger writes never queue
+  behind an update. A newer schema is refused, a corrupt file is moved aside, lock
+  contention degrades to no-memory output. `memory gc` and `memory clear` are CLI-only
+  maintenance, deliberately absent from the skill wrappers and MCP, like `clean`.
+  `stats`, `doctor`, `index_stats` and `healthcheck` gain an additive `memory` block.
+  Config: `memory.enabled` (true), `memory.retention_days` (14),
+  `memory.max_deliveries` (50 000); `CBX_MEMORY=0` restores 1.10.0 output byte for byte.
+- **Sequential real-history benchmark** (`tests/eval/memory_eval.py`) with an oracle
+  independent of memory's hashing, plus repository-lifecycle, security and
+  stale-context test suites driven by real git: branch switches, detached HEAD,
+  worktrees, dirty trees, renames, rebases, CRLF checkouts, and excluded content that
+  must never reach the ledger.
+- **Upgrade test from a real 1.10.0 index.** The index schema stays at version 3; an
+  upgraded project keeps its index, a 1.x config loads with memory defaults, and
+  `memory.sqlite` attaches on the first `--session` call.
+- **Skill: Find → Trace → Verify → Predict.** The agent wrappers pass one session tag
+  per conversation, run `verify` before relying on evidence gathered earlier, and
+  document `reused`, `stale` and `memory.invalidated` in `references/memory.md`.
+  `verify` joins the wrapper whitelists; `memory` does not.
 
 - **Public baseline benchmark.** `tests/eval/run_baselines.py` compares the index with
   a disciplined `rg` + 80-line-window agent and with repo-map-style context on
@@ -30,6 +87,15 @@ All notable changes to this project are documented here. The format is based on
   manifest, and `docs/COMMUNITY_AUDIT.md` / `docs/COMMUNITY_LAUNCH.md`.
 
 ### Changed
+
+- **Indexing gates are shared with later working-tree reads.** Evidence validation
+  reads files long after they were indexed, so the walker and the validator now go
+  through one `PathGate`; a parity test asserts the gate admits exactly the files a
+  walk indexes. The resolved on-disk path is gated again, so a symlink or a
+  differently-cased path on a case-insensitive filesystem cannot reach a file the
+  walker would never have indexed.
+- MCP `schema_version` stays **1**: every payload change is an added field. No CLI
+  command, flag or JSON field is removed or retyped.
 
 - **Read plan is bounded.** `recommended_reads` entries are capped at
   `retrieval.max_read_lines` (default 120) and carry `truncated: true` plus
@@ -704,6 +770,7 @@ Pooled over 305 queries (Python, Java, TypeScript), v1.8.0 → 1.9.0:
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
 [Unreleased]: https://github.com/denfry/codebase-index/compare/v1.10.0...HEAD
+[2.0.0]: https://github.com/denfry/codebase-index/compare/v1.9.0...v2.0.0
 [1.10.0]: https://github.com/denfry/codebase-index/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/denfry/codebase-index/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/denfry/codebase-index/compare/v1.7.0...v1.8.0

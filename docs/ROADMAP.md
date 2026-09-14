@@ -1,7 +1,7 @@
 # Roadmap
 
 `codebase-index` is becoming the evidence layer between a coding agent and a
-repository: **Find implementations, Trace behavior, Predict change impact.**
+repository: **Find implementations, Trace behavior, Verify evidence, Predict change impact.**
 
 This document separates shipped capability from forward work. Roadmap entries
 are not product claims until they appear under `[Unreleased]` or a tagged
@@ -31,6 +31,13 @@ release in `CHANGELOG.md`.
 - Diff-aware impact aggregation over tracked working-tree changes.
 - Graph-coverage honesty for partially supported languages.
 - Diagnostics that surface stale indexes and incomplete graph extraction.
+
+### Verify
+
+- Evidence references (`path:start-end@hash`) minted for every delivered snippet.
+- `verify` and MCP `verify_evidence`: byte-identity verdicts against the working tree.
+- Session-scoped reuse: byte-identical snippets withheld, changed evidence reported.
+- Content-free `memory.sqlite`, gated by the same path rules as the indexer.
 
 ### Delivery and trust
 

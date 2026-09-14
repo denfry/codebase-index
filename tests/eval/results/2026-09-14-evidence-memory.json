@@ -1,0 +1,960 @@
+{
+  "corpora": {
+    "codebase-index": {
+      "tasks": 87,
+      "rows": [
+        {
+          "sessions_k": "1",
+          "tasks": 87,
+          "sessions": 87,
+          "deliveries": 643,
+          "distinct_atoms": 643,
+          "B_tokens": 98222,
+          "C_tokens": 98222,
+          "S_tokens": 98222,
+          "A_tokens": 1928268,
+          "A_mem_tokens": 1928268,
+          "C_token_reuse_rate": 0.0,
+          "C_evidence_reuse_rate": 0.0,
+          "C_saved_per_task": 0.0,
+          "C_saved_per_task_ci95": [
+            0.0,
+            0.0
+          ],
+          "C_stale_withheld": 0,
+          "C_validated_reuse_rate": null,
+          "S_token_reuse_rate": 0.0,
+          "S_stale_withheld": 0,
+          "S_stale_reuse_rate": null,
+          "S_stale_gold": 0,
+          "notices": 0,
+          "invalidation_precision": null,
+          "invalidation_recall": null,
+          "page_mismatches": 0,
+          "stale_flags": 0,
+          "B_packet_tokens": 172851,
+          "C_packet_tokens": 174475,
+          "useful_B_equals_C": 0.27586206896551724,
+          "useful_S": 0.27586206896551724,
+          "survival": {
+            "1": [
+              null,
+              0
+            ],
+            "5": [
+              null,
+              0
+            ],
+            "10": [
+              null,
+              0
+            ],
+            "20": [
+              null,
+              0
+            ]
+          },
+          "memory_ms_p50": 4.046000000016647,
+          "memory_ms_p95": 6.0016000006726244,
+          "store_bytes": 409600,
+          "examples": []
+        },
+        {
+          "sessions_k": "5",
+          "tasks": 87,
+          "sessions": 18,
+          "deliveries": 643,
+          "distinct_atoms": 591,
+          "B_tokens": 98222,
+          "C_tokens": 94358,
+          "S_tokens": 87633,
+          "A_tokens": 1928268,
+          "A_mem_tokens": 1291386,
+          "C_token_reuse_rate": 0.03933945551913014,
+          "C_evidence_reuse_rate": 0.05132192846034215,
+          "C_saved_per_task": 44.41379310344828,
+          "C_saved_per_task_ci95": [
+            12.89655172413793,
+            88.70114942528735
+          ],
+          "C_stale_withheld": 0,
+          "C_validated_reuse_rate": 1.0,
+          "S_token_reuse_rate": 0.10780680499277148,
+          "S_stale_withheld": 15,
+          "S_stale_reuse_rate": 0.28846153846153844,
+          "S_stale_gold": 2,
+          "notices": 36,
+          "invalidation_precision": 1.0,
+          "invalidation_recall": 0.972972972972973,
+          "page_mismatches": 0,
+          "stale_flags": 0,
+          "B_packet_tokens": 172851,
+          "C_packet_tokens": 171263,
+          "useful_B_equals_C": 0.27586206896551724,
+          "useful_S": 0.27011494252873564,
+          "survival": {
+            "1": [
+              0.9714912280701754,
+              456
+            ],
+            "5": [
+              0.8198757763975155,
+              161
+            ],
+            "10": [
+              0.65,
+              100
+            ],
+            "20": [
+              0.075,
+              40
+            ]
+          },
+          "memory_ms_p50": 7.953800000905176,
+          "memory_ms_p95": 15.853599999900325,
+          "store_bytes": 372736,
+          "examples": [
+            {
+              "kind": "notice_fn",
+              "path": "docs/FAQ.md",
+              "sha": "f481fe4537198f01",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 7,
+              "oracle_occurrences": 0
+            }
+          ]
+        },
+        {
+          "sessions_k": "10",
+          "tasks": 87,
+          "sessions": 9,
+          "deliveries": 643,
+          "distinct_atoms": 563,
+          "B_tokens": 98222,
+          "C_tokens": 92565,
+          "S_tokens": 83756,
+          "A_tokens": 1928268,
+          "A_mem_tokens": 1084176,
+          "C_token_reuse_rate": 0.05759402170593146,
+          "C_evidence_reuse_rate": 0.08242612752721618,
+          "C_saved_per_task": 65.02298850574712,
+          "C_saved_per_task_ci95": [
+            30.862068965517242,
+            111.6896551724138
+          ],
+          "C_stale_withheld": 0,
+          "C_validated_reuse_rate": 1.0,
+          "S_token_reuse_rate": 0.1472786137525198,
+          "S_stale_withheld": 20,
+          "S_stale_reuse_rate": 0.2597402597402597,
+          "S_stale_gold": 2,
+          "notices": 49,
+          "invalidation_precision": 1.0,
+          "invalidation_recall": 0.9245283018867925,
+          "page_mismatches": 0,
+          "stale_flags": 0,
+          "B_packet_tokens": 172851,
+          "C_packet_tokens": 169696,
+          "useful_B_equals_C": 0.27586206896551724,
+          "useful_S": 0.27586206896551724,
+          "survival": {
+            "1": [
+              0.9737373737373738,
+              495
+            ],
+            "5": [
+              0.9025069637883009,
+              359
+            ],
+            "10": [
+              0.7680412371134021,
+              194
+            ],
+            "20": [
+              0.3977272727272727,
+              88
+            ]
+          },
+          "memory_ms_p50": 10.889099999985774,
+          "memory_ms_p95": 23.312499999519787,
+          "store_bytes": 368640,
+          "examples": [
+            {
+              "kind": "notice_fn",
+              "path": "docs/ROADMAP.md",
+              "sha": "150e7a90d1bec372",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 49,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "docs/FAQ.md",
+              "sha": "f481fe4537198f01",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 7,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "docs/PRODUCT_UPGRADE_PLAN.md",
+              "sha": "2bbea03fa8d909c6",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 1,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "docs/PRODUCT_UPGRADE_PLAN.md",
+              "sha": "802af198a186890e",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 141,
+              "oracle_occurrences": 0
+            }
+          ]
+        },
+        {
+          "sessions_k": "25",
+          "tasks": 87,
+          "sessions": 4,
+          "deliveries": 643,
+          "distinct_atoms": 542,
+          "B_tokens": 98222,
+          "C_tokens": 92268,
+          "S_tokens": 79119,
+          "A_tokens": 1928268,
+          "A_mem_tokens": 827557,
+          "C_token_reuse_rate": 0.06061778420313168,
+          "C_evidence_reuse_rate": 0.1104199066874028,
+          "C_saved_per_task": 68.4367816091954,
+          "C_saved_per_task_ci95": [
+            34.51724137931034,
+            114.25287356321839
+          ],
+          "C_stale_withheld": 0,
+          "C_validated_reuse_rate": 1.0,
+          "S_token_reuse_rate": 0.19448799657917779,
+          "S_stale_withheld": 30,
+          "S_stale_reuse_rate": 0.30303030303030304,
+          "S_stale_gold": 4,
+          "notices": 69,
+          "invalidation_precision": 1.0,
+          "invalidation_recall": 0.92,
+          "page_mismatches": 0,
+          "stale_flags": 0,
+          "B_packet_tokens": 172851,
+          "C_packet_tokens": 169861,
+          "useful_B_equals_C": 0.27586206896551724,
+          "useful_S": 0.27011494252873564,
+          "survival": {
+            "1": [
+              0.9778225806451613,
+              496
+            ],
+            "5": [
+              0.9225806451612903,
+              465
+            ],
+            "10": [
+              0.8777506112469438,
+              409
+            ],
+            "20": [
+              0.7800687285223368,
+              291
+            ]
+          },
+          "memory_ms_p50": 19.56839999911608,
+          "memory_ms_p95": 38.00810000029742,
+          "store_bytes": 368640,
+          "examples": [
+            {
+              "kind": "notice_fn",
+              "path": "docs/ROADMAP.md",
+              "sha": "039513f1b18c1364",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 38,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "docs/ROADMAP.md",
+              "sha": "e15784d0fcfe16d1",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 45,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "docs/ROADMAP.md",
+              "sha": "150e7a90d1bec372",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 49,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "docs/FAQ.md",
+              "sha": "f481fe4537198f01",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 7,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "docs/PRODUCT_UPGRADE_PLAN.md",
+              "sha": "2bbea03fa8d909c6",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 1,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "docs/PRODUCT_UPGRADE_PLAN.md",
+              "sha": "802af198a186890e",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 141,
+              "oracle_occurrences": 0
+            }
+          ]
+        },
+        {
+          "sessions_k": "all",
+          "tasks": 87,
+          "sessions": 1,
+          "deliveries": 643,
+          "distinct_atoms": 473,
+          "B_tokens": 98222,
+          "C_tokens": 87634,
+          "S_tokens": 64318,
+          "A_tokens": 1928268,
+          "A_mem_tokens": 544122,
+          "C_token_reuse_rate": 0.10779662397426239,
+          "C_evidence_reuse_rate": 0.19440124416796267,
+          "C_saved_per_task": 121.70114942528735,
+          "C_saved_per_task_ci95": [
+            76.34482758620689,
+            178.7816091954023
+          ],
+          "C_stale_withheld": 0,
+          "C_validated_reuse_rate": 1.0,
+          "S_token_reuse_rate": 0.34517725153224327,
+          "S_stale_withheld": 54,
+          "S_stale_reuse_rate": 0.3157894736842105,
+          "S_stale_gold": 6,
+          "notices": 128,
+          "invalidation_precision": 1.0,
+          "invalidation_recall": 0.8707482993197279,
+          "page_mismatches": 0,
+          "stale_flags": 0,
+          "B_packet_tokens": 172851,
+          "C_packet_tokens": 166456,
+          "useful_B_equals_C": 0.27586206896551724,
+          "useful_S": 0.26436781609195403,
+          "survival": {
+            "1": [
+              0.9754464285714286,
+              448
+            ],
+            "5": [
+              0.9249448123620309,
+              453
+            ],
+            "10": [
+              0.8778280542986425,
+              442
+            ],
+            "20": [
+              0.8408071748878924,
+              446
+            ]
+          },
+          "memory_ms_p50": 36.57369999928051,
+          "memory_ms_p95": 68.22990000000573,
+          "store_bytes": 352256,
+          "examples": [
+            {
+              "kind": "notice_fn",
+              "path": "docs/ROADMAP.md",
+              "sha": "039513f1b18c1364",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 38,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "docs/ROADMAP.md",
+              "sha": "e15784d0fcfe16d1",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 45,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "docs/ROADMAP.md",
+              "sha": "150e7a90d1bec372",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 49,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "README.md",
+              "sha": "2353492da96d24f4",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 145,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "ROADMAP.md",
+              "sha": "1faec12ba8307640",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 49,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "ROADMAP.md",
+              "sha": "1fb676dca4d76452",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 37,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "ROADMAP.md",
+              "sha": "7b40838bf03af0d5",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 43,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "ROADMAP.md",
+              "sha": "ab9b49fee3918b21",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 31,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "ROADMAP.md",
+              "sha": "c64353992a16f581",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 25,
+              "oracle_occurrences": 0
+            },
+            {
+              "kind": "notice_fn",
+              "path": "docs/ROADMAP.md",
+              "sha": "afb56398eb3173a5",
+              "memory_state": null,
+              "oracle_known": true,
+              "oracle_line_start": 33,
+              "oracle_occurrences": 0
+            }
+          ]
+        }
+      ],
+      "search_ms_p50": 31.602200000634184,
+      "search_ms_p95": 55.25899999884132,
+      "update_ms_p50": 154.52839999852586
+    }
+  },
+  "pooled": [
+    {
+      "sessions_k": "1",
+      "tasks": 87,
+      "sessions": 87,
+      "deliveries": 643,
+      "distinct_atoms": 643,
+      "B_tokens": 98222,
+      "C_tokens": 98222,
+      "S_tokens": 98222,
+      "A_tokens": 1928268,
+      "A_mem_tokens": 1928268,
+      "C_token_reuse_rate": 0.0,
+      "C_evidence_reuse_rate": 0.0,
+      "C_saved_per_task": 0.0,
+      "C_saved_per_task_ci95": [
+        0.0,
+        0.0
+      ],
+      "C_stale_withheld": 0,
+      "C_validated_reuse_rate": null,
+      "S_token_reuse_rate": 0.0,
+      "S_stale_withheld": 0,
+      "S_stale_reuse_rate": null,
+      "S_stale_gold": 0,
+      "notices": 0,
+      "invalidation_precision": null,
+      "invalidation_recall": null,
+      "page_mismatches": 0,
+      "stale_flags": 0,
+      "B_packet_tokens": 172851,
+      "C_packet_tokens": 174475,
+      "useful_B_equals_C": 0.27586206896551724,
+      "useful_S": 0.27586206896551724,
+      "survival": {
+        "1": [
+          null,
+          0
+        ],
+        "5": [
+          null,
+          0
+        ],
+        "10": [
+          null,
+          0
+        ],
+        "20": [
+          null,
+          0
+        ]
+      },
+      "memory_ms_p50": 4.046000000016647,
+      "memory_ms_p95": 6.0016000006726244,
+      "store_bytes": 409600,
+      "examples": []
+    },
+    {
+      "sessions_k": "5",
+      "tasks": 87,
+      "sessions": 18,
+      "deliveries": 643,
+      "distinct_atoms": 591,
+      "B_tokens": 98222,
+      "C_tokens": 94358,
+      "S_tokens": 87633,
+      "A_tokens": 1928268,
+      "A_mem_tokens": 1291386,
+      "C_token_reuse_rate": 0.03933945551913014,
+      "C_evidence_reuse_rate": 0.05132192846034215,
+      "C_saved_per_task": 44.41379310344828,
+      "C_saved_per_task_ci95": [
+        12.89655172413793,
+        88.70114942528735
+      ],
+      "C_stale_withheld": 0,
+      "C_validated_reuse_rate": 1.0,
+      "S_token_reuse_rate": 0.10780680499277148,
+      "S_stale_withheld": 15,
+      "S_stale_reuse_rate": 0.28846153846153844,
+      "S_stale_gold": 2,
+      "notices": 36,
+      "invalidation_precision": 1.0,
+      "invalidation_recall": 0.972972972972973,
+      "page_mismatches": 0,
+      "stale_flags": 0,
+      "B_packet_tokens": 172851,
+      "C_packet_tokens": 171263,
+      "useful_B_equals_C": 0.27586206896551724,
+      "useful_S": 0.27011494252873564,
+      "survival": {
+        "1": [
+          0.9714912280701754,
+          456
+        ],
+        "5": [
+          0.8198757763975155,
+          161
+        ],
+        "10": [
+          0.65,
+          100
+        ],
+        "20": [
+          0.075,
+          40
+        ]
+      },
+      "memory_ms_p50": 7.953800000905176,
+      "memory_ms_p95": 15.853599999900325,
+      "store_bytes": 372736,
+      "examples": [
+        {
+          "kind": "notice_fn",
+          "path": "docs/FAQ.md",
+          "sha": "f481fe4537198f01",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 7,
+          "oracle_occurrences": 0
+        }
+      ]
+    },
+    {
+      "sessions_k": "10",
+      "tasks": 87,
+      "sessions": 9,
+      "deliveries": 643,
+      "distinct_atoms": 563,
+      "B_tokens": 98222,
+      "C_tokens": 92565,
+      "S_tokens": 83756,
+      "A_tokens": 1928268,
+      "A_mem_tokens": 1084176,
+      "C_token_reuse_rate": 0.05759402170593146,
+      "C_evidence_reuse_rate": 0.08242612752721618,
+      "C_saved_per_task": 65.02298850574712,
+      "C_saved_per_task_ci95": [
+        30.862068965517242,
+        111.6896551724138
+      ],
+      "C_stale_withheld": 0,
+      "C_validated_reuse_rate": 1.0,
+      "S_token_reuse_rate": 0.1472786137525198,
+      "S_stale_withheld": 20,
+      "S_stale_reuse_rate": 0.2597402597402597,
+      "S_stale_gold": 2,
+      "notices": 49,
+      "invalidation_precision": 1.0,
+      "invalidation_recall": 0.9245283018867925,
+      "page_mismatches": 0,
+      "stale_flags": 0,
+      "B_packet_tokens": 172851,
+      "C_packet_tokens": 169696,
+      "useful_B_equals_C": 0.27586206896551724,
+      "useful_S": 0.27586206896551724,
+      "survival": {
+        "1": [
+          0.9737373737373738,
+          495
+        ],
+        "5": [
+          0.9025069637883009,
+          359
+        ],
+        "10": [
+          0.7680412371134021,
+          194
+        ],
+        "20": [
+          0.3977272727272727,
+          88
+        ]
+      },
+      "memory_ms_p50": 10.889099999985774,
+      "memory_ms_p95": 23.312499999519787,
+      "store_bytes": 368640,
+      "examples": [
+        {
+          "kind": "notice_fn",
+          "path": "docs/ROADMAP.md",
+          "sha": "150e7a90d1bec372",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 49,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "docs/FAQ.md",
+          "sha": "f481fe4537198f01",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 7,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "docs/PRODUCT_UPGRADE_PLAN.md",
+          "sha": "2bbea03fa8d909c6",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 1,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "docs/PRODUCT_UPGRADE_PLAN.md",
+          "sha": "802af198a186890e",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 141,
+          "oracle_occurrences": 0
+        }
+      ]
+    },
+    {
+      "sessions_k": "25",
+      "tasks": 87,
+      "sessions": 4,
+      "deliveries": 643,
+      "distinct_atoms": 542,
+      "B_tokens": 98222,
+      "C_tokens": 92268,
+      "S_tokens": 79119,
+      "A_tokens": 1928268,
+      "A_mem_tokens": 827557,
+      "C_token_reuse_rate": 0.06061778420313168,
+      "C_evidence_reuse_rate": 0.1104199066874028,
+      "C_saved_per_task": 68.4367816091954,
+      "C_saved_per_task_ci95": [
+        34.51724137931034,
+        114.25287356321839
+      ],
+      "C_stale_withheld": 0,
+      "C_validated_reuse_rate": 1.0,
+      "S_token_reuse_rate": 0.19448799657917779,
+      "S_stale_withheld": 30,
+      "S_stale_reuse_rate": 0.30303030303030304,
+      "S_stale_gold": 4,
+      "notices": 69,
+      "invalidation_precision": 1.0,
+      "invalidation_recall": 0.92,
+      "page_mismatches": 0,
+      "stale_flags": 0,
+      "B_packet_tokens": 172851,
+      "C_packet_tokens": 169861,
+      "useful_B_equals_C": 0.27586206896551724,
+      "useful_S": 0.27011494252873564,
+      "survival": {
+        "1": [
+          0.9778225806451613,
+          496
+        ],
+        "5": [
+          0.9225806451612903,
+          465
+        ],
+        "10": [
+          0.8777506112469438,
+          409
+        ],
+        "20": [
+          0.7800687285223368,
+          291
+        ]
+      },
+      "memory_ms_p50": 19.56839999911608,
+      "memory_ms_p95": 38.00810000029742,
+      "store_bytes": 368640,
+      "examples": [
+        {
+          "kind": "notice_fn",
+          "path": "docs/ROADMAP.md",
+          "sha": "039513f1b18c1364",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 38,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "docs/ROADMAP.md",
+          "sha": "e15784d0fcfe16d1",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 45,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "docs/ROADMAP.md",
+          "sha": "150e7a90d1bec372",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 49,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "docs/FAQ.md",
+          "sha": "f481fe4537198f01",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 7,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "docs/PRODUCT_UPGRADE_PLAN.md",
+          "sha": "2bbea03fa8d909c6",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 1,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "docs/PRODUCT_UPGRADE_PLAN.md",
+          "sha": "802af198a186890e",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 141,
+          "oracle_occurrences": 0
+        }
+      ]
+    },
+    {
+      "sessions_k": "all",
+      "tasks": 87,
+      "sessions": 1,
+      "deliveries": 643,
+      "distinct_atoms": 473,
+      "B_tokens": 98222,
+      "C_tokens": 87634,
+      "S_tokens": 64318,
+      "A_tokens": 1928268,
+      "A_mem_tokens": 544122,
+      "C_token_reuse_rate": 0.10779662397426239,
+      "C_evidence_reuse_rate": 0.19440124416796267,
+      "C_saved_per_task": 121.70114942528735,
+      "C_saved_per_task_ci95": [
+        76.34482758620689,
+        178.7816091954023
+      ],
+      "C_stale_withheld": 0,
+      "C_validated_reuse_rate": 1.0,
+      "S_token_reuse_rate": 0.34517725153224327,
+      "S_stale_withheld": 54,
+      "S_stale_reuse_rate": 0.3157894736842105,
+      "S_stale_gold": 6,
+      "notices": 128,
+      "invalidation_precision": 1.0,
+      "invalidation_recall": 0.8707482993197279,
+      "page_mismatches": 0,
+      "stale_flags": 0,
+      "B_packet_tokens": 172851,
+      "C_packet_tokens": 166456,
+      "useful_B_equals_C": 0.27586206896551724,
+      "useful_S": 0.26436781609195403,
+      "survival": {
+        "1": [
+          0.9754464285714286,
+          448
+        ],
+        "5": [
+          0.9249448123620309,
+          453
+        ],
+        "10": [
+          0.8778280542986425,
+          442
+        ],
+        "20": [
+          0.8408071748878924,
+          446
+        ]
+      },
+      "memory_ms_p50": 36.57369999928051,
+      "memory_ms_p95": 68.22990000000573,
+      "store_bytes": 352256,
+      "examples": [
+        {
+          "kind": "notice_fn",
+          "path": "docs/ROADMAP.md",
+          "sha": "039513f1b18c1364",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 38,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "docs/ROADMAP.md",
+          "sha": "e15784d0fcfe16d1",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 45,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "docs/ROADMAP.md",
+          "sha": "150e7a90d1bec372",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 49,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "README.md",
+          "sha": "2353492da96d24f4",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 145,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "ROADMAP.md",
+          "sha": "1faec12ba8307640",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 49,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "ROADMAP.md",
+          "sha": "1fb676dca4d76452",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 37,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "ROADMAP.md",
+          "sha": "7b40838bf03af0d5",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 43,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "ROADMAP.md",
+          "sha": "ab9b49fee3918b21",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 31,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "ROADMAP.md",
+          "sha": "c64353992a16f581",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 25,
+          "oracle_occurrences": 0
+        },
+        {
+          "kind": "notice_fn",
+          "path": "docs/ROADMAP.md",
+          "sha": "afb56398eb3173a5",
+          "memory_state": null,
+          "oracle_known": true,
+          "oracle_line_start": 33,
+          "oracle_occurrences": 0
+        }
+      ]
+    }
+  ]
+}

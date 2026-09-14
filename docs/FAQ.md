@@ -160,7 +160,7 @@ Yes. Use any of these methods:
 
 ## Is it production-ready?
 
-Yes, with the caveats below. The current line is **1.9.x** (see
+Yes, with the caveats below. The current line is **2.0.x** (see
 [CHANGELOG.md](../CHANGELOG.md)). It ships:
 
 - Hybrid FTS5 / path / symbol retrieval with optional local embeddings; rank fusion that

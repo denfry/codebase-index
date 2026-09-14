@@ -41,7 +41,16 @@ The MCP server exposes the same retrieval contract as the CLI.
 | `architecture_overview` | Modules, god nodes, surprising connections, suggested questions | `architecture` |
 | `path_between` | Shortest dependency/call path between two symbols or files | `path` |
 | `describe_symbol` | Node card: definition, callers, callees, centrality, module | `describe` |
-| `index_stats` | Return counts, language coverage, graph stats, freshness | `stats` |
+| `index_stats` | Return counts, language coverage, graph stats, freshness, memory | `stats` |
+| `verify_evidence` | Re-check `path:start-end@hash` references and/or a session's deliveries against the working tree (read-only) | `verify` |
+
+`search_code` and `explain_code` accept an optional `session` string. With a session, a
+snippet the session already received from byte-identical source comes back as
+`snippet: null, reused: true`, and evidence the session received that has since changed is
+listed once under `memory.invalidated`. Without a session the payload is unchanged except
+for `stale: true` on a result whose index text no longer matches the working tree. Memory
+maintenance (`memory gc`, `memory clear`) is CLI-only, like `clean`. See
+[MEMORY.md](MEMORY.md).
 
 ## Output contract
 
@@ -69,7 +78,7 @@ branch on the contract without sniffing the shape:
   version. The current version is **1**.
 - `tool` (string) — the emitting tool name (`search_code`, `find_symbol`,
   `find_refs`, `impact_of`, `impact_of_diff`, `explain_code`, `architecture_overview`,
-  `path_between`, `describe_symbol`, `index_stats`, `healthcheck`).
+  `path_between`, `describe_symbol`, `index_stats`, `healthcheck`, `verify_evidence`).
 - The no-index / error path carries the same envelope plus an `"error"` field.
 
 Rules:
@@ -165,7 +174,8 @@ same trust boundaries:
 - Done: `codebase-index mcp --root <path>` CLI entrypoint.
 - Done: `healthcheck`, `search_code`, `find_symbol`, `find_refs`, `impact_of`,
   `impact_of_diff`, `explain_code`, `architecture_overview`, `path_between`,
-  `describe_symbol`, and `index_stats` tools.
+  `describe_symbol`, `index_stats`, and `verify_evidence` tools; `session` on `search_code`
+  and `explain_code`; additive `memory` block in `index_stats` and `healthcheck`.
 - Done: focused tests for tool registration, missing-index behavior, config resolution, and run entrypoint.
 - Done: explicit `schema_version` + `tool` envelope on every structured tool payload (including the
   error path), asserted by `tests/test_mcp_server.py` and `tests/test_mcp_golden.py`.

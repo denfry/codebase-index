@@ -178,6 +178,41 @@ Every ranking signal that ships has an ablation row. 1.9.0 removed two signals
 that could not demonstrate a benefit and rejected several plausible ones
 (IDF-weighted coverage, stemming, graph propagation, MMR, a file-length prior).
 
+## Evidence memory
+
+`tests/eval/memory_eval.py` replays a repository's own history: for every git-derived
+query the tree is checked out at the parent of the query's commit, the index is updated
+incrementally, one retrieval call is made, and consecutive tasks form sessions of K
+tasks. Every arm is computed from the same packet, so arms differ only in what they do
+with evidence: **B** is the 1.10.0 packet, **C** is 2.0 evidence memory (withhold only
+byte-identical evidence, report changes), **S** is the unsafe alternative (withhold by
+locator without checking the source), **A** rereads whole files. The oracle keeps the
+text each session was actually handed and is independent of memory's hashing.
+
+Logged run over this repository, 87 tasks (`tests/eval/results/2026-09-14-evidence-memory.md`):
+
+| K (tasks / session) | snippet tokens B → C | saved / task, 95% CI | C stale withheld | S saved | S stale withheld | change notices P / R |
+|---|---|---|---|---|---|---|
+| 5 | 98 222 → 94 358 (−3.9%) | 44 [13, 89] | 0 | −10.8% | 15 | 1.000 / 0.973 |
+| 10 | 98 222 → 92 565 (−5.8%) | 65 [31, 112] | 0 | −14.7% | 20 | 1.000 / 0.925 |
+| 25 | 98 222 → 92 268 (−6.1%) | 68 [35, 114] | 0 | −19.4% | 30 | 1.000 / 0.920 |
+| all | 98 222 → 87 634 (−10.8%) | 122 [76, 179] | 0 | −34.5% | 54 | 1.000 / 0.871 |
+
+What this does and does not show:
+
+- **Correctness is the result.** Across every session length, memory withheld zero
+  stale snippets and every change notice was correct (precision 1.000). The unsafe
+  arm saves two to three times more tokens and pays for it with 15–54 stale
+  withholdings per run, six of which hide a gold answer at K = all.
+- **Token savings are modest**, 4–11% of snippet tokens at 44–122 tokens per task on
+  this corpus. Restoring withheld snippets reproduced the B packet on every task (0
+  page mismatches), and `useful@budget` is identical for B and C.
+- **Cost:** memory adds 8–37 ms p50 per call (K = 5 … all) on a 31.6 ms p50 search;
+  the store stayed under 410 KB.
+- One corpus, one language. The number to watch on other repositories is stale
+  withheld, which must stay at zero; the savings figure will vary with how often a
+  session revisits the same files.
+
 ## Claims that must NOT be made
 
 Do not write, imply, or ship any of these until a run with published logs exists:
