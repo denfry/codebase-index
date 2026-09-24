@@ -25,8 +25,8 @@
       "line_start": 4,
       "path": "src/auth/token.py",
       "rank": 1,
-      "reason": "in src/auth/ · 2 callers · source prior +0.08",
-      "score": 2.313,
+      "reason": "in src/auth/ · file named after a query term · 2 callers · source prior +0.08",
+      "score": 2.513,
       "skeletonized": false,
       "snippet": "def refresh_access_token(refresh_token: str) -> str:",
       "symbols": [

@@ -28,6 +28,11 @@ _DEGREE_SCALE = 0.03
 _DEGREE_CAP = 0.08
 
 
+def _stem(path: str) -> str:
+    name = path.rsplit("/", 1)[-1]
+    return name.split(".", 1)[0].lower()
+
+
 def rerank(
     candidates: list[Candidate],
     *,
@@ -75,6 +80,9 @@ def rerank(
         if any(t in c.path.lower() for t in terms):
             bonus += 0.05
             reasons.append(f"in {c.path.rsplit('/', 1)[0] or '.'}/")
+        if tuning.stem_match and not demoted and _stem(c.path) in terms:
+            bonus += tuning.stem_match_weight
+            reasons.append("file named after a query term")
 
         if c.in_degree:
             bonus += min(_DEGREE_CAP, math.log1p(c.in_degree) * _DEGREE_SCALE)
@@ -91,7 +99,9 @@ def rerank(
             bonus += min(_DEGREE_CAP, math.log1p(c.in_degree + c.out_degree) * (_DEGREE_SCALE / 2))
 
         if tuning.source_priors and ("/" in c.path or "\\" in c.path):
-            prior = source_role_prior(c.path, query=query, intent=intent)
+            prior = source_role_prior(
+                c.path, query=query, intent=intent, extended=tuning.resource_priors
+            )
             if prior:
                 bonus += prior
                 reasons.append(f"source prior {prior:+.2f}")

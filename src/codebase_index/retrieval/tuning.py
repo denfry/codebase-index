@@ -157,6 +157,46 @@ class RetrievalTuning:
     truth from commits, which touch tests. 0.5 is the only setting that improves
     both partitions (+0.015 test-answer, +0.020 implementation-answer)."""
 
+    resource_priors: bool = True
+    """Extend the source priors past code/test/docs: localisation catalogues and
+    workflow artifacts (review diffs, patches, agent scratch directories) are
+    demoted to the level of generated code.
+
+    Found on a Minecraft monorepo: for "how does the town treasury work" the page
+    held the English and Russian language files (every UI string about the treasury
+    lives there) and five review diffs of the commits that built it, while the
+    SavedData class the question was about fell off the page.
+
+    A wider variant also stripped data files (`.json`, `.yml`) of the implementation
+    bonus; it cost TerraForge a query whose answer is `.github/workflows/release.yml`
+    and was dropped: configuration is sometimes the answer."""
+
+    stem_match: bool = True
+    """Credit a file whose name *is* one of the query terms (`Treasury.java` for
+    "how does the treasury store items"). Name co-occurrence deliberately gives a
+    single matched term nothing, and the symbol bonus only fires for symbol-level
+    hits, so a file-level chunk of the class named after the subject got no credit
+    for it."""
+
+    stem_match_weight: float = 0.20
+    """Bonus for a file stem equal to a query term; see `stem_match`.
+
+    Swept 0.10 / 0.20 / 0.30 over 342 queries on six query sets: 0.20 improved or
+    held every corpus; 0.30 added recall on two and cost terra-incognita MRR."""
+
+    candidate_pool_floor: int = 20
+    """Minimum candidate pool when the pool is over-fetched (multiplier > 1)."""
+
+    question_pool_floor: int = 40
+    """Candidate-pool floor for a question-form query (see `intent.is_question`).
+
+    On 24 natural-language questions over a 5.9k-file monorepo, a 40-deep pool
+    raised MRR 0.436 -> 0.472 and recall@10 0.750 -> 0.833: the class a question
+    paraphrases is often ranked 20-40 by every retriever and only the reranker's
+    name signals can lift it. On 318 commit-subject queries a 40-deep pool was
+    MRR-neutral (-0.009, p=0.36) at +17 ms p50, so the wider pool is spent only
+    where it pays. 0 disables it."""
+
     # --- selection, continued -----------------------------------------------
     max_per_file: int = 1
     """Hits from one file kept in place before the rest are pushed to the tail.
@@ -199,6 +239,9 @@ class RetrievalTuning:
             # and it kept up to three hits from any one file.
             candidate_pool_multiplier=1,
             max_per_file=3,
+            resource_priors=False,
+            stem_match=False,
+            question_pool_floor=0,
         )
 
     @classmethod
@@ -210,7 +253,10 @@ class RetrievalTuning:
         better than the release it replaces. Both must keep working, so a later
         default change can never silently redefine its own comparison point.
         """
-        return cls(name_cooccurrence=False, max_per_file=3)
+        return cls(
+            name_cooccurrence=False, max_per_file=3,
+            resource_priors=False, stem_match=False, question_pool_floor=0,
+        )
 
 
     def without(self, flag: str) -> RetrievalTuning:

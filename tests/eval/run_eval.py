@@ -56,6 +56,8 @@ ABLATABLE = (
     "dedup",
     "source_priors",
     "file_agreement",
+    "resource_priors",
+    "stem_match",
 )
 
 # Rows are looked up by label rather than position, so adding a variant cannot

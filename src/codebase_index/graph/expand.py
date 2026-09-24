@@ -7,7 +7,8 @@ Direction semantics:
 
 Target resolution: an exact file path -> a file node (seeded together with all
 symbols defined in that file, so importers AND subclassers surface). Otherwise a
-symbol name -> all symbol nodes with that name. A path suffix is the last resort.
+symbol name -> all symbol nodes with that name, or a qualified `Owner.member` ->
+that type's members. A path suffix is the last resort.
 """
 
 from __future__ import annotations
@@ -17,7 +18,13 @@ import sqlite3
 from collections import deque
 from typing import Optional
 
-from ..models import GraphCoverage, ImpactNode, ImpactResponse, IndexFreshness
+from ..models import (
+    GraphCoverage,
+    ImpactNode,
+    ImpactResponse,
+    IndexFreshness,
+    unmatched_coverage,
+)
 from ..storage import repo
 
 
@@ -76,7 +83,7 @@ def _seed_nodes(conn: sqlite3.Connection, target: str) -> list[tuple[str, int]]:
         seeds += [("symbol", int(s["id"])) for s in repo.symbols_in_file(conn, int(frow["id"]))]
         return seeds
 
-    sym_rows = repo.symbols_by_name(conn, target, exact=True)
+    sym_rows, _member = repo.symbols_for_target(conn, target)
     if sym_rows:
         return [("symbol", int(r["id"])) for r in sym_rows]
 
@@ -211,11 +218,16 @@ def walk_impact(
     return sorted(nodes.values(), key=_impact_sort_key)
 
 
+def target_paths(conn: sqlite3.Connection, target: str) -> list[str]:
+    """The file path(s) a refs/impact target resolves to."""
+    return _target_paths(conn, target)
+
+
 def _target_paths(conn: sqlite3.Connection, target: str) -> list[str]:
     """The file path(s) the target resolves to, for coverage classification."""
     if repo.file_by_path(conn, target) is not None:
         return [target]
-    sym_rows = repo.symbols_by_name(conn, target, exact=True)
+    sym_rows, _member = repo.symbols_for_target(conn, target)
     if sym_rows:
         return [r["path"] for r in sym_rows]
     suffix = repo.files_with_suffix(conn, target)
@@ -242,5 +254,9 @@ def impact_lookup(
     return ImpactResponse(
         target=target, direction=direction, depth=depth,
         index=_freshness(conn), nodes=nodes, files=files,
-        coverage=GraphCoverage.for_paths(_target_paths(conn, target)),
+        coverage=(
+            GraphCoverage.for_paths(paths)
+            if (paths := _target_paths(conn, target))
+            else unmatched_coverage(target)
+        ),
     )

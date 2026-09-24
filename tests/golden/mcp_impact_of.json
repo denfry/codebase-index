@@ -16,6 +16,7 @@
     "head_commit": "<SHA>",
     "stale": false
   },
+  "modules": [],
   "nodes": [
     {
       "distance": 1,

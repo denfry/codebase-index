@@ -137,7 +137,7 @@ def path_payload(conn: sqlite3.Connection, src: str, dst: str) -> dict:
 def describe_payload(conn: sqlite3.Connection, query: str) -> dict:
     """A node card: definition(s), callers, callees, centrality, module, god status."""
     base = {"query": query, "index": _freshness(conn)}
-    sym_rows = repo.symbols_by_name(conn, query, exact=True)
+    sym_rows, _member = repo.symbols_for_target(conn, query)
     if not sym_rows:
         return {**base, "found": False,
                 "reason": f"No symbol named `{query}` is indexed. Try `search` or `symbol`."}
@@ -160,9 +160,15 @@ def describe_payload(conn: sqlite3.Connection, query: str) -> dict:
     primary_row = max(sym_rows, key=lambda r: int(r["in_degree"]) + int(r["out_degree"]))
     primary_id = int(primary_row["id"])
 
+    from ..retrieval.searchers import refs_lookup
+
+    # Same resolution as `refs`: for `Owner.member`, or a name several types share,
+    # only the sites that belong to these definitions, each naming its caller.
     callers = [
-        {"path": r["path"], "line": r["line"], "confidence": r["confidence"]}
-        for r in repo.refs_for_name(conn, query)
+        {"path": s.path, "line": s.line, "confidence": s.confidence,
+         "caller": s.caller, "target": s.target}
+        for s in refs_lookup(conn, query, kind="callers").sites
+        if s.kind == "call"
     ]
     callees = []
     for e in repo.outgoing_edges(conn, "symbol", primary_id):
@@ -175,7 +181,7 @@ def describe_payload(conn: sqlite3.Connection, query: str) -> dict:
     module = primary_row["path"].rsplit("/", 1)[0] if "/" in primary_row["path"] else "(root)"
     god = _god_rank(conn, primary_row["name"], primary_row["path"])
 
-    return {
+    card = {
         **base,
         "found": True,
         "definitions": definitions,
@@ -185,6 +191,60 @@ def describe_payload(conn: sqlite3.Connection, query: str) -> dict:
                     "out_degree": int(primary_row["out_degree"])},
         "callers": callers,
         "callees": callees,
+    }
+    if primary_row["kind"] in _TYPE_KINDS:
+        card.update(_type_card(conn, primary_id))
+    return card
+
+
+_TYPE_KINDS = frozenset({"class", "interface", "enum", "struct", "trait", "impl", "record"})
+_TYPE_CARD_CAP = 40
+
+
+def _type_card(conn: sqlite3.Connection, type_id: int) -> dict:
+    """Members of a type and the graph around them, as one card.
+
+    A class is rarely called itself: its methods are. Describing `TreasuryService`
+    by the class node alone gave zero callers and zero callees, so the card lists
+    the members and folds their edges from and to code *outside* the type.
+    """
+    members = repo.members_of(conn, type_id)
+    member_ids = {int(m["id"]) for m in members}
+    inside = member_ids | {type_id}
+    used_by: dict[tuple[str, str, str], dict] = {}
+    uses: dict[tuple[str, str], dict] = {}
+    for m in members:
+        for e in repo.incoming_edges(conn, "symbol", int(m["id"])):
+            if e["src_kind"] == "symbol" and int(e["src_id"]) in inside:
+                continue
+            src = _node_ref(conn, e["src_kind"], int(e["src_id"]))
+            if src is None:
+                continue
+            key = (src["path"], src["name"], m["name"])
+            used_by.setdefault(key, {"member": m["name"], "caller": src["name"],
+                                     "path": src["path"], "line": e["line"],
+                                     "confidence": e["confidence"]})
+        for e in repo.outgoing_edges(conn, "symbol", int(m["id"])):
+            if e["dst_id"] is None or (e["dst_kind"] == "symbol" and int(e["dst_id"]) in inside):
+                continue
+            dst = _node_ref(conn, e["dst_kind"], int(e["dst_id"]))
+            if dst is None:
+                continue
+            uses.setdefault((dst["path"], dst["name"]), {**dst, "edge_type": e["edge_type"],
+                                  "confidence": e["confidence"]})
+    return {
+        "members": [
+            {"name": m["name"], "kind": m["kind"], "line_start": m["line_start"],
+             "line_end": m["line_end"], "signature": m["signature"],
+             "in_degree": int(m["in_degree"])}
+            for m in members
+        ],
+        "used_by": sorted(used_by.values(), key=lambda r: (r["path"], r["line"] or 0))[
+            :_TYPE_CARD_CAP],
+        "used_by_total": len(used_by),
+        "uses": sorted(uses.values(), key=lambda r: (r["path"], r["line_start"] or 0))[
+            :_TYPE_CARD_CAP],
+        "uses_total": len(uses),
     }
 
 

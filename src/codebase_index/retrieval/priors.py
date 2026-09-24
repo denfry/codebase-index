@@ -22,6 +22,9 @@ class SourceRole(str, Enum):
     TEST = "test"
     DOCUMENTATION = "documentation"
     GENERATED_VENDOR_BUILD = "generated_vendor_build"
+    # Extended roles (RetrievalTuning.resource_priors).
+    LOCALIZATION = "localization"
+    WORKFLOW_ARTIFACT = "workflow_artifact"
     UNKNOWN = "unknown"
 
 
@@ -107,6 +110,22 @@ _IMPLEMENTATION_SUFFIXES = frozenset(
         ".zig",
     }
 )
+# Localisation catalogues repeat every user-facing noun of a feature, so they match
+# natural-language questions about it better than the code does.
+_LOCALIZATION_DIRS = frozenset({"i18n", "l10n", "lang", "langs", "locale", "locales",
+                                "translations"})
+_LOCALIZATION_SUFFIXES = frozenset({".po", ".pot", ".xliff", ".xlf", ".strings", ".resx",
+                                    ".arb", ".ftl"})
+_LOCALE_STEM_RE = re.compile(r"[a-z]{2,3}(?:[_-][a-z]{2,4})?", re.IGNORECASE)
+# Suffixes a catalogue under a localisation directory may have.
+_DATA_SUFFIXES = frozenset({".json", ".json5", ".yaml", ".yml", ".toml", ".xml", ".csv",
+                            ".tsv", ".properties", ".mcmeta", ".nbt", ".snbt", ".ini",
+                            ".cfg", ".conf"})
+# Review diffs, patches and the scratch directories agents write plans into: they
+# quote the code (and the question's words) without being the code.
+_WORKFLOW_SUFFIXES = frozenset({".diff", ".patch", ".orig", ".rej"})
+_KEPT_DOT_DIRS = frozenset({".github", ".gitlab", ".circleci", ".devcontainer",
+                            ".husky", ".config"})
 _MINIFIED_NAME_RE = re.compile(r"(?:^|[._-])min(?:ified)?(?:[._-]|$)", re.IGNORECASE)
 _TEST_QUERY_RE = re.compile(
     r"\b(?:test|tests|testing|e2e|spec|specs|fixture|fixtures|mock|mocks|pytest|jest)\b",
@@ -134,6 +153,8 @@ _ROLE_PRIORS = {
     # answer of all. Measured as quality-neutral on the benchmark corpora, so this
     # value preserves the role ordering rather than chasing a score.
     SourceRole.GENERATED_VENDOR_BUILD: -0.25,
+    SourceRole.LOCALIZATION: -0.25,
+    SourceRole.WORKFLOW_ARTIFACT: -0.25,
     SourceRole.UNKNOWN: 0.0,
 }
 _TEST_QUERY_PRIOR = 0.05
@@ -146,7 +167,7 @@ def _path_parts(path: str) -> tuple[str, ...]:
     return tuple(part for part in PurePosixPath(normalized).parts if part not in {"", "."})
 
 
-def classify_source_role(path: str) -> SourceRole:
+def classify_source_role(path: str, *, extended: bool = False) -> SourceRole:
     """Classify *path* into a small set of ranking roles.
 
     Generated/vendor/build markers take precedence over test markers: a vendored
@@ -168,6 +189,17 @@ def classify_source_role(path: str) -> SourceRole:
         or any(part in _GENERATED_DIRS for part in lowered[:-1])
     ):
         return SourceRole.GENERATED_VENDOR_BUILD
+    if extended:
+        if suffix in _WORKFLOW_SUFFIXES or any(
+            part.startswith(".") and len(part) > 1 and part not in _KEPT_DOT_DIRS
+            for part in lowered[:-1]
+        ):
+            return SourceRole.WORKFLOW_ARTIFACT
+        if suffix in _LOCALIZATION_SUFFIXES or (
+            any(part in _LOCALIZATION_DIRS for part in lowered[:-1])
+            and (suffix in _DATA_SUFFIXES or _LOCALE_STEM_RE.fullmatch(stem))
+        ):
+            return SourceRole.LOCALIZATION
     if is_test_path(path):
         return SourceRole.TEST
     if (
@@ -206,6 +238,7 @@ def source_role_prior(
     *,
     query: str = "",
     intent: Intent | str | None = None,
+    extended: bool = False,
 ) -> float:
     """Return a deterministic, bounded additive score for a source path.
 
@@ -214,7 +247,7 @@ def source_role_prior(
     or vendored paths stay penalized even when they contain tests.
     """
 
-    role = classify_source_role(path)
+    role = classify_source_role(path, extended=extended)
     if role is SourceRole.TEST and is_test_intent(query, intent):
         return _TEST_QUERY_PRIOR
     return _ROLE_PRIORS[role]

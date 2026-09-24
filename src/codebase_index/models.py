@@ -65,6 +65,9 @@ class SymbolResponse(BaseModel):
     query: str
     index: IndexFreshness
     symbols: list[SymbolDef] = []
+    # Prefix matches left out because exact matches exist (`symbol --exact` drops
+    # them silently; the default reports how many there were).
+    more_prefix_matches: int = 0
 
 
 class GraphCoverage(BaseModel):
@@ -109,13 +112,38 @@ class GraphCoverage(BaseModel):
         )
 
 
+def unmatched_coverage(target: str) -> GraphCoverage:
+    """Coverage for a target that matched no indexed definition or call site.
+
+    An empty answer here says nothing about the code: the name may be misspelt,
+    external, or in an unindexed file. Mark it partial so it is not read as
+    "no callers".
+    """
+    return GraphCoverage(
+        partial=True,
+        reason=(
+            f"No indexed definition or call site matches '{target}'. Check the name "
+            "with `symbol` (use Owner.member for a method), or confirm with Grep."
+        ),
+    )
+
+
 class RefSite(BaseModel):
     path: str
     line: int
+    # 'call' | 'reference' (a non-call use, e.g. a Rust enum variant in a `match`
+    # pattern) | 'definition' | 'possible_call' (an Owner.member query: a same-named
+    # call whose receiver the index cannot type, so it may or may not be this one).
     kind: str
     # Audit trail (see edges.confidence): 'extracted' = exact match, 'inferred' =
     # heuristic, 'ambiguous' = unresolved/non-unique. Defaults keep older callers valid.
     confidence: str = "extracted"
+    # The definition a call resolved to ('TownService.refresh'), and what it was
+    # called on ('TownService', 'town', 'this'); tell same-named methods apart.
+    target: Optional[str] = None
+    receiver: Optional[str] = None
+    # The function or method the call sits in ('TreasuryService.withdraw').
+    caller: Optional[str] = None
 
 
 class RefsResponse(BaseModel):
@@ -143,3 +171,6 @@ class ImpactResponse(BaseModel):
     nodes: list[ImpactNode] = []
     files: list[str] = []           # distinct affected files, ranked
     coverage: GraphCoverage = Field(default_factory=GraphCoverage)
+    # Build-system modules the target is defined in, with the build-file lines that
+    # name them (graph/modules.py). Filled by the CLI, which knows the repo root.
+    modules: list[dict] = []

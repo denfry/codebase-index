@@ -2,8 +2,9 @@
 
 `tests/fixtures/index-1.10.0/index.sqlite` was built by the released 1.10.0 code (commit
 abb67df) over `tests/fixtures/sample_repo`, not synthesised by 2.0, so these tests check the
-upgrade path users actually take. 2.0 leaves the index schema at version 3; evidence memory
-lives in its own `memory.sqlite`, so no reindex is needed.
+upgrade path users actually take. The index is on schema 3 while the code is on 4 (edges
+gained `dst_qualifier`): read commands keep answering from the old index in place, and the
+first `update` rebuilds it. Evidence memory lives in its own `memory.sqlite` and survives.
 """
 
 from __future__ import annotations
@@ -63,9 +64,9 @@ def _cli_json(root: Path, *args: str) -> dict:
     return json.loads(result.output)
 
 
-def test_fixture_is_a_real_1_10_index_on_the_current_schema(upgraded):
+def test_fixture_is_a_real_1_10_index_on_an_older_schema(upgraded):
     _root, db = upgraded
-    assert peek_schema_version(db) == 3 == SCHEMA_VERSION
+    assert peek_schema_version(db) == 3 < SCHEMA_VERSION
     conn = sqlite3.connect(db)
     try:
         assert conn.execute("SELECT COUNT(*) FROM files").fetchone()[0] == 6
@@ -73,15 +74,17 @@ def test_fixture_is_a_real_1_10_index_on_the_current_schema(upgraded):
         conn.close()
 
 
-def test_1x_index_is_used_in_place_without_a_rebuild(upgraded):
+def test_1x_index_answers_in_place_until_update_rebuilds_it(upgraded):
     root, db = upgraded
     built_at = _meta(db, "built_at")
     search = _cli_json(root, "search", "token", "--json")
     assert search["results"] and "memory" not in search
+    refs = _cli_json(root, "refs", "refresh_access_token", "--json")
+    assert any(site["kind"] == "call" for site in refs["sites"])  # no dst_qualifier column
+    assert _meta(db, "built_at") == built_at                       # reads never rebuild
     update = _cli_json(root, "--json", "update")
-    assert update["indexed"] == 0 and update["deleted"] == 0   # same bytes: nothing reparsed
-    assert _meta(db, "built_at") == built_at                     # the 1.x database survived
-    assert peek_schema_version(db) == 3
+    assert update["indexed"] == 6                                  # full rebuild on schema 4
+    assert peek_schema_version(db) == SCHEMA_VERSION
 
 
 def test_memory_attaches_to_an_upgraded_project(upgraded):

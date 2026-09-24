@@ -9,7 +9,8 @@ from typing import Optional
 
 # 2: chunks gained a denormalized `symbol_names` column (FTS symbol-name boost).
 # 3: edges gained a `confidence` column (extracted/inferred/ambiguous audit trail).
-SCHEMA_VERSION = 3
+# 4: edges gained a `dst_qualifier` column (call receiver, for Class.method resolution).
+SCHEMA_VERSION = 4
 
 
 class Database:

@@ -37,6 +37,24 @@ codebase-index describe "<file-or-symbol>" --json
 
 - `architecture` reads module analysis cached at index time.
 - `refs` finds definitions, calls, and graph-backed references.
+  For a method whose name several types share, pass `Owner.member`
+  (`TownService.refresh`, or `module::fn` for a top-level function); each site
+  names its `caller` and the `target` it resolved to. Calls the index cannot type
+  (`chest.holdings().take(..)`) come back as `possible_call`, nearest first, with
+  `coverage.partial: true`: read those before claiming a complete list.
+  `impact` and `symbol` accept the same form.
+  Filters: `--exclude-tests`, `--path <prefix>` (repeatable). `--compact` prints
+  `path:line kind caller -> target [confidence]`, one site per line.
+- `search`, `explain` and `impact` also take `--compact`: agent text instead of
+  JSON. For search/explain, each result is `path:start-end symbols` followed by up
+  to eight numbered lines that carry the match (rarer query words first);
+  evidence already sent to the session prints as `(already sent)`. For impact,
+  one `d<hops> path:line name via edge` line per node, after a
+  `# module ...` line naming the build files that depend on the target's module.
+- `symbol` returns exact matches alone when there are any and reports how many
+  prefix matches it left out (`more_prefix_matches`); `--exact` drops them.
+- `describe` on a class, enum, struct or trait also lists its `members` and
+  folds their edges into `used_by` / `uses` (code outside the type).
 - `impact` walks dependents (`up`), dependencies (`down`), or both.
 - `diff-impact` aggregates impact for tracked changes relative to a verified
   Git commit; new or excluded files are reported as unresolved.

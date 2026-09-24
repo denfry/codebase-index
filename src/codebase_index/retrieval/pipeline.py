@@ -14,10 +14,12 @@ from typing import Callable, Optional
 from ..config import Config
 from ..indexer.freshness import compute_freshness
 from . import searchers
+from ..output.redact import redact_snippet
 from .budget import apply_budget
 from .diversity import deduplicate, mmr_select
 from .fusion import fuse
-from .intent import detect_intent
+from .intent import detect_intent, is_question
+from .lexical import salient_terms
 from .rerank import rerank
 from .tuning import DEFAULT_TUNING, RetrievalTuning
 from .types import Confidence
@@ -185,6 +187,81 @@ def _bounded_read(entry: dict, max_lines: int) -> dict:
     }
 
 
+_MAX_HIT_LINES = 8
+_MAX_HIT_CHARS = 180
+
+
+_SUFFIXES = ("ing", "ed", "es", "s")
+
+
+def _display_stem(term: str) -> str:
+    for suffix in _SUFFIXES:
+        if term.endswith(suffix) and len(term) - len(suffix) >= 4:
+            return term[: -len(suffix)]
+    return term
+
+
+def _range_lines(conn: sqlite3.Connection, cand) -> tuple[int, list[str]]:
+    """(first line number, lines) of the candidate's full range.
+
+    A symbol-retriever candidate carries only its signature as `content`; the body
+    is in the chunk that covers it.
+    """
+    content = getattr(cand, "content", None) or ""
+    start, end = int(cand.line_start), int(cand.line_end)
+    lines = content.splitlines()
+    if len(lines) >= end - start + 1:
+        return start, lines
+    row = conn.execute(
+        "SELECT c.content, c.line_start FROM chunks c JOIN files f ON f.id = c.file_id "
+        "WHERE f.path = ? AND c.line_start <= ? AND c.line_end >= ? "
+        "ORDER BY c.line_end - c.line_start LIMIT 1",
+        (cand.path, start, end),
+    ).fetchone()
+    if row is None:
+        return start, lines
+    chunk = row[0].splitlines()
+    offset = start - int(row[1])
+    return start, chunk[offset:offset + (end - start + 1)]
+
+
+def _hit_lines(conn: sqlite3.Connection, cand, terms: tuple[str, ...]) -> list[list]:
+    """The candidate's lines an agent would cite, numbered: `[[line, text], ...]`.
+
+    What `grep -n` gives, restricted to a ranked candidate: its first line (the
+    signature or declaration) and the lines that contain a query term, rarer terms
+    weighing more, then back in file order. A snippet
+    without line numbers sends an agent back to grep for them before it can cite.
+    """
+    start, lines = _range_lines(conn, cand)
+    if not lines:
+        return []
+    lowered = [line.casefold() for line in lines]
+    # Display only, never ranking: "persisted" should light up `persist()`.
+    terms = tuple(dict.fromkeys(_display_stem(t) for t in terms if len(t) >= 3))
+    # A term on every other line ("town" in a town module) says little about
+    # which lines matter; weight each by how rarely it occurs in this range.
+    weight = {t: 1.0 / max(1, sum(t in low for low in lowered)) for t in terms}
+    scored: list[tuple[float, int]] = []
+    for i, low in enumerate(lowered):
+        score = sum(weight[t] for t in terms if t in low)
+        if score:
+            scored.append((score, i))
+    first = next((i for i, line in enumerate(lines) if line.strip()), 0)
+    picked = {first}
+    for _score, i in sorted(scored, key=lambda s: (-s[0], s[1])):
+        if len(picked) >= _MAX_HIT_LINES:
+            break
+        picked.add(i)
+    out = []
+    for i in sorted(picked):
+        text = redact_snippet(lines[i].strip())
+        if len(text) > _MAX_HIT_CHARS:
+            text = text[: _MAX_HIT_CHARS - 1] + "…"
+        out.append([start + i, text])
+    return out
+
+
 def search(
     conn: sqlite3.Connection,
     query: str,
@@ -203,6 +280,7 @@ def search(
     explain: bool = False,
     evidence: Optional[Callable[[dict, list], None]] = None,
     max_read_lines: int = 120,
+    hit_lines: bool = False,
 ) -> dict:
     tuning = tuning or DEFAULT_TUNING
     plan = detect_intent(query)
@@ -215,7 +293,10 @@ def search(
     # a tiny `limit` still leaves selection something to choose between; multiplier
     # 1 means "no over-fetch at all" and takes the page size verbatim.
     pool_mult = max(1, tuning.candidate_pool_multiplier)
-    pool_limit = fetch_limit if pool_mult == 1 else max(fetch_limit * pool_mult, 20)
+    floor = tuning.candidate_pool_floor
+    if tuning.question_pool_floor and is_question(query):
+        floor = max(floor, tuning.question_pool_floor)
+    pool_limit = fetch_limit if pool_mult == 1 else max(fetch_limit * pool_mult, floor)
     lists, weights = _run_retrievers(
         conn,
         query,
@@ -255,6 +336,10 @@ def search(
     all_results, all_recommended = apply_budget(
         ranked, token_budget=scaled_budget, compactor=compactor
     )
+    if hit_lines:
+        terms = salient_terms(query)
+        for result, cand in zip(all_results, ranked):
+            result["hits"] = _hit_lines(conn, cand, terms)
 
     # Paginate: slice results and filter recommended_reads to the current page.
     paginated = all_results[offset:offset + limit]

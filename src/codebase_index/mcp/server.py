@@ -210,14 +210,19 @@ def find_symbol(
 def find_refs(
     symbol: str,
     kind: str = "all",
+    exclude_tests: bool = False,
+    path: Optional[str] = None,
 ) -> str:
     """Find all references and callers of a symbol.
 
-    Returns call sites with file path and line number.
+    Returns call sites with file path, line number and the calling function.
 
     Args:
-        symbol: Symbol name whose references to find.
+        symbol: Symbol name, or `Owner.member` / `module::fn` to exclude same-named
+            members of other types.
         kind: "callers" for call edges only, "all" for any reference type.
+        exclude_tests: Drop sites in test files.
+        path: Keep only sites under this path prefix.
     """
     db_path, _ = _resolve_db()
     if not db_path.exists():
@@ -227,7 +232,10 @@ def find_refs(
     from ..storage.db import Database
 
     with Database(db_path) as db:
-        resp = refs_lookup(db.conn, symbol, kind=kind)
+        resp = refs_lookup(
+            db.conn, symbol, kind=kind, exclude_tests=exclude_tests,
+            paths=[path] if path else (),
+        )
     return _emit("find_refs", resp.model_dump())
 
 
