@@ -413,6 +413,10 @@ def search(
         help="Tag naming ONE agent context: evidence it already received and that is "
         "unchanged is not resent; changes to it are reported (docs/MEMORY.md).",
     ),
+    compact: bool = typer.Option(
+        False, "--compact",
+        help="Agent text: ranked locations with numbered matching lines, no JSON.",
+    ),
     json_out: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Hybrid ranked search; returns compact results + recommended_reads."""
@@ -439,9 +443,12 @@ def search(
     payload = search_payload(
         db_path, cfg, query, mode=mode, limit=limit, offset=offset,
         token_budget=token_budget, no_fallback=no_fallback, backend=backend, raw=raw,
-        session=session,
+        session=session, hit_lines=compact,
     )
 
+    if compact:
+        typer.echo(md_renderer.render_search_compact(payload))
+        return
     want_json = json_out or (ctx.obj and ctx.obj.get("json"))
     typer.echo(json_renderer.render(payload) if want_json else md_renderer.render(payload))
 
@@ -451,15 +458,25 @@ def symbol(
     ctx: typer.Context,
     name: str = typer.Argument(...),
     kind: Optional[str] = typer.Option(None, "--kind", help="Filter by symbol kind."),
-    exact: bool = typer.Option(False, "--exact"),
+    exact: bool = typer.Option(
+        False, "--exact", help="Only exact matches, even when there are none."
+    ),
+    session: Optional[str] = typer.Option(
+        None, "--session",
+        help="Accepted so one tag can go to every read command; this command returns "
+        "locations, not snippets, so there is nothing to withhold.",
+    ),
     json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
-    """Locate a symbol definition by name."""
+    """Locate a symbol definition by name (or `Owner.member`).
+
+    Exact matches come alone when there are any; otherwise prefix matches."""
     from .output import json as json_out
     from .output import markdown as md_out
     from .retrieval.searchers import symbol_lookup
     from .storage.db import Database
 
+    _checked_session(session)
     is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
     db_path, _cfg = _ensure_index(ctx)
 
@@ -473,20 +490,41 @@ def refs(
     ctx: typer.Context,
     symbol_name: str = typer.Argument(...),
     kind: str = typer.Option("all", "--kind", help="callers|all"),
+    exclude_tests: bool = typer.Option(
+        False, "--exclude-tests", help="Drop sites in test files."
+    ),
+    path: Optional[list[str]] = typer.Option(
+        None, "--path", help="Keep only sites under this path prefix (repeatable)."
+    ),
+    compact: bool = typer.Option(
+        False, "--compact",
+        help="One line per site (path:line kind caller -> target), no JSON envelope.",
+    ),
+    session: Optional[str] = typer.Option(
+        None, "--session",
+        help="Accepted so one tag can go to every read command; this command returns "
+        "locations, not snippets, so there is nothing to withhold.",
+    ),
     json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
-    """Find references / callers of a symbol."""
+    """Find references / callers of a symbol (a bare name or `Owner.member`)."""
     from .output import json as json_out
     from .output import markdown as md_out
     from .retrieval.searchers import refs_lookup
     from .storage.db import Database
 
+    _checked_session(session)
     is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
     db_path, _cfg = _ensure_index(ctx)
 
     with Database(db_path) as db:
-        resp = refs_lookup(db.conn, symbol_name, kind=kind)
-    typer.echo(json_out.render(resp) if is_json else md_out.render_refs(resp))
+        resp = refs_lookup(
+            db.conn, symbol_name, kind=kind, exclude_tests=exclude_tests, paths=path or ()
+        )
+    if compact:
+        typer.echo(md_out.render_refs_compact(resp))
+    else:
+        typer.echo(json_out.render(resp) if is_json else md_out.render_refs(resp))
 
 
 @app.command()
@@ -495,6 +533,14 @@ def impact(
     target: str = typer.Argument(..., help="File path or symbol name."),
     depth: int = typer.Option(2, "--depth"),
     direction: str = typer.Option("up", "--direction", help="up|down|both"),
+    compact: bool = typer.Option(
+        False, "--compact", help="One line per affected node, no JSON."
+    ),
+    session: Optional[str] = typer.Option(
+        None, "--session",
+        help="Accepted so one tag can go to every read command; this command returns "
+        "locations, not snippets, so there is nothing to withhold.",
+    ),
     json_flag: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Blast radius: what is affected if `target` changes (graph walk)."""
@@ -506,8 +552,16 @@ def impact(
     is_json = json_flag or bool(ctx.obj and ctx.obj.get("json"))
     db_path, _cfg = _ensure_index(ctx)
 
+    _checked_session(session)
+    from .graph.expand import target_paths
+    from .graph.modules import modules_for_paths
+
     with Database(db_path) as db:
         resp = impact_lookup(db.conn, target, depth=depth, direction=direction)
+        resp.modules = modules_for_paths(Path(_cfg.root), target_paths(db.conn, target))
+    if compact:
+        typer.echo(md_out.render_impact_compact(resp))
+        return
     typer.echo(json_out.render(resp) if is_json else md_out.render_impact(resp))
 
 
@@ -560,6 +614,10 @@ def explain(
         help="Tag naming ONE agent context: evidence it already received and that is "
         "unchanged is not resent; changes to it are reported (docs/MEMORY.md).",
     ),
+    compact: bool = typer.Option(
+        False, "--compact",
+        help="Agent text: ranked locations with numbered matching lines, no JSON.",
+    ),
     json_out: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ) -> None:
     """Intent-aware bundle for 'how does X work' / overview questions."""
@@ -574,9 +632,12 @@ def explain(
     payload = search_payload(
         db_path, cfg, normalize_explain_query(query), mode="hybrid", limit=10,
         token_budget=token_budget, no_fallback=False, backend=backend, raw=raw,
-        session=session,
+        session=session, hit_lines=compact,
     )
 
+    if compact:
+        typer.echo(md_renderer.render_search_compact(payload))
+        return
     want_json = json_out or (ctx.obj and ctx.obj.get("json"))
     typer.echo(json_renderer.render(payload) if want_json else md_renderer.render(payload))
 

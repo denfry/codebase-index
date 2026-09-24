@@ -2,14 +2,18 @@
   "callees": [],
   "callers": [
     {
+      "caller": "AdminUser.renew",
       "confidence": "extracted",
       "line": 11,
-      "path": "src/api/service.py"
+      "path": "src/api/service.py",
+      "target": "refresh_access_token"
     },
     {
+      "caller": "login",
       "confidence": "extracted",
       "line": 11,
-      "path": "src/auth/token.py"
+      "path": "src/auth/token.py",
+      "target": "refresh_access_token"
     }
   ],
   "definitions": [

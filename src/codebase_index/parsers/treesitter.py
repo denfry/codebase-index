@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from tree_sitter import Parser, Query, QueryCursor
@@ -37,6 +38,8 @@ def parse_file(lang: str, text: str) -> ParseResult:
     else:
         symbols = _extract_symbols_generic(root, source)
     edges = _extract_edges(root, symbols, source)
+    if lang == "rust":
+        edges.extend(_rust_path_references(root, symbols, source))
     if spec is not None:
         edges.extend(_extract_graph_edges(spec, grammar, root, symbols))
     del grammar
@@ -128,6 +131,9 @@ _DEF_KINDS: dict[str, str] = {
     "trait_declaration": "trait",  # php
     "enum_declaration": "enum",  # java, csharp, ts
     "enum_item": "enum",  # rust
+    "enum_variant": "variant",  # rust
+    "enum_constant": "variant",  # java
+    "enum_member_declaration": "variant",  # csharp
     "enum_specifier": "enum",  # c/cpp
     "impl_item": "impl",  # rust
     # modules / namespaces (NOT containers — a function inside stays a function, not a method)
@@ -310,8 +316,53 @@ def _extract_edges(root, symbols: list[Symbol], source: bytes) -> list[Edge]:
                 callee_name=_node_text(callee, source),
                 line=line,
                 src_symbol_index=_enclosing_symbol_index(symbols, line),
+                receiver=_receiver_name(node, source),
             )
         )
+    return edges
+
+
+# Where a Rust `Owner::name` path is a use of `name` rather than part of a longer
+# path, an import, or a call (calls are already edges).
+_RUST_PATH_SKIP_PARENTS = frozenset({
+    "scoped_identifier", "scoped_type_identifier", "use_declaration", "scoped_use_list",
+    "use_list", "use_as_clause", "use_wildcard",
+})
+
+
+def _rust_path_references(root, symbols: list[Symbol], source: bytes) -> list[Edge]:
+    """`CoreError::ObjectDamaged` in a pattern or a value, as a 'reference' edge.
+
+    Enum variants are matched (`Err(CoreError::ObjectDamaged(_)) =>`,
+    `if let Kind::A = ..`) and passed around (`Err(CoreError::Gone)`) far more often
+    than they are called, so without these edges `refs` finds the constructions of
+    a variant but not the code that handles it.
+    """
+    edges: list[Edge] = []
+    for node in _walk(root):
+        kind = _kind(node)
+        if kind not in {"scoped_identifier", "scoped_type_identifier"}:
+            continue
+        parent = node.parent
+        pkind = _kind(parent) if parent is not None else ""
+        if pkind in _RUST_PATH_SKIP_PARENTS:
+            continue
+        if pkind == "call_expression" and _field(parent, "function") == node:
+            continue
+        if kind == "scoped_type_identifier" and pkind not in {"struct_pattern", "struct_expression"}:
+            continue  # type positions: `-> io::Result<..>` is not a use of a variant
+        name, path = _field(node, "name"), _field(node, "path")
+        if name is None or path is None:
+            continue
+        owner = re.split(r"::", _node_text(path, source))[-1]
+        line = _row(_start_point(node)) + 1
+        edges.append(Edge(
+            edge_type="reference",
+            callee_name=_node_text(name, source),
+            line=line,
+            src_symbol_index=_enclosing_symbol_index(symbols, line),
+            receiver=owner if _RECEIVER_NAME.fullmatch(owner) else None,
+        ))
     return edges
 
 
@@ -368,9 +419,13 @@ def _callee_node(node):
     if kind not in {"call", "call_expression", "invocation_expression", "function_call_expression"}:
         return None
     # ruby `call` uses field "method"; everything else uses field "function".
-    fn = _field(node, "function") or _field(node, "method")
+    fn = _field(node, "function") or _field(node, "method") or _kotlin_callee(node)
     if fn is None:
         return None
+    if _kind(fn) == "navigation_expression":  # kotlin: Foo.bar(...)
+        suffix = _named_children(fn)[-1]
+        name = _named_children(suffix)[-1] if _named_children(suffix) else None
+        return name if name is not None and _kind(name) in _CALLEE_LEAVES else None
     if _kind(fn) in _CALLEE_LEAVES:
         return fn
     # member / selector / scoped / field access: take the trailing identifier.
@@ -383,6 +438,55 @@ def _callee_node(node):
     if attr is not None and _kind(attr) in _CALLEE_LEAVES:
         return attr
     return None
+
+
+def _kotlin_callee(node):
+    """Kotlin's `call_expression` has no named fields: its first named child is the
+    callee (`simple_identifier` or `navigation_expression`), followed by
+    `call_suffix`."""
+    children = _named_children(node)
+    if len(children) >= 2 and _kind(children[-1]) == "call_suffix":
+        return children[0]
+    return None
+
+
+# Field that holds the receiver of a member call, per grammar: java `object`,
+# python/js/ts `object`, go `operand`, rust field `value` / scoped `path`,
+# c/c++ `argument`, c# `expression`, ruby `receiver`.
+_RECEIVER_FIELDS = ("object", "operand", "value", "path", "argument", "expression", "receiver")
+_RECEIVER_NAME = re.compile(r"[A-Za-z_$][\w$]*(?:(?:\.|::)[A-Za-z_$][\w$]*)*")
+
+
+def _receiver_name(node, source: bytes) -> Optional[str]:
+    """The last segment of a call's receiver when it is a plain (dotted) name.
+
+    `TownService.refresh(x)` -> 'TownService', `a.b.Foo.bar()` -> 'Foo',
+    `Foo::new()` -> 'Foo', `self.save()` -> 'self'. A computed receiver
+    (`get().x()`, `a[0].x()`) or a bare call yields None: there is no name to
+    resolve against.
+    """
+    kind = _kind(node)
+    if kind == "method_invocation":
+        holder = node
+    elif kind == "call" and _field(node, "receiver") is not None:
+        holder = node
+    else:
+        holder = _field(node, "function") or _kotlin_callee(node)
+        if holder is None or _kind(holder) in _CALLEE_LEAVES:
+            return None
+    if _kind(holder) == "navigation_expression":
+        receiver = _named_children(holder)[0]
+        text = _node_text(receiver, source).strip()
+        return re.split(r"\.|::", text)[-1] if _RECEIVER_NAME.fullmatch(text) else None
+    receiver = next(
+        (r for f in _RECEIVER_FIELDS if (r := _field(holder, f)) is not None), None
+    )
+    if receiver is None:
+        return None
+    text = _node_text(receiver, source).strip()
+    if not _RECEIVER_NAME.fullmatch(text):
+        return None
+    return re.split(r"\.|::", text)[-1]
 
 
 def _kind(node) -> str:

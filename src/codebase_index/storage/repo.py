@@ -6,7 +6,7 @@ import re
 import sqlite3
 from typing import Any, Iterable, Optional, Sequence
 
-from ..parsers.base import Chunk, Symbol
+from ..parsers.base import Chunk, Symbol, module_name
 
 
 def upsert_file(
@@ -254,14 +254,17 @@ def replace_edges(
         """
         INSERT INTO edges
             (edge_type, src_kind, src_id, dst_kind, dst_id, dst_name, file_id, line,
-             resolved, confidence)
+             resolved, confidence, dst_qualifier)
         VALUES
             (:edge_type, :src_kind, :src_id, :dst_kind, :dst_id, :dst_name, :file_id, :line,
-             :resolved, :confidence)
+             :resolved, :confidence, :dst_qualifier)
         """,
         # confidence defaults to 'extracted' for callers (and tests) that predate the
         # audit-trail column; the global graph pass refines it (see graph/builder.py).
-        [{"confidence": "extracted", **edge, "file_id": file_id} for edge in edges],
+        [
+            {"confidence": "extracted", "dst_qualifier": None, **edge, "file_id": file_id}
+            for edge in edges
+        ],
     )
     return len(edges)
 
@@ -271,20 +274,89 @@ def count_edges(conn: sqlite3.Connection) -> int:
 
 
 def refs_for_name(conn: sqlite3.Connection, name: str) -> list[sqlite3.Row]:
+    qualifier = (
+        "e.dst_qualifier" if _has_column(conn, "edges", "dst_qualifier") else "NULL"
+    )
     return conn.execute(
-        """
+        f"""
         SELECT e.line AS line, f.path AS path, e.edge_type AS edge_type,
                e.resolved AS resolved, e.src_id AS src_id, e.src_kind AS src_kind,
-               e.confidence AS confidence,
+               e.confidence AS confidence, e.dst_id AS dst_id,
+               {qualifier} AS receiver, dst.qualified AS target,
                src.name AS src_name, src.qualified AS src_qualified
         FROM edges e
         JOIN files f ON f.id = e.file_id
         LEFT JOIN symbols src ON src.id = e.src_id AND e.src_kind = 'symbol'
-        WHERE e.dst_name = ? AND e.edge_type = 'call'
+        LEFT JOIN symbols dst ON dst.id = e.dst_id AND e.dst_kind = 'symbol'
+        WHERE e.dst_name = ? AND e.edge_type IN ('call', 'reference')
         ORDER BY f.path, e.line
         """,
         (name,),
     ).fetchall()
+
+
+def symbols_by_owner(
+    conn: sqlite3.Connection, owner: str, name: str
+) -> list[sqlite3.Row]:
+    """Members `name` of a type called `owner` ('TownService', 'refresh'), or
+    top-level definitions `name` in a module called `owner` ('activation', 'place')."""
+    members = conn.execute(
+        """
+        SELECT s.*, f.path AS path
+        FROM symbols s JOIN files f ON f.id = s.file_id
+        WHERE s.name = :name
+          AND (s.qualified = :member
+               OR substr(s.qualified, -length(:suffix)) = :suffix)
+        ORDER BY f.path, s.line_start
+        """,
+        {"name": name, "member": f"{owner}.{name}", "suffix": f".{owner}.{name}"},
+    ).fetchall()
+    if members:
+        return members
+    return [
+        row for row in conn.execute(
+            "SELECT s.*, f.path AS path FROM symbols s JOIN files f ON f.id = s.file_id "
+            "WHERE s.name = ? AND (s.qualified = s.name OR s.qualified IS NULL) "
+            "ORDER BY f.path, s.line_start",
+            (name,),
+        )
+        if module_name(row["path"]) == owner
+    ]
+
+
+def split_member(query: str) -> Optional[tuple[str, str]]:
+    """'TownService.refresh' / 'pkg.TownService::refresh' -> ('TownService', 'refresh')."""
+    parts = re.split(r"\.|::|#", query.strip())
+    if len(parts) < 2 or not all(_IDENTIFIER.fullmatch(p) for p in parts):
+        return None
+    return parts[-2], parts[-1]
+
+
+_IDENTIFIER = re.compile(r"[A-Za-z_$][\w$]*")
+
+
+def symbols_for_target(
+    conn: sqlite3.Connection, target: str
+) -> tuple[list[sqlite3.Row], Optional[tuple[str, str]]]:
+    """Definitions a refs/impact/symbol target names, and the (owner, member) split.
+
+    An exact symbol name wins (the pre-existing behaviour); otherwise a qualified
+    `Owner.member` matches members of types named Owner. The split is returned
+    whenever the target is qualified, so callers can also match unresolved call
+    sites by their receiver.
+    """
+    rows = symbols_by_name(conn, target, exact=True)
+    if rows:
+        return rows, None
+    member = split_member(target)
+    if member is None:
+        return [], None
+    return symbols_by_owner(conn, *member), member
+
+
+def _has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    # An index built by an older schema is still read in place (see db.py).
+    return any(row[1] == column for row in conn.execute(f"PRAGMA table_info({table})"))
 
 
 def fts_search(
@@ -355,7 +427,7 @@ def symbol_search(
     )
     return conn.execute(
         f"""
-        SELECT s.name, s.kind, s.signature, s.line_start, s.line_end,
+        SELECT s.name, s.kind, s.signature, s.line_start, s.line_end, s.qualified,
                s.in_degree, s.out_degree, f.path, f.mtime_ns, f.is_generated,
                (s.name = :exact COLLATE NOCASE) AS is_exact
         FROM symbols s
@@ -383,7 +455,7 @@ def symbol_search(
 def unresolved_edges(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         "SELECT e.id AS id, e.edge_type AS edge_type, e.dst_name AS dst_name, "
-        "       f.lang AS lang "
+        "       e.dst_qualifier AS dst_qualifier, f.lang AS lang "
         "FROM edges e JOIN files f ON f.id = e.file_id "
         "WHERE e.resolved = 0 AND e.dst_name IS NOT NULL ORDER BY e.id"
     ).fetchall()
@@ -469,14 +541,13 @@ def name_ref_counts(conn: sqlite3.Connection, names: Sequence[str]) -> dict[str,
     return {row["dst_name"]: int(row["c"]) for row in rows}
 
 
-def unique_symbol_ids_by_name(conn: sqlite3.Connection) -> dict[str, int]:
-    """Map symbol name -> id for names defined exactly once in the repo."""
-    return {
-        row["name"]: int(row["sym_id"])
-        for row in conn.execute(
-            "SELECT name, MIN(id) AS sym_id FROM symbols GROUP BY name HAVING COUNT(*) = 1"
-        )
-    }
+def symbols_for_resolution(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Every symbol with what the graph pass matches edges on (see graph/builder.py)."""
+    return conn.execute(
+        "SELECT s.id AS id, s.name AS name, s.qualified AS qualified, "
+        "       s.file_id AS file_id, f.path AS path, f.lang AS lang "
+        "FROM symbols s JOIN files f ON f.id = s.file_id ORDER BY s.id"
+    ).fetchall()
 
 
 def all_file_ids_with_paths(conn: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -506,6 +577,15 @@ def symbols_in_file(conn: sqlite3.Connection, file_id: int) -> list[sqlite3.Row]
         "SELECT id, name, kind, line_start, in_degree FROM symbols "
         "WHERE file_id = ? ORDER BY line_start",
         (file_id,),
+    ).fetchall()
+
+
+def members_of(conn: sqlite3.Connection, symbol_id: int) -> list[sqlite3.Row]:
+    """Direct children of a symbol (a class's methods, an enum's variants)."""
+    return conn.execute(
+        "SELECT id, name, kind, line_start, line_end, signature, in_degree FROM symbols "
+        "WHERE parent_id = ? ORDER BY line_start",
+        (symbol_id,),
     ).fetchall()
 
 

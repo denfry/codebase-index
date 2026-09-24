@@ -6,6 +6,101 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-24
+
+Agent-efficiency release. An agent answering five code questions on a 5.9k-file
+Java/Rust monorepo spent **19% fewer tokens (83.5k vs 103.0k) and 25% fewer tool calls
+(9 vs 12)** with the skill than with Grep/Read alone, three runs per arm, with no
+overlap between the arms' ranges; before this release the two were at parity. The
+gain comes from answer-ready output (`--compact`: ranked files with numbered matching
+lines), `refs`/`impact` that resolve `Owner.member` targets exactly and say when a list
+may be incomplete, build-module awareness in `impact`, and ranking measured over 342
+queries (MRR +0.010, p=0.031). Index schema 4: the first `update` rebuilds the index
+once.
+
+### Fixed
+
+- `refs`, `impact` and `symbol` accept a qualified `Owner.member` target
+  (`TownService.refresh`, also `pkg.Owner.member`, `Owner::member`, `Owner#member`),
+  where the owner is a type or a module (`activation::place`). Before, a qualified name
+  matched nothing and a bare name that several types share (`refresh`) returned every
+  same-named method's callers mixed together.
+- Calls written against a type or module (`TownService.refresh(server)`, `Foo::new()`,
+  `activation::place(..)`) now resolve across files when exactly one type or module of
+  that name defines the callee, so `impact` walks them. These edges are marked
+  `inferred`.
+- Call resolution no longer invents edges: a call never binds across languages (a
+  Python `queue.take()` to a Java `take`), a call on another type
+  (`ApprenticeService.take`) no longer binds to the repo's only `take` when that one
+  belongs to a different type, and a call on a type the file does not define no
+  longer binds to a same-named method in the calling file. Name uniqueness is now
+  judged per language family (JVM, JS/TS, C/C++), so a Rust `place` resolves even
+  when Java also defines one.
+- `refs "Owner.member"` no longer reports a confident empty answer when calls it
+  cannot type exist (`chest.holdings().take(..)`): they are listed as
+  `possible_call`, nearest to the definition first, and `coverage.partial` is true.
+- `refs` and `impact` report `coverage.partial: true` with a reason when the target
+  matches no indexed definition or call site, instead of an empty answer that looked
+  like "no callers".
+- `update` parses changed files in a process pool, like a full build. It used to parse
+  them one at a time, so a large change set was slower to update than to rebuild
+  (2009 changed files: 149 s, against 13 s for a full build of all 5904).
+- A class is returned instead of its same-named constructor. The constructor's
+  `new X()` callers gave it the higher in-degree, so it took the file's one slot on
+  the page with a one-line body while the class never appeared.
+- Kotlin call sites are extracted (with their receiver). Kotlin's `call_expression`
+  has no named fields, so no Kotlin call edge was ever recorded.
+
+### Added
+
+- Rust enum variants, Java enum constants and C# enum members are indexed as
+  `variant` symbols (`CoreError.ObjectDamaged`), and a Rust `Owner::name` path used in a
+  pattern or as a value (`Err(CoreError::ObjectDamaged(_)) =>`, `if let Kind::A = ..`)
+  is recorded as a `reference` edge. `refs` reports these as `kind: "reference"`, so it
+  finds where a variant is handled, not only where it is constructed.
+- `refs --exclude-tests`, `refs --path <prefix>` (repeatable; also on the MCP
+  `find_refs` tool) and `refs --compact`, which prints one line per site:
+  `path:line kind caller -> target [confidence]`.
+- `describe` on a class, enum, struct or trait lists its `members` and folds their
+  edges from and to code outside the type into `used_by` / `uses`. It used to report
+  zero callers and callees for a class, whose methods, not the class, are called.
+- `--session` is accepted by `symbol`, `refs` and `impact`, so one tag can be passed to
+  every read command.
+- `search --compact` / `explain --compact`: agent text instead of JSON. Each result is
+  `path:start-end symbols` with up to eight numbered lines underneath that carry the
+  match (rarer query words first), so an agent can cite `file:line` without a Read or
+  a `grep -n`. On a benchmark query the packet went from 9.6 KB of JSON to 3.7 KB.
+  Evidence already sent to the session prints as `(already sent)`.
+- `impact --compact`, and a `modules` field on `impact`: the build-system module the
+  target lives in (Gradle, Maven, Cargo, npm, Go, Python) and the lines of other
+  build files that name it, split into workspace membership and dependencies. "Does
+  another module depend on this?" no longer needs a grep over build files.
+- The skill routes every question through `--compact` and is 40% shorter.
+
+### Changed
+
+- Ranking, measured over 342 queries on six query sets (five repositories, including
+  24 natural-language "how does X work" questions): MRR +0.010 (p=0.036), recall@10
+  +0.015 (p=0.038), nDCG@10 +0.009 (p=0.018), useful@budget +0.020 (p=0.015), 15 fewer
+  snippet tokens per query; no corpus regressed. On the natural-language questions MRR
+  went 0.428 → 0.475 and recall@10 0.708 → 0.833. Three signals, each ablatable:
+  - `resource_priors`: localisation catalogues (`lang/en_us.json`, `i18n/*.json`,
+    `.po`) and workflow artifacts (review `.diff`/`.patch` files, agent scratch
+    directories such as `.superpowers/`) are demoted like generated code;
+  - `stem_match`: a file named after a query term (`Treasury.java` for a question
+    about the treasury) gets a small bonus;
+  - `question_pool_floor`: a question-form query ("how is a crop loaded") gets a
+    40-deep candidate pool, so the class it paraphrases reaches the reranker.
+- `symbol` returns exact matches alone when there are any, with a count of the prefix
+  matches it left out (`more_prefix_matches`), instead of burying the one symbol asked
+  for among twenty `TreasuryX` prefix matches.
+
+- Every `refs` site carries `caller` (the function it sits in), `target` (the
+  definition it resolved to) and `receiver` (what the call was made on), so callers can
+  be named and same-named methods told apart without reading each file.
+- Index schema 4: call edges store their receiver. The first `update` after upgrading
+  rebuilds the index once; read commands keep working on an older index until then.
+
 ## [2.0.0] - 2026-09-14
 
 Evidence release. Everything an agent reads through `codebase-index` is now identified
@@ -773,7 +868,8 @@ Pooled over 305 queries (Python, Java, TypeScript), v1.8.0 → 1.9.0:
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/denfry/codebase-index/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/denfry/codebase-index/compare/v1.9.0...v2.0.0
 [1.10.0]: https://github.com/denfry/codebase-index/compare/v1.9.0...abb67df
 [1.9.0]: https://github.com/denfry/codebase-index/compare/v1.8.0...v1.9.0

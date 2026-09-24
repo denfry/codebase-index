@@ -6,106 +6,60 @@ allowed-tools: Bash(codebase-index search *), Bash(codebase-index explain *), Ba
 
 # Codebase Index
 
-Use the local index before reading repository files.
+Use the local index before reading repository files. It answers with ranked,
+numbered lines, so most answers need no Read and no Grep at all.
 
-The operating principle is **Find → Trace → Verify → Predict**:
-
-- **Find** the implementation with ranked retrieval.
-- **Trace** behavior through definitions, callers, dependencies, and paths.
-- **Verify** that evidence you already hold is still true before relying on it.
-- **Predict** change impact while preserving an explicit evidence trail.
-
-## Route the question
+## Route the question — always `--compact`
 
 | Intent | Command |
 |---|---|
-| Where is X implemented? | `codebase-index search "X" --session <tag> --json` |
-| How does X work? | `codebase-index explain "X" --session <tag> --json` |
-| What is this codebase? | `codebase-index architecture --json` |
-| Find a named symbol | `codebase-index symbol "X" --json` |
-| Who calls or references X? | `codebase-index refs "X" --json` |
-| What changes if X changes? | `codebase-index impact "X" --json` |
-| What does my current diff affect? | `codebase-index diff-impact --json` |
-| How are X and Y connected? | `codebase-index path "X" "Y" --json` |
-| Describe X and its neighborhood | `codebase-index describe "X" --json` |
+| Where / how does X work? | `codebase-index search "X" --compact --session <tag>` |
+| Overview of a feature | `codebase-index explain "X" --compact --session <tag>` |
+| Every caller / call site of X | `codebase-index refs "Owner.member" --compact` |
+| What breaks if X changes (incl. other modules) | `codebase-index impact "Owner.member" --compact` |
+| Find a definition | `codebase-index symbol "X"` |
+| A class: members, who uses it | `codebase-index describe "Class" --json` |
+| What does my diff affect? | `codebase-index diff-impact --json` |
 | Is what I read earlier still true? | `codebase-index verify --session <tag> --json` |
-| Produce a human graph | `codebase-index graph "X" --output <path>` |
 
-Use `search --mode symbol` for exact symbol work, `--mode fts` for text and
-error messages, and the default `hybrid` mode for mixed questions. Use pure
-`vector` mode only when embeddings are enabled and exact vocabulary is unknown.
+`--compact` prints `path:start-end symbol` per result with the matching lines
+numbered underneath (`  24| public static final String FILE_ID = ...`). Cite
+those lines as `path:24` directly. Read a range only when the lines shown do not
+answer the question — and then only that range, never the whole file.
 
-Read [references/commands.md](references/commands.md) only when command options
-or routing remain unclear.
+Name members as `Owner.member` (`TownService.refresh`, `activation::place`,
+`CoreError::ObjectDamaged`) so same-named methods of other types are excluded.
+`refs --compact` lines are `path:line kind caller -> target`: the list of call
+sites with the calling function is usually the whole answer. Add
+`--exclude-tests` for production-only lists and `--path <prefix>` for one module.
+`kind reference` is a non-call use, e.g. an enum variant matched in a `match` arm.
 
-## Evidence protocol
+`impact --compact` starts with `# module <m>: build files depending on it: ...`
+— the answer to "does another module depend on this", with no build-file grep.
 
-1. Pick one session tag for this conversation (for example `auth-fix-1`) and
-   pass `--session <tag>` to every `search` and `explain`.
-2. Run the best-matching command with `--json`.
-3. Check `index` before trusting the payload:
-   - missing → run `codebase-index index`, then repeat;
-   - stale with fewer than 20 changed files → run `codebase-index update`;
-   - stale with 20 or more changed files → run `codebase-index index`;
-   - fresh → continue.
-4. Start with ranks 1–3. Read only `recommended_reads` line ranges.
-5. Trace one additional hop only when the question requires behavior,
-   ownership, or impact.
-6. Before answering or editing from evidence gathered earlier in the task, run
-   `codebase-index verify --session <tag> --json` and reread anything whose
-   state is not `valid` or `relocated`.
-7. Answer with `file:line` evidence and state uncertainty explicitly.
+## Protocol
 
-Do not open whole files when a line range is available. A snippet may already
-be sufficient. `skeletonized: true` means the response intentionally folded
-unrelated body lines; read the supplied range when the missing body matters.
+1. Pick one session tag per conversation (e.g. `auth-fix-1`); pass it to
+   `search`/`explain`. Results already sent in this session print as
+   `(already sent)` — use your earlier copy.
+2. A header saying `index stale` → run `codebase-index update` once; `NO INDEX`
+   → `codebase-index index`.
+3. Batch independent questions into one Bash call (`cmd1; echo ---; cmd2`).
+4. `# partial:` on refs/impact means the list may be incomplete. For
+   `Owner.member` it lists `possible_call` sites (calls on a variable the index
+   cannot type), nearest first: check those few lines, do not grep the repo.
+5. Before relying on evidence from earlier in a long task, run
+   `codebase-index verify --session <tag> --json`.
+6. Grep only when the index returns nothing relevant or for non-code text.
 
-## Evidence memory
+Edge confidence: `extracted` exact, `inferred` heuristic (receiver matched a
+type), `ambiguous` unresolved. Never present an inferred chain as certain.
 
-- `reused: true` with `snippet: null` — this session already received that
-  exact text and its source is unchanged. Use your earlier copy; if you can no
-  longer see it, Read the range.
-- `memory.invalidated` — evidence this session received has changed since.
-  Treat your earlier copy as wrong and reread before relying on it.
-- `stale: true` — the index is older than the file. Run `codebase-index update`
-  or Read the range.
-- A tag belongs to one context. Never give it to a subagent or another
-  conversation. Start a new tag after the context is cleared or compacted, or
-  whenever earlier snippets are no longer visible to you.
+## Answer
 
-Verdict states and citing evidence in notes: [references/memory.md](references/memory.md).
+Lead with the answer, then the minimum `file:line` evidence. State uncertainty
+only when evidence is partial, inferred or stale.
 
-## Confidence contract
-
-- **high** — answer from the indexed evidence.
-- **medium** — read the recommended ranges and confirm the key claim with one
-  targeted lookup if necessary.
-- **low** or no results — follow `fallback_suggestions`, then use a narrow
-  Grep/Glob fallback.
-
-On `refs` and `impact`, inspect `coverage`. If `coverage.partial` is true, an
-empty result is inconclusive; confirm with targeted Grep before saying that
-nothing references the target.
-
-Edges carry `confidence`:
-
-- `extracted` — exact parser evidence;
-- `inferred` — heuristic resolution;
-- `ambiguous` — unresolved or non-unique.
-
-Never present an inferred or ambiguous chain as certain.
-
-## Answer contract
-
-Structure repository answers around:
-
-1. **Answer** — the direct conclusion.
-2. **Evidence** — the minimum supporting `file:line` references.
-3. **Confidence** — only when evidence is partial, inferred, stale, or missing.
-4. **Next check** — only when another check would materially reduce uncertainty.
-
-Do not narrate every search step. Do not claim absence from a partial graph.
-Do not replace evidence with a generated HTML graph.
-
-For payload fields and failure handling, read
-[references/response-contract.md](references/response-contract.md).
+Options and JSON fields: [references/commands.md](references/commands.md),
+[references/response-contract.md](references/response-contract.md),
+session memory: [references/memory.md](references/memory.md).

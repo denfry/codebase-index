@@ -32,6 +32,24 @@ _PLANS: dict[Intent, IntentPlan] = {
 }
 
 
+_QUESTION_RE = re.compile(
+    r"^\s*(?:how|what|where|which|who|whom|whose|why|when|does|do|is|are|can|could|"
+    r"should|would|will)\b|\?\s*$",
+    re.I,
+)
+
+
+def is_question(query: str) -> bool:
+    """True for a question ("how is a crop loaded", "which books can be bought?").
+
+    Separate from intent: most such questions classify as KEYWORD, but they differ
+    from terse keyword or commit-subject queries in one way that matters to
+    retrieval — the answer is usually named by a noun the question paraphrases, so
+    it tends to sit lower in each retriever's list.
+    """
+    return bool(_QUESTION_RE.search(query))
+
+
 def detect_intent(query: str) -> IntentPlan:
     matched = [_PLANS[intent] for pattern, intent in _RULES if pattern.search(query)]
     if not matched:

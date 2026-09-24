@@ -16,7 +16,7 @@ from ..config import Config
 from ..discovery.walker import walk
 from ..embeddings.backend import resolve_backend
 from ..graph.builder import build_graph
-from ..parsers.base import ParseResult
+from ..parsers.base import ParseResult, names_a_type
 from ..parsers.line_chunker import chunk_text
 from ..parsers.treesitter import UnsupportedLanguage, parse_file
 from ..storage import repo
@@ -292,6 +292,9 @@ def _resolve_edges(
         symbol.name: symbol_ids[idx]
         for idx, symbol in enumerate(parse_result.symbols)
     }
+    local_types = {
+        symbol.name for symbol in parse_result.symbols if symbol.kind in _TYPE_KINDS
+    }
     rows: list[dict] = []
     for edge in parse_result.edges:
         src_id = (
@@ -301,6 +304,10 @@ def _resolve_edges(
         )
         src_kind = "symbol" if edge.src_symbol_index is not None else "file"
         dst_id = name_to_id.get(edge.callee_name)
+        if dst_id is not None and _names_foreign_type(edge.receiver, local_types):
+            # `Other.refresh()` is not this file's `refresh`; leave it to the
+            # global pass, which can match the receiver to its owning type.
+            dst_id = None
         rows.append(
             {
                 "edge_type": edge.edge_type,
@@ -311,9 +318,23 @@ def _resolve_edges(
                 "dst_name": edge.callee_name,
                 "line": edge.line,
                 "resolved": 1 if dst_id is not None else 0,
+                "dst_qualifier": edge.receiver,
             }
         )
     return rows
+
+
+_TYPE_KINDS = frozenset({"class", "record", "struct", "interface", "trait", "enum", "impl"})
+
+
+def _names_foreign_type(receiver: Optional[str], local_types: set[str]) -> bool:
+    """True when a call's receiver names a type this file does not define.
+
+    A variable, `this`/`self`, `Self` or a constant says nothing about the callee's
+    type (see `names_a_type`), so same-file resolution keeps its old behaviour.
+    """
+    return names_a_type(receiver) and receiver not in local_types
+
 
 
 def _utc_now_iso() -> str:
@@ -351,6 +372,7 @@ def update_index(
     scope = _git_changed_since(root, since) if since else None
 
     seen: set[str] = set()
+    changed: list = []
     for cand in walk(root, config):
         seen.add(cand.rel_path)
         if scope is not None and cand.rel_path not in scope:
@@ -377,8 +399,13 @@ def update_index(
             )
             stats.skipped += 1
             continue
+        changed.append(cand)
 
-        pr = _parse_one_inline(cand, config, sha256=sha)
+    # Parse like a full build does: in a process pool once there are enough files.
+    # Parsing a large change set one file at a time made `update` slower than
+    # rebuilding from scratch (2009 changed files: 149 s, against 13 s for a full
+    # build of all 5904).
+    for cand, pr in zip(changed, _parse_all(changed, config)):
         _add_stats(stats, _write_candidate(conn, cand, pr, now))
 
     if scope is None:

@@ -79,6 +79,7 @@ def search_payload(
     backend: Any = None,
     raw: bool = False,
     session: Optional[str] = None,
+    hit_lines: bool = False,
 ) -> dict:
     """One search session: open the DB (vector-enabled when the backend is
     live), run retrieval, return the payload dict both surfaces serialize.
@@ -115,6 +116,7 @@ def search_payload(
                 compact_min_reduction=cfg.retrieval.compact_min_reduction,
                 evidence=evidence,
                 max_read_lines=cfg.retrieval.max_read_lines,
+                hit_lines=hit_lines,
             )
     if tag is not None and not enabled:
         payload["memory"] = {"session": tag, "available": False, "reason": "memory is disabled"}

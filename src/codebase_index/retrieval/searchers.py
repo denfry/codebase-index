@@ -10,9 +10,13 @@ import math
 import re
 import sqlite3
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 from ..config import Config
+from ..discovery.classify import detect_language, is_test_path
+from ..parsers.languages import CONTAINER_KINDS
+from ..graph.builder import language_family
+from ..parsers.base import names_a_type
 from ..indexer.freshness import compute_freshness
 from ..models import (
     GraphCoverage,
@@ -21,6 +25,7 @@ from ..models import (
     RefsResponse,
     SymbolDef,
     SymbolResponse,
+    unmatched_coverage,
 )
 from ..storage import repo
 from .fuzzy import identifier_similarity
@@ -323,6 +328,22 @@ def symbol_candidates(
         for row in _fuzzy_symbol_rows(conn, query, limit=limit, kind=kind):
             rows_by_key.setdefault((row["path"], row["line_start"], row["name"]), row)
 
+    # A constructor shares its class's name, and its `new X()` callers give it the
+    # higher in-degree, so it used to take the file's one slot on the page with a
+    # one-line body while the class it constructs never appeared. Keep the class.
+    types_found = {
+        (row["path"], row["name"]) for row in rows_by_key.values()
+        if row["kind"] in CONTAINER_KINDS
+    }
+    rows_by_key = {
+        key: row for key, row in rows_by_key.items()
+        if not (
+            row["kind"] == "method"
+            and (row["path"], row["name"]) in types_found
+            and (row["qualified"] or "").endswith(f"{row['name']}.{row['name']}")
+        )
+    }
+
     scored: list[tuple] = []
     for row in rows_by_key.values():
         subs = _name_subtokens(row["name"])
@@ -497,7 +518,19 @@ def _freshness(
 def symbol_lookup(
     conn: sqlite3.Connection, name: str, *, kind: Optional[str], exact: bool
 ) -> SymbolResponse:
-    rows = repo.symbols_by_name(conn, name, kind=kind, exact=exact)
+    rows = repo.symbols_by_name(conn, name, kind=kind, exact=True)
+    more = 0
+    if not exact:
+        prefixed = repo.symbols_by_name(conn, name, kind=kind, exact=False)
+        if rows:
+            # An exact hit is what was asked for; twenty `TreasuryX` prefix matches
+            # around it cost tokens and bury it.
+            more = len(prefixed) - len(rows)
+        else:
+            rows = prefixed
+    member = repo.split_member(name) if not rows else None
+    if member is not None:
+        rows = [r for r in repo.symbols_by_owner(conn, *member) if not kind or r["kind"] == kind]
     symbols = [
         SymbolDef(
             name=row["name"],
@@ -510,36 +543,135 @@ def symbol_lookup(
         )
         for row in rows
     ]
-    return SymbolResponse(query=name, index=_freshness(conn), symbols=symbols)
+    return SymbolResponse(
+        query=name, index=_freshness(conn), symbols=symbols, more_prefix_matches=more
+    )
 
 
-def refs_lookup(conn: sqlite3.Connection, name: str, *, kind: str) -> RefsResponse:
-    defs = repo.symbols_by_name(conn, name, exact=True)
-    sites = [
-        RefSite(
-            path=row["path"],
-            line=row["line"],
-            kind="call",
-            confidence=row["confidence"] if "confidence" in row.keys() else "extracted",
-        )
-        for row in repo.refs_for_name(conn, name)
-    ]
+def refs_lookup(
+    conn: sqlite3.Connection,
+    name: str,
+    *,
+    kind: str,
+    exclude_tests: bool = False,
+    paths: Sequence[str] = (),
+) -> RefsResponse:
+    """Definitions, calls and references of `name` (a bare or `Owner.member` name).
+
+    `exclude_tests` drops sites in test files; `paths` keeps only sites under one of
+    the given path prefixes. Both filter what is reported, including the count of
+    possible calls behind `coverage.partial`.
+    """
+    defs, member = repo.symbols_for_target(conn, name)
+    possible: list[sqlite3.Row] = []
+    if member is None:
+        rows = repo.refs_for_name(conn, name)
+    else:
+        # `Owner.member`: calls resolved to one of Owner's definitions, plus
+        # unresolved calls made on a receiver literally named Owner.
+        owner, short = member
+        def_ids = {int(row["id"]) for row in defs}
+        rows, possible = [], []
+        for row in repo.refs_for_name(conn, short):
+            if row["dst_id"] in def_ids or (row["dst_id"] is None and row["receiver"] == owner):
+                rows.append(row)
+            elif defs and row["edge_type"] == "call" and _may_call_member(row, defs):
+                possible.append(row)
+    if kind == "callers":
+        rows = [row for row in rows if row["edge_type"] == "call"]
+    keep = _site_filter(exclude_tests, paths)
+    rows = [row for row in rows if keep(row["path"])]
+    possible = [row for row in possible if keep(row["path"])]
+    sites = [_ref_site(row, row["edge_type"]) for row in rows]
+    sites += [_ref_site(row, "possible_call") for row in possible]
     if kind == "all":
         sites.extend(
             # A definition is the symbol itself — exact by construction.
-            RefSite(path=row["path"], line=row["line_start"], kind="definition")
+            RefSite(
+                path=row["path"], line=row["line_start"], kind="definition",
+                target=row["qualified"] or row["name"],
+            )
             for row in defs
+            if keep(row["path"])
         )
-    sites.sort(key=lambda site: (site.path, site.line, site.kind))
+    def_paths = [row["path"] for row in defs]
+    # Known sites by location; possible ones after them, nearest to a definition first.
+    sites.sort(key=lambda site: (
+        site.kind == "possible_call",
+        -_shared_dirs(site.path, def_paths) if site.kind == "possible_call" else 0,
+        site.path, site.line, site.kind,
+    ))
     # Coverage is judged by the symbol's defining language(s); fall back to the
     # call-site files when the symbol has no indexed definition.
-    coverage_paths = [row["path"] for row in defs] or [s.path for s in sites]
-    return RefsResponse(
-        query=name,
-        index=_freshness(conn),
-        sites=sites,
-        coverage=GraphCoverage.for_paths(coverage_paths),
+    if not (defs or sites):
+        coverage = unmatched_coverage(name)
+    else:
+        coverage = GraphCoverage.for_paths(def_paths or [s.path for s in sites])
+    if possible:
+        coverage = GraphCoverage(
+            partial=True,
+            languages=coverage.languages,
+            reason=(
+                f"{len(possible)} call(s) to `{member[1] if member else name}` have a "
+                "receiver the index cannot type (a variable or an expression such as "
+                "`chest.holdings()`), so any of them may call this. They are listed as "
+                "`possible_call`, nearest to the definition first; read the ones that "
+                "matter to confirm."
+            ),
+        )
+    return RefsResponse(query=name, index=_freshness(conn), sites=sites, coverage=coverage)
+
+
+def _site_filter(exclude_tests: bool, paths: Sequence[str]):
+    prefixes = tuple(p.replace("\\", "/").strip("/") + "/" for p in paths if p.strip("/\\"))
+
+    def keep(path: str) -> bool:
+        if exclude_tests and is_test_path(path):
+            return False
+        return not prefixes or any((path + "/").startswith(p) for p in prefixes)
+
+    return keep
+
+
+def _ref_site(row: sqlite3.Row, kind: str) -> RefSite:
+    return RefSite(
+        path=row["path"],
+        line=row["line"],
+        kind=kind,
+        confidence=row["confidence"] if "confidence" in row.keys() else "extracted",
+        target=row["target"],
+        receiver=row["receiver"],
+        caller=row["src_qualified"] or row["src_name"],
     )
+
+
+def _may_call_member(row: sqlite3.Row, defs: list[sqlite3.Row]) -> bool:
+    """An unresolved same-named call that could still land on one of `defs`.
+
+    A receiver naming another type (`ApprenticeService.take`) cannot; a variable,
+    constant or expression receiver might. Only calls written in a
+    language one of the definitions is written in are considered.
+    """
+    if row["dst_id"] is not None:
+        return False
+    if names_a_type(row["receiver"]):
+        return False
+    families = {language_family(detect_language(d["path"])) for d in defs}
+    return language_family(detect_language(row["path"])) in families
+
+
+def _shared_dirs(path: str, others: list[str]) -> int:
+    """Longest run of leading directories `path` shares with any of `others`."""
+    parts = path.split("/")[:-1]
+    best = 0
+    for other in others:
+        shared = 0
+        for a, b in zip(parts, other.split("/")[:-1]):
+            if a != b:
+                break
+            shared += 1
+        best = max(best, shared)
+    return best
 
 
 def vector_candidates(

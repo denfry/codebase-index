@@ -3,12 +3,15 @@ denormalize symbol degrees.
 
 Runs once after all files are indexed (it needs the complete symbol/file tables).
 Symbol-target edges (call/reference/extends/implements) resolve only on an
-UNAMBIGUOUS name match — if two definitions share a name, the edge is left
-unresolved rather than guessed. Import edges resolve their module path to a file
-by POSIX path-suffix match (e.g. 'auth.token' -> '%/auth/token.py').
+UNAMBIGUOUS match within the caller's language family — if two definitions share a
+name, the edge is left unresolved rather than guessed. A call written against an
+owner (`TownService.refresh(x)`, `activation::place(..)`) also resolves when exactly
+one type or module of that name defines it; that match is a heuristic, recorded as
+'inferred'. Import edges resolve their module path to a file by POSIX path-suffix
+match (e.g. 'auth.token' -> '%/auth/token.py').
 
-The pass is batched: one query for globally-unique symbol names, one for file
-paths (expanded into an in-memory suffix map), one executemany for the updates.
+The pass is batched: one query for all symbols, one for file paths (expanded into
+an in-memory suffix map), one executemany for the updates.
 The per-edge variant did an indexed lookup per symbol edge and up to ~20
 full-table LIKE scans per import edge, which dominated large builds.
 """
@@ -18,6 +21,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Optional
 
+from ..parsers.base import module_name, names_a_type
 from ..storage import repo
 
 _SYMBOL_EDGE_TYPES = {"call", "reference", "extends", "implements"}
@@ -48,12 +52,12 @@ def resolve_edges(conn: sqlite3.Connection) -> int:
     if not edges:
         return 0
 
-    unique_symbols = repo.unique_symbol_ids_by_name(conn)
+    targets = _SymbolTargets(repo.symbols_for_resolution(conn))
     suffix_map = _path_suffix_map(repo.all_file_ids_with_paths(conn))
 
-    # (dst_kind, dst_id, edge_id, confidence). A repo-unique symbol name is an exact
-    # hit -> 'extracted'; an import resolved only by path-suffix matching is a best-
-    # effort heuristic -> 'inferred'.
+    # (dst_kind, dst_id, edge_id, confidence). A name unique within its language
+    # family is an exact hit -> 'extracted'; an owner/module match and an import
+    # resolved by path-suffix matching are heuristics -> 'inferred'.
     resolutions: list[tuple[str, int, int, str]] = []
     for edge in edges:
         name = edge["dst_name"]
@@ -62,12 +66,87 @@ def resolve_edges(conn: sqlite3.Connection) -> int:
             if file_id is not None:
                 resolutions.append(("file", file_id, edge["id"], "inferred"))
         elif edge["edge_type"] in _SYMBOL_EDGE_TYPES:
-            sym_id = unique_symbols.get(name)
-            if sym_id is not None:
-                resolutions.append(("symbol", sym_id, edge["id"], "extracted"))
+            hit = targets.resolve(language_family(edge["lang"]), edge["dst_qualifier"], name)
+            if hit is not None:
+                resolutions.append(("symbol", hit[0], edge["id"], hit[1]))
 
     repo.resolve_edges_bulk(conn, resolutions)
     return len(resolutions)
+
+
+# Languages that call each other directly; any other pair cannot share a call edge.
+_LANGUAGE_FAMILIES = {
+    "kotlin": "jvm", "java": "jvm", "scala": "jvm",
+    "typescript": "js", "javascript": "js",
+    "cpp": "c",
+}
+
+
+def language_family(lang: Optional[str]) -> Optional[str]:
+    return _LANGUAGE_FAMILIES.get(lang or "", lang)
+
+
+_Key = tuple[Optional[str], str, str]
+
+
+class _SymbolTargets:
+    """Where a symbol edge may point, indexed three ways within a language family.
+
+    - by name, for names defined once in the family;
+    - by (owner type, name), for `TownService.refresh(x)`;
+    - by (module, name), for a top-level definition called through its module
+      (`activation::place(..)`, `token.refresh()`); see `module_name`.
+    A key that two files claim maps to nothing: that is ambiguity, not a guess.
+    Overloads (one owner, one file, several rows) map to the first of them.
+    """
+
+    def __init__(self, rows: list[sqlite3.Row]) -> None:
+        by_name: dict[tuple[Optional[str], str], list[tuple[int, Optional[str]]]] = {}
+        by_owner: dict[_Key, tuple[int, int]] = {}
+        by_module: dict[_Key, tuple[int, int]] = {}
+        clashes: set[_Key] = set()
+        for row in rows:
+            family = language_family(row["lang"])
+            name, sym_id, file_id = row["name"], int(row["id"]), int(row["file_id"])
+            parts = (row["qualified"] or name).split(".")
+            owner = parts[-2] if len(parts) >= 2 and parts[-1] == name else None
+            by_name.setdefault((family, name), []).append((sym_id, owner))
+            if owner is not None:
+                _claim(by_owner, clashes, (family, owner, name), sym_id, file_id)
+            elif len(parts) == 1:
+                module = module_name(row["path"])
+                _claim(by_module, clashes, (family, module, name), sym_id, file_id)
+        self._unique = {key: ids[0] for key, ids in by_name.items() if len(ids) == 1}
+        self._owned = {k: v[0] for k, v in by_owner.items() if k not in clashes}
+        self._module = {k: v[0] for k, v in by_module.items() if k not in clashes}
+
+    def resolve(
+        self, family: Optional[str], receiver: Optional[str], name: str
+    ) -> Optional[tuple[int, str]]:
+        unique = self._unique.get((family, name))
+        # `ApprenticeService.take(x)` is not a call to the family's only `take` when
+        # that one belongs to Holdings. A top-level definition keeps matching any
+        # receiver (`Utils.fn()` may be a namespace import).
+        if unique is not None and not (
+            unique[1] is not None and names_a_type(receiver) and receiver != unique[1]
+        ):
+            return unique[0], "extracted"
+        if receiver is None:
+            return None
+        sym_id = self._owned.get((family, receiver, name))
+        if sym_id is None:
+            sym_id = self._module.get((family, receiver, name))
+        return (sym_id, "inferred") if sym_id is not None else None
+
+
+def _claim(
+    table: dict[_Key, tuple[int, int]], clashes: set[_Key], key: _Key, sym_id: int, file_id: int
+) -> None:
+    first = table.get(key)
+    if first is None:
+        table[key] = (sym_id, file_id)
+    elif first[1] != file_id:
+        clashes.add(key)
 
 
 def _path_suffix_map(rows: list[sqlite3.Row]) -> dict[str, Optional[int]]:

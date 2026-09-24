@@ -6,6 +6,7 @@
     "head_commit": "<SHA>",
     "stale": false
   },
+  "more_prefix_matches": 0,
   "query": "User",
   "symbols": [
     {

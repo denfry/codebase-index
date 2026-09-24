@@ -171,6 +171,8 @@ def render_symbols(resp: SymbolResponse) -> str:
             f"| `{display}` | {symbol.kind} | `{symbol.path}` | "
             f"{symbol.line_start}-{symbol.line_end} | `{signature}` |"
         )
+    if resp.more_prefix_matches:
+        lines.append(f"\n_{resp.more_prefix_matches} more symbols start with `{resp.query}`._")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -199,15 +201,108 @@ def render_refs(resp: RefsResponse) -> str:
             lines.append(note)
         return "\n".join(lines).rstrip() + "\n"
 
-    lines.append("| kind | path | line | confidence |")
-    lines.append("|------|------|------|------------|")
+    lines.append("| kind | path | line | in | target | confidence |")
+    lines.append("|------|------|------|----|--------|------------|")
     for site in resp.sites:
+        target = site.target or (f"on `{site.receiver}`" if site.receiver else "")
+        caller = f"`{site.caller}`" if site.caller else ""
         lines.append(
-            f"| {site.kind} | `{site.path}` | {site.line} | {_conf_mark(site.confidence) or 'exact'} |"
+            f"| {site.kind} | `{site.path}` | {site.line} | {caller} | {target} "
+            f"| {_conf_mark(site.confidence) or 'exact'} |"
         )
     if note:
         lines.append(note)
     return "\n".join(lines).rstrip() + "\n"
+
+
+def render_search_compact(payload: dict) -> str:
+    """Agent text for search/explain: ranked locations with numbered lines.
+
+    One `path:start-end symbols` header per result and, under it, the numbered
+    lines that carry the match — ready to cite as `file:line` without a Read.
+    Evidence the session already holds is one line (`already sent`).
+    """
+    index = payload.get("index") or {}
+    head = f"# {payload.get('intent', '')} · confidence {payload.get('confidence', '')}"
+    if not index.get("exists", True):
+        head += " · NO INDEX: run `codebase-index index`"
+    elif index.get("stale"):
+        head += (f" · index stale ({index.get('files_changed_since_build', '?')} files"
+                 " changed): run `codebase-index update`")
+    memory = payload.get("memory") or {}
+    for item in memory.get("invalidated") or []:
+        head += f"\n# changed since sent: {item.get('path')}:{item.get('line_start')}"
+    lines = [head]
+    for r in payload.get("results", []):
+        loc = f"{r['path']}:{r['line_start']}-{r['line_end']}"
+        names = ",".join(r.get("symbols") or [])
+        label = f"{loc} {names}".rstrip()
+        if r.get("stale"):
+            label += " [stale: file changed, Read it]"
+        if r.get("reused"):
+            lines.append(f"{label} (already sent)")
+            continue
+        lines.append(label)
+        hits = r.get("hits")
+        if hits is None and r.get("snippet"):
+            hits = [[r["line_start"] + i, t.strip()]
+                    for i, t in enumerate(r["snippet"].splitlines()[:8]) if t.strip()]
+        prev = None
+        for n, text in hits or []:
+            if prev is not None and n > prev + 1:
+                lines.append("    …")
+            lines.append(f"  {n}| {text}")
+            prev = n
+    if not payload.get("results"):
+        lines.append("# no results")
+    fallback = payload.get("fallback_suggestions") or {}
+    if fallback:
+        tips = "; ".join(f"{k}: {v}" for k, v in fallback.items() if v)
+        if tips:
+            lines.append(f"# low confidence — {tips}"[:400])
+    page = payload.get("pagination") or {}
+    if page.get("has_more"):
+        lines.append(f"# more results: --offset {page.get('next_offset')}")
+    return "\n".join(lines)
+
+
+def render_impact_compact(resp: ImpactResponse) -> str:
+    """Agent text for impact: `d<hops> path:line name via edge [confidence]`."""
+    lines = [f"# impact {resp.target} · {resp.direction} · depth {resp.depth} · "
+             f"{len(resp.files)} files"]
+    if resp.coverage.partial:
+        lines.append(f"# partial: {resp.coverage.reason}")
+    for m in resp.modules:
+        deps = ", ".join(m.get("dependents") or []) or "none"
+        members = [f"{r['path']}:{r['line']}" for r in m.get("referenced_by", [])
+                   if r.get("kind") == "member"]
+        incl = f" · included by {', '.join(members)}" if members else ""
+        lines.append(f"# module {m['module']}: build files depending on it: {deps}{incl}")
+    for n in sorted(resp.nodes, key=lambda x: (x.distance, x.path, x.line_start or 0)):
+        loc = f"{n.path}:{n.line_start}" if n.line_start else n.path
+        conf = "" if n.via_confidence in (None, "extracted") else f" [{n.via_confidence}]"
+        lines.append(f"d{n.distance} {loc} {n.name or ''} via {n.via_edge or '?'}{conf}".replace("  ", " "))
+    return "\n".join(lines)
+
+
+def render_refs_compact(resp: RefsResponse) -> str:
+    """One line per site, for agents: `path:line kind caller -> target [confidence]`."""
+    counts: dict[str, int] = {}
+    for site in resp.sites:
+        counts[site.kind] = counts.get(site.kind, 0) + 1
+    # The total is stated so an agent copies it instead of recounting the list.
+    summary = ", ".join(
+        f"{n} {kind}{'' if n == 1 else 's'}" for kind, n in sorted(counts.items())
+    )
+    lines = [f"# {resp.query}: {summary or 'no sites'}"]
+    if resp.coverage.partial:
+        lines.append(f"# partial: {resp.coverage.reason}")
+    for site in resp.sites:
+        target = site.target or (f"{site.receiver}.?" if site.receiver else "?")
+        caller = f"{site.caller} -> " if site.caller else ""
+        conf = "" if site.confidence == "extracted" else f" [{site.confidence}]"
+        lines.append(f"{site.path}:{site.line} {site.kind} {caller}{target}{conf}")
+    return "\n".join(lines)
 
 
 def _node_label(ref: dict) -> str:
@@ -265,7 +360,8 @@ def render_describe(payload: dict) -> str:
         lines.append(f"**callers ({len(callers)}):**")
         for c in callers[:20]:
             mark = _conf_mark(c.get("confidence"))
-            lines.append(f"- `{c['path']}:{c['line']}`{' · ' + mark if mark else ''}")
+            caller = f" in `{c['caller']}`" if c.get("caller") else ""
+            lines.append(f"- `{c['path']}:{c['line']}`{caller}{' · ' + mark if mark else ''}")
         lines.append("")
 
     callees = payload.get("callees", [])
@@ -276,6 +372,24 @@ def render_describe(payload: dict) -> str:
             lines.append(f"- {_node_label(c)} _{c.get('edge_type', '')}_"
                          f"{' · ' + mark if mark else ''}")
         lines.append("")
+
+    members = payload.get("members", [])
+    if members:
+        lines.append(f"**members ({len(members)}):**")
+        for m in members:
+            sig = f" — `{m['signature']}`" if m.get("signature") else ""
+            lines.append(f"- {m['kind']} `{m['name']}` :{m['line_start']}-{m['line_end']}{sig}")
+        lines.append("")
+    for key, title in (("used_by", "used by"), ("uses", "uses")):
+        rows = payload.get(key, [])
+        if rows:
+            lines.append(f"**{title} ({payload.get(key + '_total', len(rows))}):**")
+            for r in rows:
+                if key == "used_by":
+                    lines.append(f"- `{r['caller']}` → `{r['member']}` at `{r['path']}:{r['line']}`")
+                else:
+                    lines.append(f"- {_node_label(r)} _{r.get('edge_type', '')}_")
+            lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
 

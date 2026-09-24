@@ -15,22 +15,31 @@
   "schema_version": 1,
   "sites": [
     {
+      "caller": "AdminUser.renew",
       "confidence": "extracted",
       "kind": "call",
       "line": 11,
-      "path": "src/api/service.py"
+      "path": "src/api/service.py",
+      "receiver": null,
+      "target": "refresh_access_token"
     },
     {
+      "caller": null,
       "confidence": "extracted",
       "kind": "definition",
       "line": 4,
-      "path": "src/auth/token.py"
+      "path": "src/auth/token.py",
+      "receiver": null,
+      "target": "refresh_access_token"
     },
     {
+      "caller": "login",
       "confidence": "extracted",
       "kind": "call",
       "line": 11,
-      "path": "src/auth/token.py"
+      "path": "src/auth/token.py",
+      "receiver": null,
+      "target": "refresh_access_token"
     }
   ],
   "tool": "find_refs"

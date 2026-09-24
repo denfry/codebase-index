@@ -69,7 +69,10 @@ CREATE TABLE IF NOT EXISTS edges (
     -- name); 'inferred' = a heuristic resolved it (import path-suffix); 'ambiguous'
     -- = a name/import we could not pin to a unique target. Set at build time by the
     -- global graph pass; never guessed by an LLM (the index is fully local).
-    confidence    TEXT NOT NULL DEFAULT 'extracted'
+    confidence    TEXT NOT NULL DEFAULT 'extracted',
+    -- Receiver of a call edge ('TownService' in `TownService.refresh(x)`), NULL for a
+    -- bare call. Lets the graph pass resolve a non-unique method name by its owner.
+    dst_qualifier TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_edges_src  ON edges(src_kind, src_id);
 CREATE INDEX IF NOT EXISTS idx_edges_dst  ON edges(dst_kind, dst_id);
