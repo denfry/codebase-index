@@ -130,13 +130,16 @@ affected files (8): src/flask/app.py, src/flask/ctx.py, src/flask/globals.py, ..
 
 More: `explain "how are blueprints registered"`, `describe dispatch_request`,
 `architecture` (modules, god nodes, surprising links), `graph User --output graph.html`.
-Add `--json` to any command for the machine-readable packet.
+Name a method as `Owner.member` (`SessionInterface.open_session`) to leave out
+same-named methods of other types. Add `--json` to any command for the
+machine-readable packet, or `--compact` (search, explain, refs, impact) for the
+agent format: `path:start-end symbol` with the matching lines numbered underneath.
 
 ## Agent integrations
 
 | Agent | Setup | What it gets |
 |---|---|---|
-| **Claude Code** | `codebase-index init --target claude`, or the plugin: `/plugin marketplace add denfry/codebase-index` then `/plugin install codebase-index@codebase-index` | A skill that routes repository questions to the index and reads only `recommended_reads` ranges; optional PostToolUse hook keeps the index fresh |
+| **Claude Code** | `codebase-index init --target claude`, or the plugin: `/plugin marketplace add denfry/codebase-index` then `/plugin install codebase-index@codebase-index` | A skill that routes repository questions to the index and answers from `--compact` output (ranked files with numbered matching lines, `refs` with the calling function per site); optional PostToolUse hook keeps the index fresh |
 | **Codex CLI** | `codebase-index init --target codex` | A managed block in `AGENTS.md` plus the skill resources |
 | **OpenCode** | `codebase-index init --target opencode` | `/codebase-index` command, agent file, skill resources |
 | **Any MCP client** (Claude Desktop, Cursor, VS Code, Zed, Windsurf, ...) | `pip install "codebase-index[mcp]"` then `codebase-index mcp --root /path/to/repo` | 11 tools (`search_code`, `find_refs`, `impact_of`, `impact_of_diff`, `path_between`, ...) with a versioned JSON envelope |
@@ -172,10 +175,14 @@ significant on a pooled multi-language query set
 ([tests/eval](tests/eval/README.md)). 1.9.0 removed two signals that could not
 show a benefit and rejected five plausible ones.
 
-**What is not measured yet**: whether an *agent* completes tasks better with the
-index. That needs model calls and a rubric and is the top item in
-[BENCHMARKS.md](docs/BENCHMARKS.md#future-work-in-priority-order). Please do not
-quote task-success numbers for this project; there are none.
+**Agent pilot (2.1.0).** The same five code questions on a 5.9k-file Java/Rust
+monorepo, answered by a coding agent three times with the skill and three times with
+Grep/Read only: **19% fewer tokens and 25% fewer tool calls** with the skill, all
+answers correct in both arms, no overlap between the arms' token ranges. It is one
+private repository and five questions, so read it as a direction:
+[raw runs and caveats](tests/eval/results/2026-09-24-agent-pilot.md). A broader
+task-level evaluation is still the top item in
+[BENCHMARKS.md](docs/BENCHMARKS.md#future-work-in-priority-order).
 
 ## How it works
 

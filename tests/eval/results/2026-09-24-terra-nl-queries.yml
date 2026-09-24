@@ -1,0 +1,75 @@
+# Natural-language "how does X work" questions over terra-incognita, the kind an
+# agent asks. Expected files are the classes whose javadoc answers them; the
+# wording is paraphrased so the doc comment is not a verbatim lexical hit.
+- query: "how does the town treasury store and persist its items"
+  category: concept
+  expected_files: [realism-polity/src/main/java/dev/terraincognita/realism/polity/treasury/Treasury.java]
+- query: "who is allowed to withdraw from the town treasury"
+  category: concept
+  expected_files: [realism-polity/src/main/java/dev/terraincognita/realism/polity/treasury/TreasuryRules.java]
+- query: "what happens when a stored object's hash does not match while placing it"
+  category: concept
+  expected_files: [launcher/crates/terra-launcher-core/src/activation.rs]
+- query: "how are planted crops saved per dimension"
+  category: concept
+  expected_files: [realism-agriculture/src/main/java/dev/terraincognita/realism/agriculture/persistence/AgricultureData.java]
+- query: "how is a crop definition loaded from the datapack"
+  category: concept
+  expected_files: [realism-agriculture/src/main/java/dev/terraincognita/realism/agriculture/crop/CropReloadListener.java]
+- query: "how long does the air in a diving bell stay breathable"
+  category: concept
+  expected_files: [realism-hydrosphere/src/main/java/dev/terraincognita/realism/hydrosphere/block/DivingBellBlockEntity.java]
+- query: "how does the deep scattering layer move between day and night"
+  category: concept
+  expected_files: [realism-hydrosphere/src/main/java/dev/terraincognita/realism/hydrosphere/depth/ScatteringLayer.java]
+- query: "how strong is a herbal dose in this world"
+  category: concept
+  expected_files: [realism-medicine/src/main/java/dev/terraincognita/realism/medicine/Potency.java]
+- query: "how does the body fight an infection by a pathogen"
+  category: concept
+  expected_files: [realism-medicine/src/main/java/dev/terraincognita/realism/medicine/illness/Infection.java]
+- query: "which planted positions are in loaded chunks"
+  category: concept
+  expected_files: [realism-agriculture/src/main/java/dev/terraincognita/realism/agriculture/field/PlotIndex.java]
+- query: "how are ecological signals broadcast on the server"
+  category: concept
+  expected_files: [realism-api/src/main/java/dev/terraincognita/realism/api/signal/SignalBus.java]
+- query: "where does game time, season and day length come from"
+  category: concept
+  expected_files: [realism-api/src/main/java/dev/terraincognita/realism/api/environment/CalendarSource.java]
+- query: "how does a building teach the player what it knows"
+  category: concept
+  expected_files: [realism-institutions/src/main/java/dev/terraincognita/realism/institutions/effect/Unlocks.java]
+- query: "how is a map sheet rendered like a printed map"
+  category: concept
+  expected_files: [realism-cartography/src/main/java/dev/terraincognita/realism/cartography/client/SheetRenderer.java]
+- query: "how does the tripod hold a cauldron over the fire"
+  category: concept
+  expected_files: [realism-cuisine/src/main/java/dev/terraincognita/realism/cuisine/block/TripodBlock.java]
+- query: "how is a command run on the server thread and its output captured"
+  category: concept
+  expected_files: [realism-agent/src/main/java/dev/terraincognita/realism/agent/CommandBridge.java]
+- query: "how are the weather conditions at a player's position sent to the client"
+  category: concept
+  expected_files: [realism-atmosphere/src/main/java/dev/terraincognita/realism/atmosphere/network/LocalWeatherPayload.java]
+- query: "which books can be bought and from whom"
+  category: concept
+  expected_files: [realism-institutions/src/main/java/dev/terraincognita/realism/institutions/source/BookTrades.java]
+- query: "how does a pet rat remember its owner's habits"
+  category: concept
+  expected_files: [realism-compat/src/main/java/dev/terraincognita/realism/compat/naturalist/RatCompanion.java]
+- query: "where do changes to the land get reported"
+  category: concept
+  expected_files: [realism-api/src/main/java/dev/terraincognita/realism/api/ecology/LandUseSink.java]
+- query: "how does the player fill in an atlas"
+  category: concept
+  expected_files: [realism-cartography/src/main/java/dev/terraincognita/realism/cartography/document/AtlasItem.java]
+- query: "what skills can a pair of hands improve at in medicine"
+  category: concept
+  expected_files: [realism-medicine/src/main/java/dev/terraincognita/realism/medicine/hands/Procedure.java]
+- query: "how does a town get founded at its hall"
+  category: concept
+  expected_files: [realism-polity/src/main/java/dev/terraincognita/realism/polity/town/TownService.java]
+- query: "how are damaged launcher downloads retried"
+  category: concept
+  expected_files: [launcher/crates/terra-launcher-core/src/engine.rs]

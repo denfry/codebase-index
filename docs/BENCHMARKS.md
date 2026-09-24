@@ -178,6 +178,25 @@ Every ranking signal that ships has an ablation row. 1.9.0 removed two signals
 that could not demonstrate a benefit and rejected several plausible ones
 (IDF-weighted coverage, stemming, graph propagation, MMR, a file-length prior).
 
+## Agent pilot (2.1.0)
+
+The first task-level measurement: five code questions on one private 5.9k-file
+Java/Rust monorepo, a Claude Code subagent answering each set three times with the
+skill and three times with Grep/Read only
+([raw runs, questions, ground truth, caveats](../tests/eval/results/2026-09-24-agent-pilot.md)).
+
+| arm | mean tokens | range | mean tool calls | correct |
+|---|---:|---|---:|---|
+| skill 2.1.0 | **83.5k** | 82.1k–85.0k | **9.0** | 15/15 |
+| Grep/Read only | 103.0k | 98.7k–107.1k | 12.0 | 15/15 |
+| skill, pre-2.1.0 template | 100.6k | 96.1k–103.5k | 16.7 | 15/15 |
+
+The 2.1.0 ranking changes were gated separately over 342 queries (six query sets,
+five repositories, 24 of them natural-language questions): MRR +0.010 (p=0.031),
+recall@10 +0.019 (p=0.017), nDCG@10 +0.011 (p=0.005), useful@budget +0.022
+(p=0.008), no corpus regressing
+([log](../tests/eval/results/2026-09-24-retrieval-2.1.0.txt)).
+
 ## Evidence memory
 
 `tests/eval/memory_eval.py` replays a repository's own history: for every git-derived
@@ -223,16 +242,15 @@ Do not write, imply, or ship any of these until a run with published logs exists
 - Any *token savings* multiplier without naming the read model. Under
   symmetric accounting the index costs about the same as disciplined grep.
 - Latency comparisons against external tools.
-- Any statement about *LLM agent task success*. The baselines here are
-  retrieval metrics; nobody has measured whether an agent with the index
-  finishes tasks faster or better. That is the most important open item.
+- Any general statement about *LLM agent task success* or savings beyond the
+  pilot above (one private repository, five questions, one model). Quote the
+  pilot with its scope or not at all.
 
 ## Future work, in priority order
 
-1. **Agent task-level evaluation**: the same questions, an actual coding agent
-   (Claude Code or Codex CLI) with and without the skill, measuring answer
-   correctness, files read, tokens, and wall time. Needs model calls and a
-   grading rubric; not started.
+1. **Agent task-level evaluation**: the pilot above covers one repository and
+   five questions. Next: public repositories, natural-language and debugging
+   tasks, more runs per arm, and a second agent (Codex CLI).
 2. **Large repository run**: a 500k–1M LOC monorepo, reporting index build
    time, incremental update latency, memory, and the same retrieval metrics.
 3. **Graph task benchmark**: hand-labelled `refs`, `impact`, and
