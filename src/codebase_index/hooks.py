@@ -6,9 +6,11 @@ Two events, both no-ops outside a repository that has an index:
   is indexed, and which commands answer code questions.
 - ``guard`` (PreToolUse on Grep and Bash) intercepts a code search the first time
   in a session, before any ``codebase-index`` command has run, and names the
-  index command to use instead. It is a nudge, not a wall: repeating the same
-  call lets it through, the first ``codebase-index`` command in the session turns
-  the guard off, and searches over docs, logs or config are never intercepted.
+  index command to use instead. It is a nudge, not a wall: searching for the
+  same term again lets it through, the first ``codebase-index`` command in the
+  session turns the guard off (even one that has yet to build the index), and
+  searches over docs, logs or config, or inside heredoc bodies, are never
+  intercepted.
 
 Measured on a 5.9k-file monorepo, an agent spent 19% fewer tokens with the index
 than with grep (tests/eval/results/2026-09-24-agent-pilot.md), but agents reach
@@ -17,6 +19,8 @@ only the standard library and does no index work beyond one small SQLite read.
 
 Entry point: ``codebase-index-hook <event>`` reads the hook JSON on stdin and
 prints the hook JSON reply (or nothing). ``CBX_GUARD=0`` disables the guard.
+Per-session state lives in the system temp directory (``CBX_HOOK_STATE``
+overrides it), so it exists before the repository has an index.
 """
 
 from __future__ import annotations
@@ -27,20 +31,30 @@ import os
 import re
 import sqlite3
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Optional
 
 INDEX_REL = Path(".claude") / "cache" / "codebase-index" / "index.sqlite"
-_STATE_DIR = "hook-sessions"
+_STATE_DIR = "codebase-index-hooks"
 _STATE_TTL_S = 2 * 24 * 3600
 
 # A shell segment that searches file contents: the first command of the segment
-# (after `&&`, `||`, `;` or the start), so `ps aux | grep x` is not a repo search.
+# (after `&&`, `||`, `;`, a newline or the start), so `ps aux | grep x` is not a
+# repo search. Quoted arguments may hold `|`, as in grep "a\|b".
 _SEARCH_CMD = re.compile(
-    r"(?:^|&&|\|\||;)\s*(?:cd\s+\S+\s*&&\s*)?"
-    r"(?P<cmd>git\s+grep|grep|egrep|fgrep|rg|ag|ack|findstr|Select-String)\b(?P<args>[^|;&]*)",
+    r"(?:^|&&|\|\||;|\n)[ \t]*(?:cd\s+\S+\s*&&\s*)?"
+    r"(?P<cmd>git\s+grep|grep|egrep|fgrep|rg|ag|ack|findstr|Select-String)\b"
+    r"""(?P<args>(?:"[^"\n]*"|'[^'\n]*'|[^|;&\n"'])*)""",
     re.IGNORECASE,
+)
+# A heredoc body is file content (a script being written, stdin for python), not
+# commands; an unterminated one runs to the end of the command.
+_HEREDOC = re.compile(
+    r"""(?<!<)<<-?(?!<)[ \t]*(['"]?)([A-Za-z_][\w-]*)\1(?P<rest>[^\n]*)\n"""
+    r".*?(?:^[ \t]*\2[ \t]*$|\Z)",
+    re.DOTALL | re.MULTILINE,
 )
 _INDEX_CMD = re.compile(r"(?:^|[\s;&|/\\\"'])(?:codebase-index|cbx)(?:\.exe|\.ps1)?\s+\w")
 # Searches over prose, logs and config are what grep is for; leave them alone.
@@ -132,15 +146,12 @@ def guard(payload: dict) -> Optional[dict]:
     tool_input = payload.get("tool_input") or {}
     if tool not in ("Grep", "Bash"):
         return None
-    root = find_index_root(_cwd(payload))
-    if root is None:
-        return None
-    session = str(payload.get("session_id") or "default")
-    state = _State(root, session)
+    state = _State(str(payload.get("session_id") or "default"))
 
     if tool == "Bash":
-        command = str(tool_input.get("command") or "")
+        command = _HEREDOC.sub(lambda m: "<<" + m.group("rest"), str(tool_input.get("command") or ""))
         if _INDEX_CMD.search(command):
+            # Checked before the index exists: the first search is what builds it.
             state.mark_used()
             return None
         pattern = _shell_search_pattern(command)
@@ -151,11 +162,11 @@ def guard(payload: dict) -> Optional[dict]:
             return None
         pattern = str(tool_input.get("pattern") or "")
 
-    if state.used:
+    if state.used or find_index_root(_cwd(payload)) is None:
         return None
-    fingerprint = hashlib.sha1(
-        (tool + json.dumps(tool_input, sort_keys=True, default=str)).encode("utf-8")
-    ).hexdigest()
+    # Keyed by the search term, not the whole call: a retry rarely repeats the
+    # command byte for byte (a new description, another pipe, a regenerated script).
+    fingerprint = hashlib.sha1(_term(pattern).lower().encode("utf-8")).hexdigest()
     if state.was_denied(fingerprint):
         return None  # the retry after a nudge: the agent decided grep is right
     state.deny(fingerprint)
@@ -190,26 +201,31 @@ def _grep_targets_non_code(tool_input: dict) -> bool:
     return bool(_NON_CODE.search(target))
 
 
+def _term(pattern: str) -> str:
+    """A regex search pattern as plain query words."""
+    return " ".join(re.sub(r"""[\\^$()\[\]{}|*+?"']""", " ", pattern).split())[:80]
+
+
 def _reason(pattern: str) -> str:
-    term = re.sub(r"[\\^$()\[\]{}|*+?]", " ", pattern).strip() or "<what you are looking for>"
-    term = " ".join(term.split())[:80]
+    term = _term(pattern) or "<what you are looking for>"
     return (
         "codebase-index: this repository is indexed, and the index answers code "
         "searches with ranked, numbered lines in fewer tokens than grep. Run it first:\n"
         f'  codebase-index search "{term}" --compact     # where / how\n'
         '  codebase-index refs "Owner.member" --compact  # every call site, with callers\n'
         '  codebase-index symbol "Name"                 # a definition\n'
-        "If the index does not answer, repeat this exact call and it will run. Once any "
-        "codebase-index command has run in this session, searches are not intercepted."
+        "If the index does not answer, search for the same term again and it will run. "
+        "Once any codebase-index command has run in this session, searches are not "
+        "intercepted."
     )
 
 
 class _State:
     """Per-session guard state: whether the index was used, which calls were nudged."""
 
-    def __init__(self, root: Path, session: str) -> None:
+    def __init__(self, session: str) -> None:
         safe = re.sub(r"[^A-Za-z0-9_.-]", "_", session)[:80] or "default"
-        self.dir = root / INDEX_REL.parent / _STATE_DIR
+        self.dir = Path(os.environ.get("CBX_HOOK_STATE") or Path(tempfile.gettempdir()) / _STATE_DIR)
         self.path = self.dir / f"{safe}.json"
         self.data: dict[str, Any] = {"used": False, "denied": []}
         try:
