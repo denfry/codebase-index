@@ -283,6 +283,67 @@ def merge_hook_settings(root: Path) -> bool:
     return True
 
 
+# Index-first hooks (hooks.py): a SessionStart note and a PreToolUse guard that
+# steers the first code search of a session to the index.
+_GUARD_MARKER = "codebase-index-hook"
+GUARD_HOOKS: dict[str, dict] = {
+    "SessionStart": {
+        "hooks": [{"type": "command", "command": "codebase-index-hook session-start",
+                   "timeout": 5}],
+    },
+    "PreToolUse": {
+        "matcher": "Grep|Bash",
+        "hooks": [{"type": "command", "command": "codebase-index-hook guard", "timeout": 5}],
+    },
+}
+
+
+def _is_guard_entry(entry: dict) -> bool:
+    return any(_GUARD_MARKER in str(h.get("command", "")) for h in entry.get("hooks", []))
+
+
+def install_guard_hooks(settings_path: Path) -> list[str]:
+    """Merge the index-first hooks into a Claude Code settings file.
+
+    Idempotent, and leaves every other hook in place. Returns the events added.
+    """
+    settings: dict = {}
+    if settings_path.exists():
+        settings = json.loads(settings_path.read_text(encoding="utf-8") or "{}")
+    hooks = settings.setdefault("hooks", {})
+    added = []
+    for event, entry in GUARD_HOOKS.items():
+        entries = hooks.setdefault(event, [])
+        if not any(_is_guard_entry(e) for e in entries):
+            entries.append(json.loads(json.dumps(entry)))
+            added.append(event)
+    if added:
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    return added
+
+
+def uninstall_guard_hooks(settings_path: Path) -> list[str]:
+    """Remove the index-first hooks; other hooks are kept. Returns the events changed."""
+    if not settings_path.exists():
+        return []
+    settings = json.loads(settings_path.read_text(encoding="utf-8") or "{}")
+    hooks = settings.get("hooks", {})
+    removed = []
+    for event in GUARD_HOOKS:
+        entries = hooks.get(event, [])
+        kept = [e for e in entries if not _is_guard_entry(e)]
+        if len(kept) != len(entries):
+            removed.append(event)
+            if kept:
+                hooks[event] = kept
+            else:
+                hooks.pop(event, None)
+    if removed:
+        settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    return removed
+
+
 # ── MCP client config helpers ──────────────────────────────────────────────────────────────────
 
 _MCP_SERVER_NAME = "codebase-index"

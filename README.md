@@ -145,7 +145,10 @@ agent format: `path:start-end symbol` with the matching lines numbered underneat
 | **Any MCP client** (Claude Desktop, Cursor, VS Code, Zed, Windsurf, ...) | `pip install "codebase-index[mcp]"` then `codebase-index mcp --root /path/to/repo` | 11 tools (`search_code`, `find_refs`, `impact_of`, `impact_of_diff`, `path_between`, ...) with a versioned JSON envelope |
 | **Anything with a shell** | `codebase-index --json ...` | The same payloads as plain JSON, plus a local SQLite database you can query yourself |
 
-`init --target auto` detects which of these are present. See
+`init --target auto` detects which of these are present. To make Claude Code reach for
+the index before Grep in every indexed repository, run
+`codebase-index install-hooks --global`: a session-start note plus a guard that sends the
+first code search of a session to the index (repeat the call to run it anyway). See
 [INSTALLATION.md](docs/INSTALLATION.md) and [MCP.md](docs/MCP.md).
 
 ## Evidence

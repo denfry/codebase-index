@@ -57,6 +57,7 @@ build = ["build>=1.2", "twine>=5.0"]
 codebase-index = "codebase_index.cli:app"
 cbx = "codebase_index.cli:app"           # short alias
 codebase-index-mcp = "codebase_index.mcp.server:run"  # standalone MCP entry point
+codebase-index-hook = "codebase_index.hooks:main"  # Claude Code hooks (stdlib only, fast)
 
 [project.urls]
 Homepage = "https://github.com/denfry/codebase-index"

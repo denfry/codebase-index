@@ -6,6 +6,23 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/bootstrap.sh\""
+          },
+          {
+            "type": "command",
+            "command": "codebase-index-hook session-start 2>/dev/null || true",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Grep|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "codebase-index-hook guard 2>/dev/null || true",
+            "timeout": 5
           }
         ]
       }

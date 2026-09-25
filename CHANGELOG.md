@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `codebase-index install-hooks [--global]` makes Claude Code search through the index
+  by default. It merges two hooks into `.claude/settings.json` (or
+  `~/.claude/settings.json`), keeping every other hook:
+  - `SessionStart`: in an indexed repository, one line of context naming the commands
+    that answer code questions;
+  - `PreToolUse` on `Grep|Bash`: the first code search of a session, before any
+    `codebase-index` command has run, is sent back with the index command to use
+    instead. Repeating the same call lets it through, the first index command turns the
+    guard off for the session, and searches over docs, logs or config, pipelines such
+    as `ps | grep`, and directories without an index are never intercepted.
+    `CBX_GUARD=0` disables it; `install-hooks --uninstall` removes both hooks.
+  The hooks run as `codebase-index-hook`, a standard-library-only entry point (about
+  0.1 s per call). The Claude Code plugin registers the same hooks.
+
 ## [2.1.0] - 2026-09-24
 
 Agent-efficiency release. An agent answering five code questions on a 5.9k-file

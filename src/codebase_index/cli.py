@@ -1064,6 +1064,41 @@ def watch(
         raise typer.Exit(code=1)
 
 
+@app.command("install-hooks")
+def install_hooks(
+    ctx: typer.Context,
+    global_: bool = typer.Option(
+        False, "--global", help="Install into ~/.claude/settings.json (every project)."
+    ),
+    uninstall: bool = typer.Option(False, "--uninstall", help="Remove the hooks instead."),
+) -> None:
+    """Make Claude Code search through the index by default.
+
+    Adds a SessionStart note and a PreToolUse guard on Grep/Bash: the first code
+    search of a session, before any codebase-index command, is sent back with the
+    index command to run instead; repeating it lets it through. Both do nothing in
+    a directory without an index. Other hooks in the settings file are kept.
+    """
+    from .config import find_root
+    from . import scaffold
+
+    if global_:
+        path = Path.home() / ".claude" / "settings.json"
+    else:
+        root_opt = ctx.obj.get("root") if ctx.obj else None
+        path = (Path(root_opt).resolve() if root_opt else find_root()) / scaffold.SETTINGS_REL
+    if uninstall:
+        changed = scaffold.uninstall_guard_hooks(path)
+        verb = "removed from"
+    else:
+        changed = scaffold.install_guard_hooks(path)
+        verb = "added to"
+    if changed:
+        typer.echo(f"[install-hooks] {', '.join(changed)} {verb} {path}")
+    else:
+        typer.echo(f"[install-hooks] nothing to change in {path}")
+
+
 @app.command("skill-update")
 def skill_update(
     ctx: typer.Context,
