@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-09-25
+
 ### Fixed
 
 - The `PreToolUse` guard no longer blocks work it should let through:
@@ -900,7 +902,8 @@ Pooled over 305 queries (Python, Java, TypeScript), v1.8.0 → 1.9.0:
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/v2.1.1...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/v2.1.2...HEAD
+[2.1.2]: https://github.com/denfry/codebase-index/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/denfry/codebase-index/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/denfry/codebase-index/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/denfry/codebase-index/compare/v1.9.0...v2.0.0
