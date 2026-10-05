@@ -19,6 +19,7 @@
   <img src="https://img.shields.io/badge/MCP-stdio%20server-3fb950" alt="MCP stdio server">
   <img src="https://img.shields.io/badge/network-off%20by%20default-3fb950" alt="No network by default">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b949e" alt="MIT license"></a>
+  <a href="https://discord.gg/mVZcNUAGZt"><img src="https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
 <p align="center">
