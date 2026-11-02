@@ -42,6 +42,35 @@ def test_future_schema_version_raises(tmp_path):
             pass
 
 
+def test_every_foreign_key_column_leads_an_index(tmp_path):
+    """Without one, SQLite scans the child table for every deleted parent row."""
+    with Database(tmp_path / "index.sqlite") as db:
+        conn = db.conn
+        tables = [
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'fts_%'"
+            )
+        ]
+        for table in tables:
+            leading = {
+                conn.execute(f"PRAGMA index_info({index['name']})").fetchone()["name"]
+                for index in conn.execute(f"PRAGMA index_list({table})").fetchall()
+            }
+            for fk in conn.execute(f"PRAGMA foreign_key_list({table})").fetchall():
+                assert fk["from"] in leading, f"{table}.{fk['from']} has no index"
+
+
+def test_existing_index_gains_new_indexes_on_open(tmp_path):
+    db_path = tmp_path / "index.sqlite"
+    with Database(db_path) as db:
+        db.conn.execute("DROP INDEX idx_chunks_symbol")
+        db.conn.execute("DROP INDEX idx_symbols_parent")
+    with Database(db_path) as db:
+        names = {r[0] for r in db.conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
+    assert {"idx_chunks_symbol", "idx_symbols_parent"} <= names
+
+
 def _open(tmp_path):
     return Database(tmp_path / "index.sqlite").open()
 

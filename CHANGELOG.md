@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- Removing files from a large index no longer takes hours: `chunks.symbol_id` and
+  `symbols.parent_id` are now indexed, so a deleted symbol no longer costs a full scan
+  of both tables. Existing indexes gain the two indexes the next time they are opened,
+  with no rebuild.
+
 ## [2.1.2] - 2026-09-25
 
 ### Fixed

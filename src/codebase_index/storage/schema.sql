@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS symbols (
 CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
 CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file_id);
 CREATE INDEX IF NOT EXISTS idx_symbols_kind ON symbols(kind);
+-- Every deleted symbol looks up its children for ON DELETE SET NULL here and on
+-- chunks.symbol_id; without an index each lookup is a full table scan.
+CREATE INDEX IF NOT EXISTS idx_symbols_parent ON symbols(parent_id);
 
 CREATE TABLE IF NOT EXISTS chunks (
     id            INTEGER PRIMARY KEY,
@@ -52,6 +55,7 @@ CREATE TABLE IF NOT EXISTS chunks (
     symbol_names  TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_chunks_file ON chunks(file_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_symbol ON chunks(symbol_id);
 
 CREATE TABLE IF NOT EXISTS edges (
     id            INTEGER PRIMARY KEY,
