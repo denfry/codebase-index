@@ -44,6 +44,7 @@ CREATE TABLE chunks (
     symbol_names  TEXT NOT NULL DEFAULT ''     -- denormalized symbol name, FTS-indexed (mirrored by triggers)
 );
 CREATE INDEX idx_chunks_file ON chunks(file_id);
+CREATE INDEX idx_chunks_symbol ON chunks(symbol_id);
 
 -- Symbols extracted via tree-sitter (definitions).
 CREATE TABLE symbols (
@@ -63,6 +64,7 @@ CREATE TABLE symbols (
 CREATE INDEX idx_symbols_name ON symbols(name);
 CREATE INDEX idx_symbols_file ON symbols(file_id);
 CREATE INDEX idx_symbols_kind ON symbols(kind);
+CREATE INDEX idx_symbols_parent ON symbols(parent_id);
 
 -- Graph edges: imports / calls / references / inheritance / dependencies.
 -- src is always a known symbol or file; dst may be unresolved (dst_id NULL, dst_name kept).
