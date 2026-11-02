@@ -114,6 +114,80 @@ def test_code_searches_in_the_shell_are_guarded(repo: Path, command: str):
     assert _denied(_call(repo, "Bash", command=command))
 
 
+@pytest.mark.parametrize("command", [
+    "grep -qx '.claude/' .git/info/exclude",
+    "grep -aoE 'effortLevel' /c/Users/me/.local/bin/claude.exe",
+    "grep -rn 'def guard' ~/other-project/src",
+])
+def test_searches_over_git_internals_binaries_or_outside_the_repo_pass(repo: Path, command: str):
+    assert _call(repo, "Bash", command=command) is None
+
+
+def test_a_search_outside_the_repo_passes_and_one_inside_it_is_guarded(repo: Path, tmp_path: Path):
+    elsewhere = (tmp_path / "elsewhere").as_posix()
+    assert _call(repo, "Bash", command=f"grep -rn -A 3 TownService {elsewhere}") is None
+    assert _call(repo, "Grep", pattern="TownService", path=elsewhere) is None
+    assert _denied(_call(repo, "Bash", command=f"grep -rn TownService {(repo / 'src').as_posix()}"))
+    assert _denied(_call(repo, "Grep", pattern="Other", path=str(repo / "src")))
+    # A pattern that looks like a path does not count as one.
+    assert _denied(_call(repo, "Bash", command='grep -rn "/api/v1" src'))
+
+
+def test_an_index_command_in_powershell_turns_the_guard_off(repo: Path):
+    assert _call(repo, "PowerShell", command='codebase-index search "x" --compact; git status') is None
+    assert _call(repo, "Grep", pattern="anything") is None
+
+
+@pytest.mark.parametrize("command", [
+    "Select-String -Pattern TownService -Path src\\*.java",
+    "Select-String -Path src\\*.java -Pattern 'TownService'",
+    'git status; Select-String "TownService" src\\*.java',
+    "rg -n TownService src",
+])
+def test_code_searches_in_powershell_are_guarded(repo: Path, command: str):
+    reply = _call(repo, "PowerShell", command=command)
+    assert _denied(reply)
+    assert 'search "TownService"' in reply["hookSpecificOutput"]["permissionDecisionReason"]
+
+
+@pytest.mark.parametrize("command", [
+    "Get-Content build.txt | Select-String BUILD",
+    "Select-String -Path README.md -Pattern install",
+    "git commit -m @'\nfix: stop\n\ngrep -rn TownService src\n'@",
+    'Set-Content x.ps1 -Value @"\nSelect-String Town src\n"@\ngit status',
+])
+def test_powershell_filters_prose_and_here_strings_pass(repo: Path, command: str):
+    assert _call(repo, "PowerShell", command=command) is None
+
+
+def test_select_string_outside_the_repo_passes_whichever_way_it_is_named(repo: Path, tmp_path: Path):
+    elsewhere = str(tmp_path / "elsewhere" / "*.cs")
+    assert _call(repo, "PowerShell", command=f"Select-String -Path '{elsewhere}' -Pattern Town") is None
+    assert _call(repo, "PowerShell", command=f"Select-String -Pattern Town -LiteralPath '{elsewhere}'") is None
+    inside = str(repo / "src" / "*.cs")
+    assert _denied(_call(repo, "PowerShell", command=f"Select-String -Path '{inside}' -Pattern Town"))
+
+
+def test_install_refreshes_the_matcher_of_an_older_guard(tmp_path: Path):
+    path = tmp_path / "settings.json"
+    scaffold.install_guard_hooks(path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["hooks"]["PreToolUse"][0]["matcher"] = "Grep|Bash"
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    assert scaffold.install_guard_hooks(path) == ["PreToolUse"]
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["hooks"]["PreToolUse"][0]["matcher"] == scaffold.GUARD_HOOKS["PreToolUse"]["matcher"]
+    assert scaffold.install_guard_hooks(path) == []
+
+
+def test_every_guard_matcher_covers_the_tools_the_guard_reads():
+    plugin = json.loads(Path("hooks/hooks.json").read_text(encoding="utf-8"))
+    for matcher in (scaffold.GUARD_HOOKS["PreToolUse"]["matcher"],
+                    plugin["hooks"]["PreToolUse"][0]["matcher"]):
+        assert set(matcher.split("|")) == {"Grep", *hooks.SHELL_TOOLS}
+
+
 def test_grep_over_docs_or_config_passes(repo: Path):
     assert _call(repo, "Grep", pattern="x", glob="**/*.yml") is None
     assert _call(repo, "Grep", pattern="x", type="md") is None

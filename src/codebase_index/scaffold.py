@@ -292,7 +292,7 @@ GUARD_HOOKS: dict[str, dict] = {
                    "timeout": 5}],
     },
     "PreToolUse": {
-        "matcher": "Grep|Bash",
+        "matcher": "Grep|Bash|PowerShell",
         "hooks": [{"type": "command", "command": "codebase-index-hook guard", "timeout": 5}],
     },
 }
@@ -305,7 +305,9 @@ def _is_guard_entry(entry: dict) -> bool:
 def install_guard_hooks(settings_path: Path) -> list[str]:
     """Merge the index-first hooks into a Claude Code settings file.
 
-    Idempotent, and leaves every other hook in place. Returns the events added.
+    Idempotent, and leaves every other hook in place. An installed guard gets the
+    current matcher, so upgrading only takes running this again. Returns the events
+    added or refreshed.
     """
     settings: dict = {}
     if settings_path.exists():
@@ -314,8 +316,13 @@ def install_guard_hooks(settings_path: Path) -> list[str]:
     added = []
     for event, entry in GUARD_HOOKS.items():
         entries = hooks.setdefault(event, [])
-        if not any(_is_guard_entry(e) for e in entries):
+        installed = [e for e in entries if _is_guard_entry(e)]
+        if not installed:
             entries.append(json.loads(json.dumps(entry)))
+            added.append(event)
+        elif "matcher" in entry and any(e.get("matcher") != entry["matcher"] for e in installed):
+            for existing in installed:
+                existing["matcher"] = entry["matcher"]
             added.append(event)
     if added:
         settings_path.parent.mkdir(parents=True, exist_ok=True)

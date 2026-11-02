@@ -110,7 +110,7 @@ pwsh ./install.ps1 -Target claude -InstallDir "D:\skills\codebase-index"
 **Pin to a branch or tag** (reproducibility and safety):
 
 ```sh
-sh install.sh --branch v2.1.2
+sh install.sh --branch v2.1.3
 ```
 
 ---

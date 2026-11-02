@@ -4,17 +4,17 @@ Two events, both no-ops outside a repository that has an index:
 
 - ``session-start`` adds one short note to the session context: this repository
   is indexed, and which commands answer code questions.
-- ``guard`` (PreToolUse on Grep and Bash) intercepts a code search the first time
+- ``guard`` (PreToolUse on Grep, Bash and PowerShell) intercepts a code search the first time
   in a session, before any ``codebase-index`` command has run, and names the
   index command to use instead. It is a nudge, not a wall: searching for the
   same term again lets it through, the first ``codebase-index`` command in the
   session turns the guard off (even one that has yet to build the index), and
-  searches over docs, logs or config, or inside heredoc bodies, are never
-  intercepted.
+  searches over docs, logs or config, or inside heredoc and here-string bodies,
+  are never intercepted.
 
 Measured on a 5.9k-file monorepo, an agent spent 19% fewer tokens with the index
 than with grep (tests/eval/results/2026-09-24-agent-pilot.md), but agents reach
-for Grep out of habit. The guard runs on every Bash call, so this module imports
+for Grep out of habit. The guard runs on every shell call, so this module imports
 only the standard library and does no index work beyond one small SQLite read.
 
 Entry point: ``codebase-index-hook <event>`` reads the hook JSON on stdin and
@@ -39,6 +39,7 @@ from typing import Any, Optional
 INDEX_REL = Path(".claude") / "cache" / "codebase-index" / "index.sqlite"
 _STATE_DIR = "codebase-index-hooks"
 _STATE_TTL_S = 2 * 24 * 3600
+SHELL_TOOLS = ("Bash", "PowerShell")
 
 # A shell segment that searches file contents: the first command of the segment
 # (after `&&`, `||`, `;`, a newline or the start), so `ps aux | grep x` is not a
@@ -56,13 +57,22 @@ _HEREDOC = re.compile(
     r".*?(?:^[ \t]*\2[ \t]*$|\Z)",
     re.DOTALL | re.MULTILINE,
 )
+# PowerShell's heredoc: the closing `'@` or `"@` starts its own line.
+_HERE_STRING = re.compile(r"""@(['"])[ \t]*\r?\n.*?^\1@""", re.DOTALL | re.MULTILINE)
 _INDEX_CMD = re.compile(r"(?:^|[\s;&|/\\\"'])(?:codebase-index|cbx)(?:\.exe|\.ps1)?\s+\w")
-# Searches over prose, logs and config are what grep is for; leave them alone.
+# Searches over prose, logs, config, binaries and git internals are what grep is for;
+# leave them alone.
 _NON_CODE = re.compile(
-    r"\.(?:md|mdx|rst|txt|log|ya?ml|json|toml|ini|cfg|conf|csv|xml|properties|lock|env|html?)\b"
-    r"|--include=\*?\.(?:md|txt|log|ya?ml|json|toml)",
+    r"\.(?:md|mdx|rst|txt|log|ya?ml|json|toml|ini|cfg|conf|csv|xml|properties|lock|env|html?"
+    r"|exe|dll|so|jar|class|bin|sqlite|db)\b"
+    r"|--include=\*?\.(?:md|txt|log|ya?ml|json|toml)"
+    r"|(?:^|[\s'\"/\\])\.git[\\/]",
     re.IGNORECASE,
 )
+# Shell words of a search's arguments: a quoted string or a bare word.
+_WORD = re.compile(r""""([^"]*)"|'([^']*)'|(\S+)""")
+# An absolute path: a drive (C:\, C:/), an MSYS drive or POSIX root (/c/, /), or home.
+_ABS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|/|~(?:[\\/]|$)|\$HOME\b|\$\{HOME\})")
 _NON_CODE_TYPES = {"md", "markdown", "txt", "log", "yaml", "yml", "json", "toml", "xml",
                    "csv", "ini", "config"}
 
@@ -144,25 +154,34 @@ def guard(payload: dict) -> Optional[dict]:
         return None
     tool = payload.get("tool_name") or ""
     tool_input = payload.get("tool_input") or {}
-    if tool not in ("Grep", "Bash"):
+    if tool != "Grep" and tool not in SHELL_TOOLS:
         return None
     state = _State(str(payload.get("session_id") or "default"))
 
-    if tool == "Bash":
+    if tool in SHELL_TOOLS:
         command = _HEREDOC.sub(lambda m: "<<" + m.group("rest"), str(tool_input.get("command") or ""))
+        if tool == "PowerShell":
+            command = _HERE_STRING.sub("''", command)
         if _INDEX_CMD.search(command):
             # Checked before the index exists: the first search is what builds it.
             state.mark_used()
             return None
-        pattern = _shell_search_pattern(command)
+        root = find_index_root(_cwd(payload))
+        if root is None:
+            return None
+        pattern = _shell_search_pattern(command, root)
         if pattern is None:
             return None
     else:
-        if _grep_targets_non_code(tool_input):
+        root = find_index_root(_cwd(payload))
+        if root is None or _grep_targets_non_code(tool_input):
+            return None
+        target = str(tool_input.get("path") or "")
+        if target and _outside_repo([target], root):
             return None
         pattern = str(tool_input.get("pattern") or "")
 
-    if state.used or find_index_root(_cwd(payload)) is None:
+    if state.used:
         return None
     # Keyed by the search term, not the whole call: a retry rarely repeats the
     # command byte for byte (a new description, another pipe, a regenerated script).
@@ -179,18 +198,61 @@ def guard(payload: dict) -> Optional[dict]:
     }
 
 
-def _shell_search_pattern(command: str) -> Optional[str]:
+def _shell_search_pattern(command: str, root: Path) -> Optional[str]:
     """The search term of a content search in `command`, or None if there is none."""
     for match in _SEARCH_CMD.finditer(command):
         args = match.group("args")
         if _NON_CODE.search(args):
             continue
-        quoted = re.search(r"""(['"])(.+?)\1""", args)
-        if quoted:
-            return quoted.group(2)
-        words = [w for w in args.split() if not w.startswith("-")]
-        return words[0] if words else ""
+        words = [next(g for g in m.groups() if g is not None) for m in _WORD.finditer(args)]
+        if match.group("cmd").lower() == "select-string":
+            pattern, paths = _select_string_terms(words)
+        else:
+            positional = [w for w in words if not w.startswith("-") and not w.isdigit()]
+            # The first positional word is the pattern, the rest are the paths searched.
+            paths = positional[1:]
+            quoted = re.search(r"""(['"])(.+?)\1""", args)
+            pattern = quoted.group(2) if quoted else (positional[0] if positional else "")
+        if not _outside_repo(paths, root):
+            return pattern
     return None
+
+
+def _select_string_terms(words: list[str]) -> tuple[str, list[str]]:
+    """The pattern and paths of a Select-String call, named or positional."""
+    pattern: list[str] = []
+    paths: list[str] = []
+    positional: list[str] = []
+    target = None
+    for word in words:
+        if target is not None:
+            target.extend(word.split(",") if target is paths else [word])
+            target = None
+        elif word.lower() in ("-path", "-literalpath", "-lp"):
+            target = paths
+        elif word.lower() == "-pattern":
+            target = pattern
+        elif not word.startswith("-") and not word.isdigit():
+            positional.append(word)
+    if not pattern and positional:
+        pattern.append(positional.pop(0))
+    return (pattern[0] if pattern else ""), paths or positional
+
+
+def _outside_repo(paths: list[str], root: Path) -> bool:
+    """True when every path is absolute and none lies inside the indexed repository."""
+    if not paths or not all(_ABS_PATH.match(p) for p in paths):
+        return False
+    base = os.path.normcase(os.path.abspath(root))
+    for raw in paths:
+        path = re.sub(r"^(?:~|\$HOME\b|\$\{HOME\})", lambda _m: str(Path.home()), raw)
+        msys = re.match(r"^/([a-zA-Z])(/.*)?$", path)
+        if os.name == "nt" and msys:
+            path = f"{msys.group(1)}:{msys.group(2) or '/'}"
+        full = os.path.normcase(os.path.abspath(path))
+        if full == base or full.startswith(base.rstrip(os.sep) + os.sep):
+            return False
+    return True
 
 
 def _grep_targets_non_code(tool_input: dict) -> bool:

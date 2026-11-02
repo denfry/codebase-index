@@ -6,12 +6,25 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [2.1.3] - 2026-11-02
+
 ### Fixed
 
 - Removing files from a large index no longer takes hours: `chunks.symbol_id` and
   `symbols.parent_id` are now indexed, so a deleted symbol no longer costs a full scan
   of both tables. Existing indexes gain the two indexes the next time they are opened,
   with no rebuild.
+- The `PreToolUse` guard now covers Claude Code's PowerShell tool:
+  - a `codebase-index` command run from PowerShell turns the guard off for the session,
+    and `Select-String` or `rg` code searches there are guarded like their Bash
+    equivalents. A `Select-String` that reads piped input is left alone, and here-string
+    bodies (`@'...'@`) are not scanned;
+  - `install-hooks` refreshes the matcher of an installed guard. Run it again after
+    upgrading; the plugin's hooks pick this up on their own.
+- The guard no longer intercepts searches that cannot be answered by the index: those
+  over `.git` internals, binaries (`.exe`, `.dll`, `.jar`, `.sqlite` and the like), or
+  absolute paths outside the indexed repository. Nor does it intercept anything in a
+  directory without an index.
 
 ## [2.1.2] - 2026-09-25
 
@@ -909,7 +922,8 @@ Pooled over 305 queries (Python, Java, TypeScript), v1.8.0 → 1.9.0:
 - Hooks example + `watch` mode for keeping the index fresh without blocking the edit loop (M8).
 - `doctor`, `stats`, `clean` diagnostics/maintenance commands.
 
-[Unreleased]: https://github.com/denfry/codebase-index/compare/v2.1.2...HEAD
+[Unreleased]: https://github.com/denfry/codebase-index/compare/v2.1.3...HEAD
+[2.1.3]: https://github.com/denfry/codebase-index/compare/v2.1.2...v2.1.3
 [2.1.2]: https://github.com/denfry/codebase-index/compare/v2.1.1...v2.1.2
 [2.1.1]: https://github.com/denfry/codebase-index/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/denfry/codebase-index/compare/v2.0.0...v2.1.0
