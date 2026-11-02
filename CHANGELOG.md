@@ -12,6 +12,17 @@ All notable changes to this project are documented here. The format is based on
   `symbols.parent_id` are now indexed, so a deleted symbol no longer costs a full scan
   of both tables. Existing indexes gain the two indexes the next time they are opened,
   with no rebuild.
+- The `PreToolUse` guard now covers Claude Code's PowerShell tool:
+  - a `codebase-index` command run from PowerShell turns the guard off for the session,
+    and `Select-String` or `rg` code searches there are guarded like their Bash
+    equivalents. A `Select-String` that reads piped input is left alone, and here-string
+    bodies (`@'...'@`) are not scanned;
+  - `install-hooks` refreshes the matcher of an installed guard. Run it again after
+    upgrading; the plugin's hooks pick this up on their own.
+- The guard no longer intercepts searches that cannot be answered by the index: those
+  over `.git` internals, binaries (`.exe`, `.dll`, `.jar`, `.sqlite` and the like), or
+  absolute paths outside the indexed repository. Nor does it intercept anything in a
+  directory without an index.
 
 ## [2.1.2] - 2026-09-25
 
